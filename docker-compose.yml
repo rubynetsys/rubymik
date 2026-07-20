@@ -1,0 +1,18 @@
+name: rubymik
+
+services:
+  rubymik:
+    build: .
+    image: rubymik/rubymik:latest
+    container_name: rubymik
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${RUBYMIK_PORT:-8080}:8080"
+    environment:
+      RUBYMIK_LOG_LEVEL: ${RUBYMIK_LOG_LEVEL:-info}
+    volumes:
+      - rubymik-data:/data
+
+volumes:
+  rubymik-data:

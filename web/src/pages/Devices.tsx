@@ -1,0 +1,290 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  CheckCircle2, ChevronDown, Cpu, HardDrive, Loader2, MemoryStick,
+  Plus, RefreshCw, Router as RouterIcon, Trash2, X, XCircle,
+} from 'lucide-react';
+import { api } from '../api';
+import { fmtBytes, type Device, type RouterSystemInfo, type TestResult } from '../types';
+
+export default function Devices() {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [tests, setTests] = useState<Record<number, { state: 'busy' } | { state: 'ok'; result: TestResult } | { state: 'fail'; error: string }>>({});
+
+  const reload = useCallback(() => {
+    api.get<Device[]>('/api/devices').then(setDevices).catch(() => {});
+  }, []);
+
+  useEffect(() => reload(), [reload]);
+
+  async function testDevice(id: number) {
+    setTests((t) => ({ ...t, [id]: { state: 'busy' } }));
+    try {
+      const result = await api.post<TestResult>(`/api/devices/${id}/test`);
+      setTests((t) => ({ ...t, [id]: { state: 'ok', result } }));
+      reload(); // auto-probe may have persisted scheme/port
+    } catch (err) {
+      setTests((t) => ({ ...t, [id]: { state: 'fail', error: (err as Error).message } }));
+    }
+  }
+
+  async function removeDevice(id: number) {
+    if (!confirm('Remove this device? Its stored credentials will be deleted.')) return;
+    await api.del(`/api/devices/${id}`).catch(() => {});
+    reload();
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Devices</h1>
+          <p className="mt-1 text-sm text-zinc-500">MikroTik devices RubyMIK can reach on this network.</p>
+        </div>
+        <button
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-ruby-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ruby-500"
+        >
+          <Plus className="h-4 w-4" /> Add device
+        </button>
+      </div>
+
+      <div className="mt-6 space-y-3">
+        {devices.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/60 p-10 text-center text-sm text-zinc-500">
+            No devices yet — add your first MikroTik with its IP and a RouterOS login.
+          </div>
+        )}
+        {devices.map((d) => {
+          const t = tests[d.id];
+          return (
+            <div key={d.id} className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+              <div className="flex items-center gap-4 px-5 py-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ruby-50">
+                  <RouterIcon className="h-5 w-5 text-ruby-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-zinc-900">{d.name}</div>
+                  <div className="truncate text-xs text-zinc-500">
+                    {d.host}
+                    {d.port ? `:${d.port}` : ''} · REST{' '}
+                    {d.useTls === null ? '(auto)' : d.useTls ? '(https)' : '(http)'}
+                  </div>
+                </div>
+                {t?.state === 'ok' && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                {t?.state === 'fail' && <XCircle className="h-5 w-5 text-ruby-600" />}
+                <button
+                  onClick={() => void testDevice(d.id)}
+                  disabled={t?.state === 'busy'}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50"
+                >
+                  {t?.state === 'busy'
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                  Test
+                </button>
+                <button
+                  onClick={() => void removeDevice(d.id)}
+                  title="Remove device"
+                  className="rounded-lg p-2 text-zinc-400 transition hover:bg-ruby-50 hover:text-ruby-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              {t?.state === 'ok' && (
+                <div className="border-t border-zinc-100 px-5 py-4">
+                  <InfoGrid info={t.result.info} conn={`${t.result.scheme}:${t.result.port}`} />
+                </div>
+              )}
+              {t?.state === 'fail' && (
+                <div className="border-t border-zinc-100 px-5 py-3 text-sm text-ruby-800">{t.error}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {adding && (
+        <AddDeviceModal
+          onClose={() => setAdding(false)}
+          onSaved={() => {
+            setAdding(false);
+            reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function InfoGrid({ info, conn }: { info: RouterSystemInfo; conn: string }) {
+  const usedMem = info.totalMemory - info.freeMemory;
+  const items: Array<{ label: string; value: string; icon?: typeof Cpu }> = [
+    { label: 'Identity', value: info.identity ?? '—' },
+    { label: 'Model', value: info.model ?? info.boardName ?? '—' },
+    { label: 'RouterOS', value: info.version },
+    { label: 'Uptime', value: info.uptime },
+    { label: 'CPU', value: `${info.cpuLoad}%${info.cpuCount ? ` · ${info.cpuCount} core${info.cpuCount === 1 ? '' : 's'}` : ''}`, icon: Cpu },
+    { label: 'Memory', value: `${fmtBytes(usedMem)} / ${fmtBytes(info.totalMemory)}`, icon: MemoryStick },
+  ];
+  if (info.totalHdd !== null && info.freeHdd !== null) {
+    items.push({ label: 'Storage', value: `${fmtBytes(info.totalHdd - info.freeHdd)} / ${fmtBytes(info.totalHdd)}`, icon: HardDrive });
+  }
+  items.push({ label: 'Connection', value: `REST · ${conn}` });
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+      {items.map(({ label, value, icon: Icon }) => (
+        <div key={label}>
+          <dt className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            {Icon && <Icon className="h-3 w-3" />} {label}
+          </dt>
+          <dd className="mt-0.5 truncate text-sm font-medium text-zinc-800" title={value}>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function AddDeviceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState('');
+  const [host, setHost] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [port, setPort] = useState('');
+  const [conn, setConn] = useState<'auto' | 'https' | 'http'>('auto');
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [test, setTest] = useState<{ ok: true; result: TestResult } | { ok: false; error: string } | null>(null);
+
+  function payload(includeName: boolean) {
+    return {
+      ...(includeName ? { name: name.trim() || host.trim() } : {}),
+      host: host.trim(),
+      username,
+      password,
+      ...(port ? { port: Number(port) } : {}),
+      ...(conn !== 'auto' ? { useTls: conn === 'https' } : {}),
+    };
+  }
+
+  async function runTest() {
+    setBusy('test');
+    setTest(null);
+    try {
+      const result = await api.post<TestResult>('/api/devices/test', payload(false));
+      setTest({ ok: true, result });
+    } catch (err) {
+      setTest({ ok: false, error: (err as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy('save');
+    try {
+      await api.post('/api/devices', payload(true));
+      onSaved();
+    } catch (err) {
+      setTest({ ok: false, error: (err as Error).message });
+      setBusy(null);
+    }
+  }
+
+  const inputCls =
+    'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-ruby-500 focus:ring-2 focus:ring-ruby-500/20';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900">Add device</h2>
+            <p className="mt-0.5 text-sm text-zinc-500">RouterOS 7.1+ with the www or www-ssl service enabled.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void save(e)} className="mt-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Name</span>
+              <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)}
+                placeholder="Office gateway" autoFocus />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Host / IP</span>
+              <input className={inputCls} value={host} onChange={(e) => setHost(e.target.value)}
+                placeholder="192.168.88.1" required />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Username</span>
+              <input className={inputCls} value={username} onChange={(e) => setUsername(e.target.value)}
+                autoComplete="off" required />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Password</span>
+              <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password" />
+            </label>
+          </div>
+
+          <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-ruby-700">
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+            Advanced
+          </button>
+          {showAdvanced && (
+            <div className="grid grid-cols-2 gap-4 rounded-xl bg-zinc-50 p-4">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Connection</span>
+                <select className={inputCls} value={conn} onChange={(e) => setConn(e.target.value as typeof conn)}>
+                  <option value="auto">Auto (try HTTPS, then HTTP)</option>
+                  <option value="https">HTTPS only</option>
+                  <option value="http">HTTP only</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Port</span>
+                <input className={inputCls} value={port} onChange={(e) => setPort(e.target.value)}
+                  placeholder="443 / 80" inputMode="numeric" />
+              </label>
+            </div>
+          )}
+
+          {test && !test.ok && (
+            <div className="flex items-start gap-2 rounded-lg border border-ruby-200 bg-ruby-50 px-3 py-2.5 text-sm text-ruby-800">
+              <XCircle className="mt-0.5 h-4 w-4 shrink-0" /> {test.error}
+            </div>
+          )}
+          {test?.ok && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5">
+              <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" /> Connected successfully
+              </div>
+              <InfoGrid info={test.result.info} conn={`${test.result.scheme}:${test.result.port}`} />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button type="button" onClick={() => void runTest()} disabled={busy !== null || !host || !username}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50">
+              {busy === 'test' && <Loader2 className="h-4 w-4 animate-spin" />}
+              Test connection
+            </button>
+            <button type="submit" disabled={busy !== null || !host || !username}
+              className="rounded-lg bg-ruby-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-ruby-500 disabled:opacity-50">
+              {busy === 'save' ? 'Saving…' : 'Save device'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

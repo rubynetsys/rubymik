@@ -1,0 +1,72 @@
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
+import { LayoutDashboard, LogOut, Router as RouterIcon } from 'lucide-react';
+import { api } from '../api';
+import Logo from './Logo';
+
+const NAV = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/devices', label: 'Devices', icon: RouterIcon },
+];
+
+export default function Layout({ onLogout }: { onLogout: () => void }) {
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    api.get<{ username: string }>('/api/me').then((me) => setUsername(me.username)).catch(() => {});
+  }, []);
+
+  async function logout() {
+    await api.post('/api/logout').catch(() => {});
+    onLogout();
+  }
+
+  return (
+    <div className="flex min-h-screen bg-zinc-100">
+      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-ink-900">
+        <div className="px-5 py-5">
+          <Logo dark />
+        </div>
+        <nav className="mt-2 flex-1 space-y-1 px-3">
+          {NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-ruby-600/15 text-white shadow-[inset_2px_0_0_0_theme(colors.ruby.500)]'
+                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                }`
+              }
+            >
+              <Icon className="h-4.5 w-4.5" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="border-t border-white/10 px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ruby-600 text-sm font-bold text-white">
+                {(username[0] ?? '?').toUpperCase()}
+              </div>
+              <div className="truncate text-sm text-zinc-300">{username}</div>
+            </div>
+            <button
+              onClick={() => void logout()}
+              title="Sign out"
+              className="rounded-md p-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+      <main className="ml-60 flex-1 px-8 py-8">
+        <Outlet />
+      </main>
+    </div>
+  );
+}

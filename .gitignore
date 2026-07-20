@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+server/dist/
+web/dist/
+
+# Runtime data — never commit the database or generated secrets
+data/
+*.db
+*.db-wal
+*.db-shm
+secret.key
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs & OS noise
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db

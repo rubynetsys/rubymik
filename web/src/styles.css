@@ -1,0 +1,29 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Ruby family accent */
+  --color-ruby-50: #fdf2f7;
+  --color-ruby-100: #fce7f1;
+  --color-ruby-200: #fad0e3;
+  --color-ruby-300: #f6a9ca;
+  --color-ruby-400: #ef72a5;
+  --color-ruby-500: #e91e63;
+  --color-ruby-600: #c41e56;
+  --color-ruby-700: #a31848;
+  --color-ruby-800: #85153d;
+  --color-ruby-900: #6e1435;
+  --color-ruby-950: #43081d;
+
+  /* Dark plum sidebar/ink */
+  --color-ink-950: #120b1a;
+  --color-ink-900: #191024;
+  --color-ink-800: #221731;
+  --color-ink-700: #2e2140;
+}
+
+body {
+  @apply font-sans text-zinc-800 antialiased;
+}

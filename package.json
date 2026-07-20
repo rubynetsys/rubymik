@@ -1,0 +1,12 @@
+{
+  "name": "rubymik",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modern, self-hosted monitoring dashboard for MikroTik RouterOS devices",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build && npm --prefix server run build",
+    "start": "npm --prefix server run start"
+  }
+}
