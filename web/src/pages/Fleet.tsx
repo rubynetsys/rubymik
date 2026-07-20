@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
   Router as RouterIcon, Search, Server,
@@ -295,13 +295,20 @@ function Meter({ pct, warnAt }: { pct: number; warnAt: number }) {
 }
 
 function DeviceCard({ device: d }: { device: FleetDevice }) {
+  const navigate = useNavigate();
   const edge =
     d.status === 'down' ? 'border-l-red-600'
     : d.status === 'warning' ? 'border-l-amber-500'
     : d.status === 'pending' ? 'border-l-zinc-300'
     : 'border-l-emerald-500';
   return (
-    <div className={`rounded-xl border border-zinc-200 border-l-4 ${edge} bg-white p-4 shadow-sm`}>
+    <div
+      onClick={() => void navigate(`/devices/${d.id}`)}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') void navigate(`/devices/${d.id}`); }}
+      className={`cursor-pointer rounded-xl border border-zinc-200 border-l-4 ${edge} bg-white p-4 shadow-sm transition hover:border-ruby-300 hover:shadow-md`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate font-semibold text-zinc-900">{d.name}</div>

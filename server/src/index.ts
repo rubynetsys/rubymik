@@ -9,6 +9,7 @@ import { SecretBox } from './secretbox.js';
 import { Poller } from './poller.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
+import { detailRoutes } from './routes/detail.js';
 import { siteRoutes } from './routes/sites.js';
 import { fleetRoutes } from './routes/fleet.js';
 
@@ -25,6 +26,7 @@ app.use(express.json());
 
 app.use('/api', authRoutes(db));
 app.use('/api/devices', deviceRoutes(db, box, poller));
+app.use('/api/devices', detailRoutes(db, box, poller));
 app.use('/api/sites', siteRoutes(db));
 app.use('/api/fleet', fleetRoutes(db, poller, config.pollIntervalSec));
 

@@ -12,9 +12,15 @@ export class RouterOsError extends Error {
   }
 }
 
-type Scheme = 'https' | 'http';
+export type Scheme = 'https' | 'http';
 
-function restGet(target: DeviceTarget, scheme: Scheme, port: number, apiPath: string): Promise<unknown> {
+/**
+ * Single READ against the RouterOS REST API. This is the only function in
+ * RubyMIK that talks HTTP to a device, and it only ever issues GET —
+ * command endpoints (monitor-traffic, check-for-updates, …) are POST in
+ * RouterOS and are deliberately not reachable from here.
+ */
+export function restGet(target: DeviceTarget, scheme: Scheme, port: number, apiPath: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const lib = scheme === 'https' ? https : http;
     const options: https.RequestOptions = {

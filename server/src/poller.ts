@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { restConnect } from './routeros/rest.js';
+import { restConnect, restGet } from './routeros/rest.js';
 import type { RouterSystemInfo } from './routeros/types.js';
 import type { SecretBox } from './secretbox.js';
 import { log } from './log.js';
@@ -26,6 +26,7 @@ import { log } from './log.js';
 const LAUNCH_SPACING_MS = 250;
 const POLL_TIMEOUT_MS = 10_000;
 const HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000;
+const TRAFFIC_RETENTION_MS = 6 * 60 * 60 * 1000;
 
 interface PollDeviceRow {
   id: number;
@@ -114,7 +115,7 @@ export class Poller {
     const t0 = Date.now();
     log.debug(`→ polling "${d.name}" (${d.host})`);
     try {
-      const result = await restConnect({
+      const target = {
         host: d.host,
         port: d.port ?? undefined,
         useTls: d.use_tls === null ? undefined : d.use_tls === 1,
@@ -122,13 +123,15 @@ export class Poller {
         username: this.box.decrypt(d.username_enc),
         password: this.box.decrypt(d.password_enc),
         timeoutMs: POLL_TIMEOUT_MS,
-      });
+      };
+      const result = await restConnect(target);
       this.recordSuccess(d.id, result.info);
       // Persist what auto-probe discovered so future polls skip the probe.
       if (d.use_tls === null) {
         this.db.prepare('UPDATE devices SET use_tls = ?, port = ?, updated_at = ? WHERE id = ?')
           .run(result.scheme === 'https' ? 1 : 0, result.port, new Date().toISOString(), d.id);
       }
+      await this.sampleInterfaces(d, target, result.scheme, result.port);
       log.debug(`✓ "${d.name}" up in ${Date.now() - t0}ms — cpu ${result.info.cpuLoad}%`);
       return true;
     } catch (err) {
@@ -175,8 +178,38 @@ export class Poller {
       .run(deviceId, now);
   }
 
+  /**
+   * One extra GET per device per cycle: /interface counters, written as a
+   * single JSON-blob row (see the interface_traffic migration note). A
+   * failure here never marks the device down — the health poll already
+   * succeeded — it just skips this cycle's sample.
+   */
+  private async sampleInterfaces(
+    d: PollDeviceRow,
+    target: Parameters<typeof restGet>[0],
+    scheme: 'https' | 'http',
+    port: number,
+  ): Promise<void> {
+    try {
+      const ifaces = await restGet(target, scheme, port, '/interface') as Array<Record<string, unknown>>;
+      const counters: Record<string, [number, number]> = {};
+      for (const i of ifaces) {
+        const name = typeof i['name'] === 'string' ? i['name'] : null;
+        if (!name) continue;
+        counters[name] = [Number(i['rx-byte']) || 0, Number(i['tx-byte']) || 0];
+      }
+      this.db.prepare('INSERT INTO interface_traffic (device_id, ts, data) VALUES (?, ?, ?)')
+        .run(d.id, new Date().toISOString(), JSON.stringify(counters));
+    } catch (err) {
+      log.debug(`interface sample skipped for "${d.name}": ${(err as Error).message}`);
+    }
+  }
+
   private pruneHistory(): void {
-    const cutoff = new Date(Date.now() - HISTORY_RETENTION_MS).toISOString();
-    this.db.prepare('DELETE FROM device_metrics WHERE ts < ?').run(cutoff);
+    const now = Date.now();
+    this.db.prepare('DELETE FROM device_metrics WHERE ts < ?')
+      .run(new Date(now - HISTORY_RETENTION_MS).toISOString());
+    this.db.prepare('DELETE FROM interface_traffic WHERE ts < ?')
+      .run(new Date(now - TRAFFIC_RETENTION_MS).toISOString());
   }
 }

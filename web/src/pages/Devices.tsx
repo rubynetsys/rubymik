@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Building2, CheckCircle2, ChevronDown, Cpu, HardDrive, Loader2, MemoryStick,
   Pencil, Plus, RefreshCw, Router as RouterIcon, StickyNote, Trash2, X, XCircle,
@@ -73,7 +74,9 @@ export default function Devices() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-semibold text-zinc-900">{d.name}</span>
+                    <Link to={`/devices/${d.id}`} className="truncate font-semibold text-zinc-900 hover:text-ruby-700">
+                      {d.name}
+                    </Link>
                     {d.notes && (
                       <span title={d.notes}><StickyNote className="h-3.5 w-3.5 shrink-0 text-zinc-400" /></span>
                     )}

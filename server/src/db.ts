@@ -83,6 +83,18 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_device_metrics_device_ts ON device_metrics(device_id, ts);
   `,
+  // 3: per-interface traffic counters. ONE row per device per poll cycle —
+  // a JSON blob {ifname: [rxBytes, txBytes], …} — never a row per interface.
+  // Rates are derived from consecutive samples at read time; pruned to 6h.
+  `
+  CREATE TABLE interface_traffic (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    ts TEXT NOT NULL,
+    data TEXT NOT NULL
+  );
+  CREATE INDEX idx_iftraffic_device_ts ON interface_traffic(device_id, ts);
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

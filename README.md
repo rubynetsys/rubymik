@@ -16,12 +16,21 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
 - **Fleet overview** — every device across every site on one screen: status
   (up / warning / down), CPU, memory, uptime, RouterOS version, with per-site
   roll-ups and filtering. Auto-refreshes.
+- **Device deep view** — click any device: live interfaces with RX/TX rates,
+  per-interface traffic graphs (1h/6h), DHCP leases, ARP, routes, wireless
+  registrations, switch ports, health/temperature, recent log — the
+  RouterOS-native depth generic SNMP tools can't cleanly show. Sections
+  capability-detect per device and say "not applicable" honestly instead of
+  faking panels.
 - **Sites** — group devices by location or client (MSP-style). The data model is
   built for per-user site scoping later; today a single admin sees everything.
 - **Background poller** — staggered, timeout-isolated REST polling on a
   configurable interval (default 30s). One dead router never stalls the fleet.
-- **Read-only by design** — RubyMIK only issues GET requests to RouterOS. A
-  `group=read` user is all it needs (and all it should have).
+  Interface counters ride the same cycle (one packed row per device, pruned to
+  6h) — no separate loop, no SQLite thrash.
+- **Read-only by design** — RubyMIK only issues GET requests to RouterOS
+  (rates are derived from byte counters precisely because the monitor commands
+  are POST). A `group=read` user is all it needs (and all it should have).
 
 _Screenshots coming soon._
 
@@ -118,7 +127,7 @@ need no native compilation.
 
 ## Roadmap
 
-- Interface-level monitoring: traffic graphs, wireless, DHCP leases; deeper time-series
+- Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
 - Alerting (a device going down should be able to tell you)
 - Per-user site scoping / multi-tenant login (the schema and query layer are
   already built around site scoping — see `server/src/scope.ts`)
