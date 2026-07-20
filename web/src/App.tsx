@@ -12,6 +12,7 @@ import Alerts from './pages/Alerts';
 import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
+import Audit from './pages/Audit';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/devices" element={<Devices />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
+          <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

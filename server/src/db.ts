@@ -179,6 +179,31 @@ const MIGRATIONS: string[] = [
   INSERT INTO notification_settings (id, webhook_enabled, webhook_url, updated_at)
     VALUES (1, 0, NULL, datetime('now'));
   `,
+  // 6: config-WRITE support. A device becomes "manageable" only when it has a
+  // separate, explicit WRITE credential (encrypted like the monitoring one).
+  // Monitoring keeps using username_enc/password_enc (GET-only) — the write
+  // credential is used exclusively by the safe-apply pipeline. Every write is
+  // recorded in config_audit (before/after + outcome), pruned to 180 days.
+  `
+  ALTER TABLE devices ADD COLUMN write_username_enc TEXT;
+  ALTER TABLE devices ADD COLUMN write_password_enc TEXT;
+
+  CREATE TABLE config_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+    device_name TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target TEXT,
+    summary TEXT NOT NULL,
+    before_json TEXT,
+    after_json TEXT,
+    result TEXT NOT NULL,
+    detail TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_config_audit_device ON config_audit(device_id, created_at);
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

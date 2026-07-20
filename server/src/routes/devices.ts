@@ -19,6 +19,8 @@ interface DeviceRow {
   notes: string | null;
   username_enc: string;
   password_enc: string;
+  write_username_enc: string | null;
+  write_password_enc: string | null;
   created_at: string;
   site_name?: string | null;
   status_state?: string | null;
@@ -37,6 +39,8 @@ function toPublic(row: DeviceRow) {
     siteName: row.site_name ?? null,
     notes: row.notes,
     status: row.status_state ?? null,
+    // A device is "manageable" only when it has an explicit write credential.
+    manageable: row.write_username_enc !== null && row.write_password_enc !== null,
     createdAt: row.created_at,
   };
 }
@@ -52,6 +56,9 @@ interface DeviceInput {
   username: string;
   /** Empty string on edit means "keep the stored password". */
   password: string;
+  /** undefined = leave write cred as-is; '' = explicitly clear; string = set. */
+  writeUsername: string | undefined;
+  writePassword: string | undefined;
 }
 
 function parseDeviceInput(body: unknown, db: DatabaseSync, opts: { requireName: boolean; requireCreds: boolean }): DeviceInput | string {
@@ -76,7 +83,11 @@ function parseDeviceInput(body: unknown, db: DatabaseSync, opts: { requireName: 
     if (!db.prepare('SELECT id FROM sites WHERE id = ?').get(siteId)) return 'Site not found.';
   }
   const notes = typeof b.notes === 'string' && b.notes.trim() ? b.notes.trim() : null;
-  return { name, host, port, useTls, siteId, notes, username, password };
+  // Write credential is optional and explicit — a device is manageable ONLY
+  // when both write fields are present. `null` clears it; undefined leaves it.
+  const writeUsername = b.writeUsername === null ? '' : typeof b.writeUsername === 'string' ? b.writeUsername : undefined;
+  const writePassword = b.writePassword === null ? '' : typeof b.writePassword === 'string' ? b.writePassword : undefined;
+  return { name, host, port, useTls, siteId, notes, username, password, writeUsername, writePassword };
 }
 
 export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): Router {
@@ -104,15 +115,20 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       res.status(400).json({ error: input });
       return;
     }
+    // A write credential is set only when BOTH fields are non-empty — never
+    // silently escalate; monitoring stays on the read credential regardless.
+    const hasWrite = !!input.writeUsername && !!input.writePassword;
     const now = new Date().toISOString();
     const result = db.prepare(`
-      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, created_at, updated_at)
-      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, write_username_enc, write_password_enc, created_at, updated_at)
+      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.name, input.host, input.port,
       input.useTls === null ? null : input.useTls ? 1 : 0,
       input.siteId, input.notes,
       box.encrypt(input.username), box.encrypt(input.password),
+      hasWrite ? box.encrypt(input.writeUsername!) : null,
+      hasWrite ? box.encrypt(input.writePassword!) : null,
       now, now,
     );
     const id = result.lastInsertRowid as number;
@@ -136,14 +152,30 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     }
     const usernameEnc = input.username.length > 0 ? box.encrypt(input.username) : existing.username_enc;
     const passwordEnc = input.password.length > 0 ? box.encrypt(input.password) : existing.password_enc;
+    // Write cred: undefined = leave as-is; '' = clear (revert to monitor-only);
+    // set both = manageable. Partial (only one field) also clears, to avoid a
+    // half-configured write credential.
+    let writeUserEnc = existing.write_username_enc;
+    let writePassEnc = existing.write_password_enc;
+    if (input.writeUsername !== undefined || input.writePassword !== undefined) {
+      const wu = input.writeUsername ?? '';
+      const wp = input.writePassword ?? '';
+      if (wu && wp) {
+        writeUserEnc = box.encrypt(wu);
+        writePassEnc = box.encrypt(wp);
+      } else if (input.writeUsername === '' || input.writePassword === '') {
+        writeUserEnc = null;
+        writePassEnc = null;
+      }
+    }
     db.prepare(`
       UPDATE devices SET name = ?, host = ?, port = ?, use_tls = ?, site_id = ?, notes = ?,
-        username_enc = ?, password_enc = ?, updated_at = ?
+        username_enc = ?, password_enc = ?, write_username_enc = ?, write_password_enc = ?, updated_at = ?
       WHERE id = ?
     `).run(
       input.name, input.host, input.port,
       input.useTls === null ? null : input.useTls ? 1 : 0,
-      input.siteId, input.notes, usernameEnc, passwordEnc,
+      input.siteId, input.notes, usernameEnc, passwordEnc, writeUserEnc, writePassEnc,
       new Date().toISOString(), id,
     );
     const row = db.prepare(`${selectDevice} WHERE d.id = ?`).get(id) as unknown as DeviceRow;

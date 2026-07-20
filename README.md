@@ -40,9 +40,14 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   and a webhook notification channel (off by default; posts JSON on fire and
   resolve to whatever you run — ntfy, Gotify, Discord/Slack bridges, Home
   Assistant, n8n). Nothing phones home, ever.
-- **Read-only by design** — RubyMIK only issues GET requests to RouterOS
-  (rates are derived from byte counters precisely because the monitor commands
-  are POST). A `group=read` user is all it needs (and all it should have).
+- **DHCP reservations** *(first config-write feature)* — on a **manageable**
+  device you can add / edit / remove static leases and pin a dynamic lease.
+  Every write runs the safe-apply pipeline and is audited. Devices without a
+  write credential stay monitor-only and show DHCP read-only.
+- **Monitoring is read-only by design** — the monitoring client only issues GET
+  requests to RouterOS (rates are derived from byte counters precisely because
+  the monitor commands are POST). A `group=read` user is all monitoring needs.
+  Configuration is a **separate, explicit** capability (see below).
 
 _Screenshots coming soon._
 
@@ -116,6 +121,34 @@ hairball. If a device's discovery settings are disabled or limited to an
 interface list, the map says so — enabling discovery is a RouterOS config
 change RubyMIK deliberately won't make for you (read-only by design).
 
+## Configuration writes & the safe-apply framework
+
+RubyMIK is read-only for monitoring and stays that way. Configuration is a
+distinct, opt-in capability with a hard structural boundary:
+
+- **Two clients, one boundary.** `server/src/routeros/rest.ts` is the
+  monitoring client and contains exactly one HTTP verb — `GET`.
+  `server/src/routeros/write.ts` is the *only* module that issues
+  `PUT`/`PATCH`/`DELETE` to a device, and nothing in the poller or any
+  monitoring route can reach it. Monitoring physically cannot write.
+- **Monitor-only vs manageable.** A device is *manageable* only when you give
+  it a separate, explicit **write credential** (RouterOS `group=write` or
+  `full`). Monitoring keeps using the read credential; writes use the write
+  one. No silent privilege escalation — a monitor-only device shows config
+  read-only with an "add write credentials to manage" prompt.
+- **Every write goes through safe-apply:**
+  **snapshot → confirm → apply → verify → auto-rollback on failure → audit.**
+  Verify checks both that management survived (the device still answers) *and*
+  that the change took; if either fails, the change is automatically rolled
+  back to the pre-change snapshot. Input is validated before anything is sent
+  (subnet membership, duplicate MAC/IP, format) — bad input is rejected, never
+  pushed.
+- **Audit log.** Every write — applied, rolled-back, failed, or rejected — is
+  recorded with actor, device, before/after, and outcome (see the Audit page).
+
+The first feature riding this framework is DHCP reservations; firewall and VLAN
+management will reuse the same pipeline.
+
 ## Polling at scale
 
 The poller is designed so a large fleet doesn't get hammered and one dead
@@ -151,6 +184,8 @@ need no native compilation.
 
 ## Roadmap
 
+- More config features on the safe-apply framework: firewall rules, VLANs,
+  interface config, backups — each reusing snapshot → verify → rollback → audit
 - Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
 - Email (SMTP) notification channel; per-site / per-device alert-rule overrides
   (the rules schema already carries the scope columns)
@@ -159,7 +194,6 @@ need no native compilation.
 - SNMP as a lighter-weight polling option for very large fleets
 - RouterOS 6.x legacy API (port 8728) support
 - Device discovery / network scan for bulk adding
-- Configuration actions (guarded), backups
 - Optional Postgres backend, WireGuard remote devices
 
 ## License

@@ -13,6 +13,7 @@ import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { detailRoutes } from './routes/detail.js';
+import { dhcpRoutes, auditRoutes } from './routes/dhcp.js';
 import { siteRoutes } from './routes/sites.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { topologyRoutes } from './routes/topology.js';
@@ -33,10 +34,12 @@ app.use(express.json());
 app.use('/api', authRoutes(db));
 app.use('/api/devices', deviceRoutes(db, box, poller));
 app.use('/api/devices', detailRoutes(db, box, poller));
+app.use('/api/devices', dhcpRoutes(db, box));
 app.use('/api/sites', siteRoutes(db));
 app.use('/api/fleet', fleetRoutes(db, poller, config.pollIntervalSec));
 app.use('/api/topology', topologyRoutes(db));
 app.use('/api/alerts', alertRoutes(db, notifier));
+app.use('/api/audit', auditRoutes(db));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });

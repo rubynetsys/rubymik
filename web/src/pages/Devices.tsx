@@ -204,6 +204,10 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
   const [busy, setBusy] = useState<'test' | 'save' | 'saveMore' | null>(null);
   const [test, setTest] = useState<{ ok: true; result: TestResult } | { ok: false; error: string } | null>(null);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  // Optional write credential — makes the device "manageable" (config writes).
+  const [manage, setManage] = useState(editing && device?.manageable === true);
+  const [writeUsername, setWriteUsername] = useState('');
+  const [writePassword, setWritePassword] = useState('');
 
   async function resolveSiteId(): Promise<number | null> {
     if (siteSel === NEW_SITE) {
@@ -225,6 +229,11 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
       notes: notes.trim() || null,
       ...(port ? { port: Number(port) } : { port: null }),
       useTls: conn === 'auto' ? null : conn === 'https',
+      // Write credential: null clears it (monitor-only); a value sets/updates it;
+      // undefined (manage on, fields blank on edit) leaves the stored one as-is.
+      ...(manage
+        ? (writeUsername || writePassword ? { writeUsername, writePassword } : {})
+        : { writeUsername: null, writePassword: null }),
     };
   }
 
@@ -344,6 +353,35 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
                 <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)}
                   placeholder="Rack 2, uplink to fibre" />
               </label>
+            )}
+          </div>
+
+          {/* Optional write credential → makes the device manageable */}
+          <div className="rounded-xl border border-zinc-200 p-3.5">
+            <label className="flex items-start gap-2.5">
+              <input type="checkbox" checked={manage} onChange={(e) => setManage(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-ruby-600" />
+              <span>
+                <span className="block text-sm font-semibold text-zinc-800">Enable configuration (manageable)</span>
+                <span className="block text-xs text-zinc-500">
+                  Add a separate write-capable RouterOS credential (group=write or full). Monitoring keeps
+                  using the read credential above; writes use this one. Leave off for monitor-only.
+                </span>
+              </span>
+            </label>
+            {manage && (
+              <div className="mt-3 grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className={labelCls}>Write username</span>
+                  <input className={inputCls} value={writeUsername} onChange={(e) => setWriteUsername(e.target.value)}
+                    autoComplete="off" placeholder={editing && device?.manageable ? 'Leave blank to keep current' : ''} />
+                </label>
+                <label className="block">
+                  <span className={labelCls}>Write password</span>
+                  <input className={inputCls} type="password" value={writePassword} onChange={(e) => setWritePassword(e.target.value)}
+                    autoComplete="new-password" placeholder={editing && device?.manageable ? 'Leave blank to keep current' : ''} />
+                </label>
+              </div>
             )}
           </div>
 

@@ -24,6 +24,54 @@ export interface Device {
   notes: string | null;
   /** Latest poll state ('up' | 'down') or null if never polled. */
   status: string | null;
+  /** True when the device has an explicit write credential. */
+  manageable: boolean;
+  createdAt: string;
+}
+
+// --- DHCP management + audit (P5) ---
+
+export interface DhcpLease {
+  '.id': string;
+  address?: string;
+  'mac-address'?: string;
+  server?: string;
+  comment?: string;
+  dynamic?: string;
+  status?: string;
+  'host-name'?: string;
+  'expires-after'?: string;
+}
+
+export interface DhcpManagement {
+  manageable: boolean;
+  servers: Array<{ name: string; interface: string; disabled: boolean }>;
+  reservations: DhcpLease[];
+  dynamic: DhcpLease[];
+}
+
+export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
+
+export interface ApplyOutcome {
+  result: ApplyResultCode;
+  auditId: number;
+  detail: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface AuditEntry {
+  id: number;
+  deviceId: number | null;
+  deviceName: string;
+  actor: string;
+  action: string;
+  target: string | null;
+  summary: string;
+  before: unknown;
+  after: unknown;
+  result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed' | 'rejected';
+  detail: string | null;
   createdAt: string;
 }
 

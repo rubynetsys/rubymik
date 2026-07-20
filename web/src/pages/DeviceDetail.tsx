@@ -13,6 +13,7 @@ import {
 } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import TrafficChart from '../components/TrafficChart';
+import DhcpManager from '../components/DhcpManager';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -194,30 +195,18 @@ export default function DeviceDetail() {
         )}
       </Section>
 
-      {/* ===== DHCP ===== */}
-      <SectionFor title="DHCP leases" icon={Activity} section={detail.sections.dhcp}
-        naText="No DHCP server on this device."
-        render={(dhcp) =>
-          dhcp.servers.length === 0 ? (
-            <Unavailable text="No DHCP server configured on this device." />
-          ) : (
-            <>
-              <div className="mb-3 text-xs text-zinc-500">
-                {dhcp.servers.map((s) => `${s.name}${s.interface ? ` on ${s.interface}` : ''}`).join(' · ')}
-                {' · '}{dhcp.leases.length} lease{dhcp.leases.length === 1 ? '' : 's'}
-              </div>
-              <SimpleTable
-                headers={['IP address', 'MAC', 'Hostname', 'Server', 'Status', 'Expires', 'Kind']}
-                rows={dhcp.leases.map((l) => [
-                  l.address ?? '—', l.mac ?? '—', l.hostName ?? '—', l.server ?? '—',
-                  l.status ?? '—', l.expiresAfter ?? '—',
-                  l.dynamic ? 'dynamic' : 'static',
-                ])}
-              />
-            </>
-          )
-        }
-      />
+      {/* ===== DHCP (manageable — reservations via safe-apply pipeline) ===== */}
+      {detail.sections.dhcp.ok && detail.sections.dhcp.data.servers.length > 0 ? (
+        <Section title="DHCP reservations" icon={Activity}
+          subtitle="static leases + active dynamic leases · writes go through snapshot → verify → auto-rollback → audit">
+          <DhcpManager deviceId={deviceId} />
+        </Section>
+      ) : (
+        <SectionFor title="DHCP reservations" icon={Activity} section={detail.sections.dhcp}
+          naText="No DHCP server on this device."
+          render={() => <Unavailable text="No DHCP server configured on this device." />}
+        />
+      )}
 
       {/* ===== Wireless ===== */}
       <SectionFor title="Wireless" icon={Wifi} section={detail.sections.wireless}
