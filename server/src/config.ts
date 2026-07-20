@@ -8,9 +8,23 @@ export interface Config {
   dataDir: string;
   logLevel: LogLevel;
   encryptionKeyHex: string | undefined;
+  /** Seconds between device poll cycles. */
+  pollIntervalSec: number;
+  /** Max devices polled in parallel within a cycle. */
+  pollConcurrency: number;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+
+function intEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}, got "${raw}"`);
+  }
+  return n;
+}
 
 export function loadConfig(): Config {
   const port = Number(process.env.RUBYMIK_PORT ?? 8080);
@@ -29,5 +43,8 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_ENCRYPTION_KEY must be 64 hex characters (32 bytes). Generate one with: openssl rand -hex 32');
   }
 
-  return { port, dataDir, logLevel, encryptionKeyHex };
+  const pollIntervalSec = intEnv('RUBYMIK_POLL_INTERVAL', 30, 5, 3600);
+  const pollConcurrency = intEnv('RUBYMIK_POLL_CONCURRENCY', 4, 1, 16);
+
+  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency };
 }

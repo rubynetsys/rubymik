@@ -7,8 +7,21 @@ devices. It runs anywhere Docker runs — a Linux server, a Raspberry Pi, a Mac 
 your routers directly over the LAN via the RouterOS REST API, and needs **no external
 database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
 
-> ⚠️ **Early days:** this is the P0 skeleton — auth, the device connection layer, and the
-> dashboard shell. Live monitoring, graphs, and alerting are landing next.
+> ⚠️ **Early days:** RubyMIK currently does device management, background health
+> polling, and a multi-site fleet overview. Traffic graphs, deeper time-series and
+> alerting are landing next.
+
+**What you get today**
+
+- **Fleet overview** — every device across every site on one screen: status
+  (up / warning / down), CPU, memory, uptime, RouterOS version, with per-site
+  roll-ups and filtering. Auto-refreshes.
+- **Sites** — group devices by location or client (MSP-style). The data model is
+  built for per-user site scoping later; today a single admin sees everything.
+- **Background poller** — staggered, timeout-isolated REST polling on a
+  configurable interval (default 30s). One dead router never stalls the fleet.
+- **Read-only by design** — RubyMIK only issues GET requests to RouterOS. A
+  `group=read` user is all it needs (and all it should have).
 
 _Screenshots coming soon._
 
@@ -54,8 +67,32 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_DATA_DIR` | `/data` (Docker) / `./data` | SQLite DB + generated secrets |
 | `RUBYMIK_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `RUBYMIK_ENCRYPTION_KEY` | auto-generated | 64-hex-char AES-256 key for credentials at rest |
+| `RUBYMIK_POLL_INTERVAL` | `30` | Seconds between health poll cycles (5–3600) |
+| `RUBYMIK_POLL_CONCURRENCY` | `4` | Max devices polled in parallel (1–16) |
 
 Device credentials are stored **AES-256-GCM encrypted** in SQLite — never plaintext.
+
+## Health states
+
+Simple, honest rules — no fabricated scores:
+
+| State | Meaning |
+| --- | --- |
+| 🟢 Up | Last poll succeeded, metrics under thresholds |
+| 🟡 Warning | Reachable, but CPU ≥ 85% or memory ≥ 90% |
+| 🔴 Down | The most recent poll attempt failed (reason shown; last-known data kept) |
+| ⚪ Pending | Added but not polled yet |
+
+## Polling at scale
+
+The poller is designed so a large fleet doesn't get hammered and one dead
+device can't stall the rest: poll launches are staggered (250ms spacing),
+parallelism is capped (`RUBYMIK_POLL_CONCURRENCY`), every device has its own
+10s timeout, and an over-long cycle causes the next tick to be skipped with a
+warning — never a pile-up. Status is one UPSERTed row per device and recent
+history is pruned to 24h, so SQLite stays comfortable. For very large fleets,
+SNMP is a candidate lighter-weight polling path on the roadmap; REST is the
+polling path today.
 
 ## Running without Docker
 
@@ -81,11 +118,15 @@ need no native compilation.
 
 ## Roadmap
 
-- Live device monitoring: interfaces, traffic graphs, wireless, DHCP leases
-- Multiple devices at a glance, status polling, alerting
+- Interface-level monitoring: traffic graphs, wireless, DHCP leases; deeper time-series
+- Alerting (a device going down should be able to tell you)
+- Per-user site scoping / multi-tenant login (the schema and query layer are
+  already built around site scoping — see `server/src/scope.ts`)
+- SNMP as a lighter-weight polling option for very large fleets
 - RouterOS 6.x legacy API (port 8728) support
+- Device discovery / network scan for bulk adding
 - Configuration actions (guarded), backups
-- Optional Postgres backend, multi-user/tenant, WireGuard remote devices
+- Optional Postgres backend, WireGuard remote devices
 
 ## License
 

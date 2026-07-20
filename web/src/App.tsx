@@ -6,8 +6,9 @@ import { RubyDiamond } from './components/Logo';
 import Layout from './components/Layout';
 import Setup from './pages/Setup';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import Fleet from './pages/Fleet';
 import Devices from './pages/Devices';
+import Sites from './pages/Sites';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -55,8 +56,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout onLogout={refresh} />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Fleet />} />
           <Route path="/devices" element={<Devices />} />
+          <Route path="/sites" element={<Sites />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

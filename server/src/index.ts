@@ -6,21 +6,27 @@ import { loadConfig } from './config.js';
 import { log, setLogLevel } from './log.js';
 import { openDb } from './db.js';
 import { SecretBox } from './secretbox.js';
+import { Poller } from './poller.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
+import { siteRoutes } from './routes/sites.js';
+import { fleetRoutes } from './routes/fleet.js';
 
 const config = loadConfig();
 setLogLevel(config.logLevel);
 
 const db = openDb(config.dataDir);
 const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
+const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency);
 
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json());
 
 app.use('/api', authRoutes(db));
-app.use('/api/devices', deviceRoutes(db, box));
+app.use('/api/devices', deviceRoutes(db, box, poller));
+app.use('/api/sites', siteRoutes(db));
+app.use('/api/fleet', fleetRoutes(db, poller, config.pollIntervalSec));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -46,11 +52,13 @@ if (fs.existsSync(indexHtml)) {
 
 const server = app.listen(config.port, '0.0.0.0', () => {
   log.info(`RubyMIK listening on http://0.0.0.0:${config.port} (data: ${config.dataDir}, log: ${config.logLevel})`);
+  poller.start();
 });
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     log.info(`${signal} received, shutting down`);
+    poller.stop();
     server.close(() => {
       db.close();
       process.exit(0);
