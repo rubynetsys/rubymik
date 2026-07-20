@@ -44,6 +44,10 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   device you can add / edit / remove static leases and pin a dynamic lease.
   Every write runs the safe-apply pipeline and is audited. Devices without a
   write credential stay monitor-only and show DHCP read-only.
+- **Managed firewall** — preset-driven (Off / Basic / Standard) + guarded
+  custom rules, with a **management-accept rule always emitted first** so a
+  preset can't lock RubyMIK out, plus a dead-man that auto-reverts if the
+  management path is lost after a change. Monitor-only devices show it read-only.
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -146,8 +150,31 @@ distinct, opt-in capability with a hard structural boundary:
 - **Audit log.** Every write — applied, rolled-back, failed, or rejected — is
   recorded with actor, device, before/after, and outcome (see the Audit page).
 
-The first feature riding this framework is DHCP reservations; firewall and VLAN
-management will reuse the same pipeline.
+The first features riding this framework are DHCP reservations and the managed
+firewall; VLAN and interface config will reuse the same pipeline.
+
+### Managed firewall — never sever the management path
+
+Firewall config can lock you out of a router, so it has two extra structural
+protections on top of the pipeline:
+
+1. **mgmt-accept is always first.** The generator (`server/src/firewall.ts`)
+   *always* emits the management-accept rules — accept established/related,
+   accept each management source, accept the trusted interface — as the first
+   rules of the input chain, before any drop. It's built into the generator,
+   not something a preset or custom rule can reorder. A custom "drop-all" is
+   structurally placed *below* the guard and can never sit above it.
+2. **Dead-man auto-revert.** After applying, RubyMIK re-verifies that
+   management is still reachable *and* that the rules took, retrying for a
+   dead-man window; if the path is lost or the change didn't take, it
+   auto-reverts to the pre-change snapshot. Presets are constrained, tagged
+   `RUBYMIK:`, reconciled idempotently (never stacked), and cleanly removable.
+
+> **RouterOS device-mode note:** the strongest on-device dead-man (a scheduler
+> that reverts config even if the controller is fully locked out) needs
+> RouterOS `scheduler` enabled in device-mode, which requires a one-time
+> physical confirmation on the device. Where that isn't enabled, RubyMIK relies
+> on the mgmt-accept-first guard plus its controller-side timed verify/revert.
 
 ## Polling at scale
 

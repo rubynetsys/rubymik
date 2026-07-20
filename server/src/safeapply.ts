@@ -143,6 +143,23 @@ export async function runSafeApply<B>(ctx: SafeApplyContext, steps: SafeApplySte
   return { result: 'rolled_back', auditId: id, detail, before, after };
 }
 
+/** Write an audit row directly (used by bespoke flows like the lockout test). */
+export function writeAudit(
+  ctx: Omit<SafeApplyContext, 'target' | 'transport' | 'probe'>,
+  result: ApplyResult | 'rejected', summary: string, before: unknown, after: unknown, detail: string,
+): number {
+  const row = ctx.db.prepare(`
+    INSERT INTO config_audit (device_id, device_name, actor, action, target, summary, before_json, after_json, result, detail, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    ctx.deviceId, ctx.deviceName, ctx.actor, ctx.action, ctx.targetLabel, summary,
+    before === undefined ? null : JSON.stringify(before),
+    after === undefined ? null : JSON.stringify(after),
+    result, detail, new Date().toISOString(),
+  );
+  return row.lastInsertRowid as number;
+}
+
 /** Record an input-validation rejection (never reached the device). */
 export function auditRejected(ctx: Omit<SafeApplyContext, 'target' | 'transport'>, summary: string, detail: string): number {
   const row = ctx.db.prepare(`

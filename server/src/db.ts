@@ -204,6 +204,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_config_audit_device ON config_audit(device_id, created_at);
   `,
+  // 7: managed firewall config per device (preset + interface scoping +
+  // mgmt sources + custom rules). The applied rules live on the device
+  // (RUBYMIK-tagged); this table stores the intent so the UI can re-render it.
+  `
+  CREATE TABLE device_firewall (
+    device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+    preset TEXT NOT NULL DEFAULT 'off',
+    wan_interface TEXT,
+    trusted_interface TEXT,
+    mgmt_sources_json TEXT NOT NULL DEFAULT '[]',
+    custom_rules_json TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

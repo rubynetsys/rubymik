@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Activity, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
-  ScrollText, Thermometer, Wifi,
+  ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
 import { api } from '../api';
 import {
@@ -14,6 +14,7 @@ import {
 import StatusBadge from '../components/StatusBadge';
 import TrafficChart from '../components/TrafficChart';
 import DhcpManager from '../components/DhcpManager';
+import FirewallManager from '../components/FirewallManager';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -207,6 +208,12 @@ export default function DeviceDetail() {
           render={() => <Unavailable text="No DHCP server configured on this device." />}
         />
       )}
+
+      {/* ===== Firewall (managed — safe-apply with mgmt-lockout protection) ===== */}
+      <Section title="Firewall" icon={Shield}
+        subtitle="preset-driven, mgmt-accept always first · writes go through snapshot → verify → auto-rollback → audit">
+        <FirewallManager deviceId={deviceId} />
+      </Section>
 
       {/* ===== Wireless ===== */}
       <SectionFor title="Wireless" icon={Wifi} section={detail.sections.wireless}

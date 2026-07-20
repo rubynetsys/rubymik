@@ -60,6 +60,40 @@ export interface ApplyOutcome {
   after: unknown;
 }
 
+// --- Managed firewall (P6) ---
+
+export type FirewallPreset = 'off' | 'basic' | 'standard';
+
+export interface FirewallCustomRule {
+  chain: 'input' | 'forward';
+  action: 'accept' | 'drop' | 'reject';
+  protocol?: string | null;
+  dstPort?: string | null;
+  srcAddress?: string | null;
+  comment?: string | null;
+}
+
+export interface FirewallView {
+  manageable: boolean;
+  config: {
+    preset: FirewallPreset;
+    wanInterface: string | null;
+    trustedInterface: string | null;
+    mgmtSources: string[];
+    custom: FirewallCustomRule[];
+  };
+  interfaces: Array<{ name: string; type: string; running: boolean }>;
+  suggestedMgmt: string | null;
+  managedRules: Array<Record<string, unknown> & { id: string; chain?: string; action?: string; comment?: string }>;
+}
+
+export interface LockoutTestResult {
+  result: 'rolled_back' | 'rollback_failed' | 'failed';
+  detail: string;
+  lostForSec: number | null;
+  auditId: number;
+}
+
 export interface AuditEntry {
   id: number;
   deviceId: number | null;
