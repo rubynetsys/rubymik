@@ -210,6 +210,53 @@ export interface TrafficPoint {
   tx: number | null;
 }
 
+// --- Topology (P3) ---
+
+export interface TopoNode {
+  key: string;
+  kind: 'managed' | 'discovered';
+  name: string;
+  deviceId?: number;
+  siteId?: number | null;
+  siteName?: string | null;
+  status?: HealthStatus;
+  model?: string | null;
+  version?: string | null;
+  identity?: string | null;
+  platform?: string | null;
+  board?: string | null;
+  mac?: string | null;
+  address?: string | null;
+  vendor?: string | null;
+  discoveredBy?: string | null;
+  seenBy?: Array<{ deviceId: number; deviceName: string; iface: string | null }>;
+}
+
+export interface TopoEdge {
+  source: string;
+  target: string;
+  ifaces: Record<string, string | null>;
+  discoveredBy: string | null;
+}
+
+export interface DiscoveryNote {
+  deviceId: number;
+  deviceName: string;
+  protocol: string | null;
+  interfaceList: string | null;
+  neighborCount: number;
+  level: 'ok' | 'restricted' | 'disabled' | 'unknown';
+  message: string;
+}
+
+export interface TopologyPayload {
+  generatedAt: string;
+  sites: Array<{ id: number; name: string }>;
+  nodes: TopoNode[];
+  edges: TopoEdge[];
+  notes: DiscoveryNote[];
+}
+
 export function fmtRate(bps: number | null): string {
   if (bps === null || !Number.isFinite(bps)) return '—';
   if (bps < 1000) return `${bps} bps`;

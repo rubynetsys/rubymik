@@ -2,24 +2,15 @@ import { Router } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth } from '../auth.js';
 import { allSites, scopeFilter } from '../scope.js';
+import { computeHealth } from '../health.js';
 import type { Poller } from '../poller.js';
 
 /**
  * Fleet overview: every device with its latest poll state, grouped by site,
- * with per-site and global roll-ups.
- *
- * Health rules — simple and honest (documented in the README):
- *   down    → the most recent poll attempt failed
- *   warning → up, but CPU ≥ 85% or memory ≥ 90%
- *   up      → reachable, metrics under thresholds
- *   pending → added but not polled yet
+ * with per-site and global roll-ups. Health rules live in health.ts.
  */
 
-const CPU_WARN_PCT = 85;
-const MEM_WARN_PCT = 90;
 const HISTORY_POINTS = 20;
-
-type Health = 'up' | 'warning' | 'down' | 'pending';
 
 interface FleetRow {
   id: number;
@@ -44,20 +35,6 @@ interface FleetRow {
   mem_total: number | null;
   mem_free: number | null;
   updated_at: string | null;
-}
-
-function health(row: FleetRow): { status: Health; reasons: string[] } {
-  if (row.state === null) return { status: 'pending', reasons: ['Not polled yet'] };
-  if (row.state === 'down') {
-    return { status: 'down', reasons: [row.last_error ?? 'Unreachable'] };
-  }
-  const reasons: string[] = [];
-  if (row.cpu_load !== null && row.cpu_load >= CPU_WARN_PCT) reasons.push(`High CPU (${row.cpu_load}%)`);
-  const memUsedPct = row.mem_total && row.mem_free !== null
-    ? ((row.mem_total - row.mem_free) / row.mem_total) * 100
-    : null;
-  if (memUsedPct !== null && memUsedPct >= MEM_WARN_PCT) reasons.push(`High memory (${memUsedPct.toFixed(0)}%)`);
-  return reasons.length > 0 ? { status: 'warning', reasons } : { status: 'up', reasons: [] };
 }
 
 export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: number): Router {
@@ -102,7 +79,7 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
 
     const devicesBySite = new Map<number | null, ReturnType<typeof toFleetDevice>[]>();
     function toFleetDevice(row: FleetRow) {
-      const { status, reasons } = health(row);
+      const { status, reasons } = computeHealth(row);
       summary.total++;
       summary[status]++;
       const memUsedPct = row.mem_total && row.mem_free !== null

@@ -95,6 +95,35 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_iftraffic_device_ts ON interface_traffic(device_id, ts);
   `,
+  // 4: topology. Current-state neighbor tables (replaced wholesale each poll
+  // cycle — no history growth), per-device discovery settings, and the
+  // device's own interface MACs (for matching neighbors to managed devices).
+  `
+  ALTER TABLE device_status ADD COLUMN if_macs TEXT;
+
+  CREATE TABLE device_neighbors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    seen_on TEXT,
+    mac TEXT,
+    identity TEXT,
+    platform TEXT,
+    board TEXT,
+    version TEXT,
+    address TEXT,
+    remote_interface TEXT,
+    discovered_by TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_device_neighbors_device ON device_neighbors(device_id);
+
+  CREATE TABLE device_discovery (
+    device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+    protocol TEXT,
+    interface_list TEXT,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

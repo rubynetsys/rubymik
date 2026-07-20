@@ -132,6 +132,7 @@ export class Poller {
           .run(result.scheme === 'https' ? 1 : 0, result.port, new Date().toISOString(), d.id);
       }
       await this.sampleInterfaces(d, target, result.scheme, result.port);
+      await this.sampleNeighbors(d, target, result.scheme, result.port);
       log.debug(`✓ "${d.name}" up in ${Date.now() - t0}ms — cpu ${result.info.cpuLoad}%`);
       return true;
     } catch (err) {
@@ -193,15 +194,69 @@ export class Poller {
     try {
       const ifaces = await restGet(target, scheme, port, '/interface') as Array<Record<string, unknown>>;
       const counters: Record<string, [number, number]> = {};
+      const macs = new Set<string>();
       for (const i of ifaces) {
         const name = typeof i['name'] === 'string' ? i['name'] : null;
         if (!name) continue;
         counters[name] = [Number(i['rx-byte']) || 0, Number(i['tx-byte']) || 0];
+        if (typeof i['mac-address'] === 'string' && i['mac-address']) macs.add((i['mac-address'] as string).toLowerCase());
       }
       this.db.prepare('INSERT INTO interface_traffic (device_id, ts, data) VALUES (?, ?, ?)')
         .run(d.id, new Date().toISOString(), JSON.stringify(counters));
+      this.db.prepare('UPDATE device_status SET if_macs = ? WHERE device_id = ?')
+        .run(JSON.stringify([...macs]), d.id);
     } catch (err) {
       log.debug(`interface sample skipped for "${d.name}": ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Neighbor discovery snapshot (MNDP/LLDP/CDP via /ip/neighbor) + the
+   * device's discovery settings. Current-state only: rows are replaced
+   * wholesale each cycle, so this table never grows. READ-ONLY — RubyMIK
+   * surfaces restricted/disabled discovery but never changes it.
+   */
+  private async sampleNeighbors(
+    d: PollDeviceRow,
+    target: Parameters<typeof restGet>[0],
+    scheme: 'https' | 'http',
+    port: number,
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const s = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+    try {
+      const neighbors = await restGet(target, scheme, port, '/ip/neighbor') as Array<Record<string, unknown>>;
+      this.db.exec('BEGIN');
+      try {
+        this.db.prepare('DELETE FROM device_neighbors WHERE device_id = ?').run(d.id);
+        const ins = this.db.prepare(`
+          INSERT INTO device_neighbors (device_id, seen_on, mac, identity, platform, board, version, address, remote_interface, discovered_by, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const n of neighbors) {
+          ins.run(
+            d.id, s(n['interface']), s(n['mac-address'])?.toLowerCase() ?? null, s(n['identity']),
+            s(n['platform']), s(n['board']), s(n['version']),
+            s(n['address4']) ?? s(n['address']), s(n['interface-name']), s(n['discovered-by']), now,
+          );
+        }
+        this.db.exec('COMMIT');
+      } catch (err) {
+        this.db.exec('ROLLBACK');
+        throw err;
+      }
+    } catch (err) {
+      log.debug(`neighbor sample skipped for "${d.name}": ${(err as Error).message}`);
+    }
+    try {
+      const ds = await restGet(target, scheme, port, '/ip/neighbor/discovery-settings') as Record<string, unknown>;
+      this.db.prepare(`
+        INSERT INTO device_discovery (device_id, protocol, interface_list, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT(device_id) DO UPDATE SET protocol = excluded.protocol,
+          interface_list = excluded.interface_list, updated_at = excluded.updated_at
+      `).run(d.id, s(ds['protocol']), s(ds['discover-interface-list']), now);
+    } catch (err) {
+      log.debug(`discovery-settings sample skipped for "${d.name}": ${(err as Error).message}`);
     }
   }
 

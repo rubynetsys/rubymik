@@ -16,6 +16,11 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
 - **Fleet overview** — every device across every site on one screen: status
   (up / warning / down), CPU, memory, uptime, RouterOS version, with per-site
   roll-ups and filtering. Auto-refreshes.
+- **Live topology map** — auto-discovered from MNDP/LLDP/CDP neighbor tables
+  (`/ip/neighbor`), drawn with a clean force layout: managed devices show live
+  health status and click through to their device view; discovered-but-unmanaged
+  neighbors render distinct (dashed) with an "Add this device" shortcut.
+  Site-filterable, pan/zoom, updates on the poll cadence.
 - **Device deep view** — click any device: live interfaces with RX/TX rates,
   per-interface traffic graphs (1h/6h), DHCP leases, ARP, routes, wireless
   registrations, switch ports, health/temperature, recent log — the
@@ -91,6 +96,18 @@ Simple, honest rules — no fabricated scores:
 | 🟡 Warning | Reachable, but CPU ≥ 85% or memory ≥ 90% |
 | 🔴 Down | The most recent poll attempt failed (reason shown; last-known data kept) |
 | ⚪ Pending | Added but not polled yet |
+
+## How topology links are inferred (honestly)
+
+The map draws **direct neighbor sightings only** — device A reported neighbor N
+on interface X in its `/ip/neighbor` table. Bidirectional sightings (A sees B,
+B sees A) collapse into one edge that keeps both ports. Neighbors are matched
+to managed devices by interface MAC first, then by IP; never by identity alone
+(too many routers are literally named "MikroTik"). RubyMIK does not guess
+transitive links or invent topology: fewer, high-confidence links beat a
+hairball. If a device's discovery settings are disabled or limited to an
+interface list, the map says so — enabling discovery is a RouterOS config
+change RubyMIK deliberately won't make for you (read-only by design).
 
 ## Polling at scale
 

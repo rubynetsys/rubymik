@@ -179,16 +179,18 @@ export function InfoGrid({ info, conn }: { info: RouterSystemInfo; conn: string 
 
 const NEW_SITE = '__new__';
 
-function DeviceModal({ device, sites, onSitesChanged, onClose, onSaved }: {
+export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, onSaved }: {
   device?: Device;
   sites: Site[];
+  /** Prefill for add mode (e.g. from a discovered topology node). */
+  initial?: { name?: string; host?: string };
   onSitesChanged: () => void;
   onClose: () => void;
   onSaved: (keepOpen: boolean) => void;
 }) {
   const editing = device !== undefined;
-  const [name, setName] = useState(device?.name ?? '');
-  const [host, setHost] = useState(device?.host ?? '');
+  const [name, setName] = useState(device?.name ?? initial?.name ?? '');
+  const [host, setHost] = useState(device?.host ?? initial?.host ?? '');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [siteSel, setSiteSel] = useState<string>(device?.siteId ? String(device.siteId) : '');

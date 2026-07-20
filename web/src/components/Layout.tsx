@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, LayoutDashboard, LogOut, Router as RouterIcon } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, Router as RouterIcon, Waypoints } from 'lucide-react';
 import { api } from '../api';
 import Logo from './Logo';
 
 const NAV = [
   { to: '/', label: 'Fleet', icon: LayoutDashboard },
+  { to: '/topology', label: 'Topology', icon: Waypoints },
   { to: '/devices', label: 'Devices', icon: RouterIcon },
   { to: '/sites', label: 'Sites', icon: Building2 },
 ];
