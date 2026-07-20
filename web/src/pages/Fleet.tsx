@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
+  Bell, Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
   Router as RouterIcon, Search, Server,
 } from 'lucide-react';
 import { api } from '../api';
@@ -316,7 +316,19 @@ function DeviceCard({ device: d }: { device: FleetDevice }) {
             {d.host}{d.port ? `:${d.port}` : ''}{d.identity ? ` · ${d.identity}` : ''}
           </div>
         </div>
-        <StatusBadge status={d.status} />
+        <span className="flex items-center gap-1.5">
+          {d.alerts && (
+            <span
+              title={`${d.alerts.count} active alert${d.alerts.count === 1 ? '' : 's'}`}
+              className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold text-white ${
+                d.alerts.severity === 'critical' ? 'bg-red-600' : d.alerts.severity === 'warning' ? 'bg-amber-500' : 'bg-sky-500'
+              }`}
+            >
+              <Bell className="h-3 w-3" /> {d.alerts.count}
+            </span>
+          )}
+          <StatusBadge status={d.status} />
+        </span>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium text-zinc-600">

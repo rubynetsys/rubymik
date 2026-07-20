@@ -33,6 +33,13 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   configurable interval (default 30s). One dead router never stalls the fleet.
   Interface counters ride the same cycle (one packed row per device, pruned to
   6h) — no separate loop, no SQLite thrash.
+- **Alerting** — device down, high CPU/memory/temperature, and interface-down
+  rules evaluated on every poll cycle with debounce + hysteresis (N consecutive
+  cycles to fire, N to resolve, with a dead band — no flapping, no spam). One
+  active alert per condition, auto-resolve, 30-day history, site-scoped views,
+  and a webhook notification channel (off by default; posts JSON on fire and
+  resolve to whatever you run — ntfy, Gotify, Discord/Slack bridges, Home
+  Assistant, n8n). Nothing phones home, ever.
 - **Read-only by design** — RubyMIK only issues GET requests to RouterOS
   (rates are derived from byte counters precisely because the monitor commands
   are POST). A `group=read` user is all it needs (and all it should have).
@@ -145,7 +152,8 @@ need no native compilation.
 ## Roadmap
 
 - Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
-- Alerting (a device going down should be able to tell you)
+- Email (SMTP) notification channel; per-site / per-device alert-rule overrides
+  (the rules schema already carries the scope columns)
 - Per-user site scoping / multi-tenant login (the schema and query layer are
   already built around site scoping — see `server/src/scope.ts`)
 - SNMP as a lighter-weight polling option for very large fleets

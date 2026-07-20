@@ -87,6 +87,8 @@ export interface FleetDevice {
   consecutiveFailures: number;
   /** Recent CPU readings, oldest→newest; null where the device was down. */
   history: Array<number | null>;
+  /** Active alert flags, null when none firing. */
+  alerts: { count: number; severity: 'critical' | 'warning' | 'info' } | null;
 }
 
 export interface FleetSite {
@@ -255,6 +257,62 @@ export interface TopologyPayload {
   nodes: TopoNode[];
   edges: TopoEdge[];
   notes: DiscoveryNote[];
+}
+
+// --- Alerts (P4) ---
+
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+
+export interface Alert {
+  id: number;
+  deviceId: number;
+  deviceName: string;
+  host: string;
+  siteId: number | null;
+  siteName: string | null;
+  rule: string;
+  ruleLabel: string;
+  target: string | null;
+  severity: AlertSeverity;
+  state: 'firing' | 'resolved';
+  message: string;
+  value: string | null;
+  firedAt: string;
+  lastSeenAt: string;
+  resolvedAt: string | null;
+  cycles: number;
+}
+
+export interface AlertSummary {
+  firing: number;
+  critical: number;
+  warning: number;
+  info: number;
+}
+
+export interface AlertRule {
+  id: number;
+  rule: string;
+  label: string;
+  severity: AlertSeverity;
+  unit: string | null;
+  enabled: boolean;
+  threshold: number | null;
+  clearThreshold: number | null;
+  fireCycles: number;
+  resolveCycles: number;
+}
+
+export interface NotificationSettings {
+  webhookEnabled: boolean;
+  webhookUrl: string | null;
+}
+
+export function fmtDuration(sec: number): string {
+  if (sec < 90) return `${Math.round(sec)}s`;
+  if (sec < 5400) return `${Math.round(sec / 60)}m`;
+  if (sec < 129600) return `${(sec / 3600).toFixed(1)}h`;
+  return `${(sec / 86400).toFixed(1)}d`;
 }
 
 export function fmtRate(bps: number | null): string {

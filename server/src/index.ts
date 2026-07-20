@@ -7,6 +7,9 @@ import { log, setLogLevel } from './log.js';
 import { openDb } from './db.js';
 import { SecretBox } from './secretbox.js';
 import { Poller } from './poller.js';
+import { AlertEngine } from './alerts.js';
+import { Notifier } from './notify.js';
+import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { detailRoutes } from './routes/detail.js';
@@ -19,7 +22,9 @@ setLogLevel(config.logLevel);
 
 const db = openDb(config.dataDir);
 const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
-const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency);
+const notifier = new Notifier(db);
+const alertEngine = new AlertEngine(db, notifier);
+const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine);
 
 const app = express();
 app.disable('x-powered-by');
@@ -31,6 +36,7 @@ app.use('/api/devices', detailRoutes(db, box, poller));
 app.use('/api/sites', siteRoutes(db));
 app.use('/api/fleet', fleetRoutes(db, poller, config.pollIntervalSec));
 app.use('/api/topology', topologyRoutes(db));
+app.use('/api/alerts', alertRoutes(db, notifier));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });

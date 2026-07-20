@@ -8,6 +8,7 @@ import Setup from './pages/Setup';
 import Login from './pages/Login';
 import Fleet from './pages/Fleet';
 import Topology from './pages/Topology';
+import Alerts from './pages/Alerts';
 import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
@@ -60,6 +61,7 @@ export default function App() {
         <Route element={<Layout onLogout={refresh} />}>
           <Route path="/" element={<Fleet />} />
           <Route path="/topology" element={<Topology />} />
+          <Route path="/alerts" element={<Alerts />} />
           <Route path="/devices" element={<Devices />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />

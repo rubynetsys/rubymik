@@ -62,6 +62,21 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
       ORDER BY d.name
     `).all(...deviceFilter.params) as unknown as FleetRow[];
 
+    // Active-alert flags per device (count + highest severity).
+    const alertsByDevice = new Map<number, { count: number; severity: 'critical' | 'warning' | 'info' }>();
+    const alertRows = db.prepare(`
+      SELECT device_id, COUNT(*) AS n,
+             COALESCE(SUM(severity = 'critical'), 0) AS crit,
+             COALESCE(SUM(severity = 'warning'), 0) AS warn
+      FROM alerts WHERE state = 'firing' GROUP BY device_id
+    `).all() as unknown as Array<{ device_id: number; n: number; crit: number; warn: number }>;
+    for (const a of alertRows) {
+      alertsByDevice.set(a.device_id, {
+        count: a.n,
+        severity: a.crit > 0 ? 'critical' : a.warn > 0 ? 'warning' : 'info',
+      });
+    }
+
     // Recent CPU history per device, one query, capped in JS.
     const historyByDevice = new Map<number, Array<number | null>>();
     const histRows = db.prepare(`
@@ -109,6 +124,7 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
         lastError: row.state === 'down' ? row.last_error : null,
         consecutiveFailures: row.consecutive_failures ?? 0,
         history: historyByDevice.get(row.id) ?? [],
+        alerts: alertsByDevice.get(row.id) ?? null,
       };
     }
     for (const row of rows) {

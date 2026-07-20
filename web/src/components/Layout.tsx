@@ -1,27 +1,44 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, LayoutDashboard, LogOut, Router as RouterIcon, Waypoints } from 'lucide-react';
+import { Bell, Building2, LayoutDashboard, LogOut, Router as RouterIcon, Waypoints } from 'lucide-react';
 import { api } from '../api';
+import type { AlertSummary } from '../types';
 import Logo from './Logo';
 
 const NAV = [
   { to: '/', label: 'Fleet', icon: LayoutDashboard },
   { to: '/topology', label: 'Topology', icon: Waypoints },
+  { to: '/alerts', label: 'Alerts', icon: Bell },
   { to: '/devices', label: 'Devices', icon: RouterIcon },
   { to: '/sites', label: 'Sites', icon: Building2 },
 ];
 
+const SUMMARY_REFRESH_MS = 15_000;
+
 export default function Layout({ onLogout }: { onLogout: () => void }) {
   const [username, setUsername] = useState('');
+  const [summary, setSummary] = useState<AlertSummary | null>(null);
 
   useEffect(() => {
     api.get<{ username: string }>('/api/me').then((me) => setUsername(me.username)).catch(() => {});
+    const loadSummary = () => {
+      api.get<AlertSummary>('/api/alerts/summary').then(setSummary).catch(() => {});
+    };
+    loadSummary();
+    const t = setInterval(() => {
+      if (!document.hidden) loadSummary();
+    }, SUMMARY_REFRESH_MS);
+    return () => clearInterval(t);
   }, []);
 
   async function logout() {
     await api.post('/api/logout').catch(() => {});
     onLogout();
   }
+
+  const badgeCls = summary && summary.firing > 0
+    ? summary.critical > 0 ? 'bg-red-600' : summary.warning > 0 ? 'bg-amber-500' : 'bg-sky-500'
+    : null;
 
   return (
     <div className="flex min-h-screen bg-zinc-100">
@@ -45,6 +62,14 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             >
               <Icon className="h-4.5 w-4.5" />
               {label}
+              {label === 'Alerts' && badgeCls && (
+                <span
+                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${badgeCls}`}
+                  title={`${summary!.firing} active alert${summary!.firing === 1 ? '' : 's'}`}
+                >
+                  {summary!.firing}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

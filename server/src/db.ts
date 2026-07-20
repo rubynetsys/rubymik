@@ -124,6 +124,61 @@ const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // 5: alerting. Rules are seeded global; scope_kind/scope_id exist so
+  // per-site/per-device overrides later are new rows, not a schema change.
+  // One FIRING row per (device, rule, target) is enforced by a partial
+  // unique index — dedup by construction. History pruned to 30 days.
+  `
+  ALTER TABLE device_status ADD COLUMN temp_c REAL;
+
+  CREATE TABLE alert_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule TEXT NOT NULL,
+    scope_kind TEXT NOT NULL DEFAULT 'global',
+    scope_id INTEGER,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    threshold REAL,
+    clear_threshold REAL,
+    fire_cycles INTEGER NOT NULL DEFAULT 2,
+    resolve_cycles INTEGER NOT NULL DEFAULT 2,
+    updated_at TEXT NOT NULL,
+    UNIQUE(rule, scope_kind, scope_id)
+  );
+  INSERT INTO alert_rules (rule, enabled, threshold, clear_threshold, fire_cycles, resolve_cycles, updated_at) VALUES
+    ('device_down', 1, NULL, NULL, 2, 2, datetime('now')),
+    ('cpu_high',    1, 90,   80,   3, 3, datetime('now')),
+    ('mem_high',    1, 90,   85,   3, 3, datetime('now')),
+    ('temp_high',   1, 70,   65,   3, 3, datetime('now')),
+    ('iface_down',  1, NULL, NULL, 2, 2, datetime('now'));
+
+  CREATE TABLE alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    rule TEXT NOT NULL,
+    target TEXT,
+    severity TEXT NOT NULL,
+    state TEXT NOT NULL,
+    message TEXT NOT NULL,
+    value TEXT,
+    fired_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    resolved_at TEXT,
+    cycles INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE INDEX idx_alerts_state ON alerts(state);
+  CREATE INDEX idx_alerts_device ON alerts(device_id);
+  CREATE UNIQUE INDEX idx_alerts_one_firing
+    ON alerts(device_id, rule, IFNULL(target, '')) WHERE state = 'firing';
+
+  CREATE TABLE notification_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    webhook_enabled INTEGER NOT NULL DEFAULT 0,
+    webhook_url TEXT,
+    updated_at TEXT NOT NULL
+  );
+  INSERT INTO notification_settings (id, webhook_enabled, webhook_url, updated_at)
+    VALUES (1, 0, NULL, datetime('now'));
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

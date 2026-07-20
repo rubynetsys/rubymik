@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { restConnect, restGet } from './routeros/rest.js';
 import type { RouterSystemInfo } from './routeros/types.js';
 import type { SecretBox } from './secretbox.js';
+import type { AlertEngine, IfaceState } from './alerts.js';
 import { log } from './log.js';
 
 /**
@@ -53,6 +54,7 @@ export class Poller {
     private readonly box: SecretBox,
     private readonly intervalMs: number,
     private readonly concurrency: number,
+    private readonly alerts?: AlertEngine,
   ) {}
 
   start(): void {
@@ -80,17 +82,26 @@ export class Poller {
       if (devices.length === 0) return;
       log.info(`Poll cycle #${cycle} started — ${devices.length} device(s), reason=${reason}`);
       const queue = [...devices];
+      const cycleIfaces = new Map<number, IfaceState[]>();
       let up = 0;
       let down = 0;
       const worker = async (): Promise<void> => {
         for (let d = queue.shift(); d && !this.stopped; d = queue.shift()) {
           await this.waitForLaunchSlot();
-          if (await this.pollDevice(d)) up++;
+          if (await this.pollDevice(d, cycleIfaces)) up++;
           else down++;
         }
       };
       await Promise.all(Array.from({ length: Math.min(this.concurrency, devices.length) }, worker));
       this.pruneHistory();
+      // Alert evaluation rides THIS cycle — same cadence, no second loop.
+      if (this.alerts) {
+        try {
+          this.alerts.evaluateCycle(cycleIfaces);
+        } catch (err) {
+          log.error(`alert evaluation failed: ${(err as Error).message}`);
+        }
+      }
       log.info(`Poll cycle #${cycle} done in ${((Date.now() - startedAt) / 1000).toFixed(1)}s — ${up} up, ${down} down`);
     } finally {
       this.cycleRunning = false;
@@ -111,7 +122,7 @@ export class Poller {
     if (slot > now) await sleep(slot - now);
   }
 
-  private async pollDevice(d: PollDeviceRow): Promise<boolean> {
+  private async pollDevice(d: PollDeviceRow, cycleIfaces?: Map<number, IfaceState[]>): Promise<boolean> {
     const t0 = Date.now();
     log.debug(`→ polling "${d.name}" (${d.host})`);
     try {
@@ -125,13 +136,14 @@ export class Poller {
         timeoutMs: POLL_TIMEOUT_MS,
       };
       const result = await restConnect(target);
-      this.recordSuccess(d.id, result.info);
+      const temp = await this.fetchTemp(target, result.scheme, result.port);
+      this.recordSuccess(d.id, result.info, temp);
       // Persist what auto-probe discovered so future polls skip the probe.
       if (d.use_tls === null) {
         this.db.prepare('UPDATE devices SET use_tls = ?, port = ?, updated_at = ? WHERE id = ?')
           .run(result.scheme === 'https' ? 1 : 0, result.port, new Date().toISOString(), d.id);
       }
-      await this.sampleInterfaces(d, target, result.scheme, result.port);
+      await this.sampleInterfaces(d, target, result.scheme, result.port, cycleIfaces);
       await this.sampleNeighbors(d, target, result.scheme, result.port);
       log.debug(`✓ "${d.name}" up in ${Date.now() - t0}ms — cpu ${result.info.cpuLoad}%`);
       return true;
@@ -142,24 +154,44 @@ export class Poller {
     }
   }
 
-  private recordSuccess(deviceId: number, info: RouterSystemInfo): void {
+  /** Board temperature via /system/health — absent on boards without sensors. */
+  private async fetchTemp(
+    target: Parameters<typeof restGet>[0],
+    scheme: 'https' | 'http',
+    port: number,
+  ): Promise<number | null> {
+    try {
+      const health = await restGet(target, scheme, port, '/system/health') as Array<Record<string, unknown>>;
+      if (!Array.isArray(health)) return null;
+      const temps = health
+        .filter((h) => typeof h['name'] === 'string' && (h['name'] as string).includes('temperature'))
+        .map((h) => Number(h['value']))
+        .filter((v) => Number.isFinite(v));
+      return temps.length > 0 ? Math.max(...temps) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private recordSuccess(deviceId: number, info: RouterSystemInfo, temp: number | null): void {
     const now = new Date().toISOString();
     const memUsedPct = info.totalMemory > 0
       ? Math.round(((info.totalMemory - info.freeMemory) / info.totalMemory) * 1000) / 10
       : null;
     this.db.prepare(`
       INSERT INTO device_status (device_id, state, consecutive_failures, last_attempt_at, last_seen_at, last_error,
-        identity, board_name, model, version, uptime, cpu_load, cpu_count, mem_total, mem_free, hdd_total, hdd_free, updated_at)
-      VALUES (?, 'up', 0, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        identity, board_name, model, version, uptime, cpu_load, cpu_count, mem_total, mem_free, hdd_total, hdd_free, temp_c, updated_at)
+      VALUES (?, 'up', 0, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(device_id) DO UPDATE SET
         state = 'up', consecutive_failures = 0, last_attempt_at = excluded.last_attempt_at,
         last_seen_at = excluded.last_seen_at, last_error = NULL,
         identity = excluded.identity, board_name = excluded.board_name, model = excluded.model,
         version = excluded.version, uptime = excluded.uptime, cpu_load = excluded.cpu_load,
         cpu_count = excluded.cpu_count, mem_total = excluded.mem_total, mem_free = excluded.mem_free,
-        hdd_total = excluded.hdd_total, hdd_free = excluded.hdd_free, updated_at = excluded.updated_at
+        hdd_total = excluded.hdd_total, hdd_free = excluded.hdd_free, temp_c = excluded.temp_c,
+        updated_at = excluded.updated_at
     `).run(deviceId, now, now, info.identity, info.boardName, info.model, info.version, info.uptime,
-      info.cpuLoad, info.cpuCount, info.totalMemory, info.freeMemory, info.totalHdd, info.freeHdd, now);
+      info.cpuLoad, info.cpuCount, info.totalMemory, info.freeMemory, info.totalHdd, info.freeHdd, temp, now);
     this.db.prepare('INSERT INTO device_metrics (device_id, ts, up, cpu_load, mem_used_pct) VALUES (?, ?, 1, ?, ?)')
       .run(deviceId, now, info.cpuLoad, memUsedPct);
   }
@@ -190,17 +222,21 @@ export class Poller {
     target: Parameters<typeof restGet>[0],
     scheme: 'https' | 'http',
     port: number,
+    cycleIfaces?: Map<number, IfaceState[]>,
   ): Promise<void> {
     try {
       const ifaces = await restGet(target, scheme, port, '/interface') as Array<Record<string, unknown>>;
       const counters: Record<string, [number, number]> = {};
       const macs = new Set<string>();
+      const states: IfaceState[] = [];
       for (const i of ifaces) {
         const name = typeof i['name'] === 'string' ? i['name'] : null;
         if (!name) continue;
         counters[name] = [Number(i['rx-byte']) || 0, Number(i['tx-byte']) || 0];
         if (typeof i['mac-address'] === 'string' && i['mac-address']) macs.add((i['mac-address'] as string).toLowerCase());
+        states.push({ name, running: i['running'] === 'true' || i['running'] === true, disabled: i['disabled'] === 'true' || i['disabled'] === true });
       }
+      cycleIfaces?.set(d.id, states);
       this.db.prepare('INSERT INTO interface_traffic (device_id, ts, data) VALUES (?, ?, ?)')
         .run(d.id, new Date().toISOString(), JSON.stringify(counters));
       this.db.prepare('UPDATE device_status SET if_macs = ? WHERE device_id = ?')
