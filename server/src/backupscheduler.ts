@@ -64,7 +64,10 @@ export class BackupScheduler {
     if (this.running) { log.warn('Backup run skipped — a run is already in progress'); return { ok: 0, failed: 0 }; }
     this.running = true;
     try {
-      const devices = this.db.prepare(`SELECT ${DEVICE_COLS} FROM devices ORDER BY id`)
+      // Only devices opted into scheduled backups (default 1 → unchanged for
+      // everything that existed before P10; onboarding can set 0). A manual
+      // backup ignores this flag — it's an explicit per-device action.
+      const devices = this.db.prepare(`SELECT ${DEVICE_COLS} FROM devices WHERE backups_enabled = 1 ORDER BY id`)
         .all() as unknown as DeviceRow[];
       if (devices.length === 0) return { ok: 0, failed: 0 };
       log.info(`Backup run (${reason}) — ${devices.length} device(s)`);

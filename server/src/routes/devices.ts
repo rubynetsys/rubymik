@@ -1,11 +1,12 @@
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
-import { requireAuth } from '../auth.js';
+import { requireAuth, type SessionUser } from '../auth.js';
 import type { SecretBox } from '../secretbox.js';
 import type { Poller } from '../poller.js';
 import { allSites, scopeFilter } from '../scope.js';
 import { connectDevice, type DeviceTarget } from '../routeros/index.js';
 import { readTarget, resolveEndpoint } from '../transport.js';
+import { writeAudit } from '../safeapply.js';
 import { log } from '../log.js';
 
 interface DeviceRow {
@@ -24,6 +25,7 @@ interface DeviceRow {
   write_password_enc: string | null;
   net_transport?: string | null;
   tunnel_ip?: string | null;
+  backups_enabled?: number;
   created_at: string;
   site_name?: string | null;
   status_state?: string | null;
@@ -39,6 +41,7 @@ function toPublic(row: DeviceRow) {
     transport: row.transport,
     netTransport: row.net_transport === 'tunnel' ? 'tunnel' : 'direct',
     tunnelIp: row.tunnel_ip ?? null,
+    backupsEnabled: row.backups_enabled === undefined ? true : row.backups_enabled === 1,
     useTls: row.use_tls === null ? null : row.use_tls === 1,
     siteId: row.site_id,
     siteName: row.site_name ?? null,
@@ -123,10 +126,13 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     // A write credential is set only when BOTH fields are non-empty — never
     // silently escalate; monitoring stays on the read credential regardless.
     const hasWrite = !!input.writeUsername && !!input.writePassword;
+    // Scheduled-backup opt-in. Defaults to true (unchanged for the plain add
+    // form and any client that omits it); onboarding passes false by default.
+    const backupsEnabled = (req.body ?? {}).backupsEnabled === false ? 0 : 1;
     const now = new Date().toISOString();
     const result = db.prepare(`
-      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, write_username_enc, write_password_enc, created_at, updated_at)
-      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, write_username_enc, write_password_enc, backups_enabled, created_at, updated_at)
+      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.name, input.host, input.port,
       input.useTls === null ? null : input.useTls ? 1 : 0,
@@ -134,11 +140,19 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       box.encrypt(input.username), box.encrypt(input.password),
       hasWrite ? box.encrypt(input.writeUsername!) : null,
       hasWrite ? box.encrypt(input.writePassword!) : null,
-      now, now,
+      backupsEnabled, now, now,
     );
     const id = result.lastInsertRowid as number;
     const row = db.prepare(`${selectDevice} WHERE d.id = ?`).get(id) as unknown as DeviceRow;
     log.info(`Device "${row.name}" (${row.host}) added`);
+    // Attach is an onboarding event worth an audit trail entry — it writes
+    // nothing to the router (pure monitoring attach), so before/after are null.
+    const actor = (req as Request & { user: SessionUser }).user.username;
+    writeAudit(
+      { db, actor, deviceId: id, deviceName: row.name, action: 'device.attach', targetLabel: row.host },
+      'applied', `Attached "${row.name}" (${row.host}) as a ${hasWrite ? 'manageable' : 'monitor-only'} DIRECT device`,
+      null, null, 'Monitoring attach only — no configuration written to the router.',
+    );
     poller.pollDeviceById(id);
     res.status(201).json(toPublic(row));
   });

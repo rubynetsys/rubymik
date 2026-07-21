@@ -280,6 +280,12 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_wg_peers_device ON wg_peers(device_id);
   `,
+  // 11: per-device opt-in for scheduled backups (P10 onboarding). Defaults to 1
+  // so EVERY existing device keeps being backed up exactly as before P10; the
+  // onboarding wizard sets it explicitly (default OFF there — extras are opt-in).
+  `
+  ALTER TABLE devices ADD COLUMN backups_enabled INTEGER NOT NULL DEFAULT 1;
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

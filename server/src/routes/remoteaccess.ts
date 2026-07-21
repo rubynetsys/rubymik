@@ -130,17 +130,25 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
     const name = typeof b.name === 'string' ? b.name.trim() : peer.label;
     const username = typeof b.username === 'string' ? b.username : '';
     const password = typeof b.password === 'string' ? b.password : '';
-    if (!username || !password) { res.status(400).json({ error: 'A monitoring username and password are required to adopt the device.' }); return; }
+    // Require a username; password may be blank (RouterOS permits blank-password
+    // users) — consistent with the direct add path (POST /devices).
+    if (!username) { res.status(400).json({ error: 'A monitoring username is required to adopt the device.' }); return; }
     const wu = typeof b.writeUsername === 'string' && b.writeUsername ? b.writeUsername : null;
     const wp = typeof b.writePassword === 'string' && b.writePassword ? b.writePassword : null;
+    let siteId: number | null = null;
+    if (b.siteId !== undefined && b.siteId !== null && b.siteId !== '') {
+      siteId = Number(b.siteId);
+      if (!Number.isInteger(siteId) || !db.prepare('SELECT id FROM sites WHERE id = ?').get(siteId)) { res.status(400).json({ error: 'Invalid site.' }); return; }
+    }
+    const backupsEnabled = b.backupsEnabled === false ? 0 : 1;
     const now = new Date().toISOString();
     try {
       // Reached over the tunnel: net_transport='tunnel', tunnel_ip set; http:80 over the encrypted overlay.
       const id = db.prepare(`INSERT INTO devices
-        (name, host, port, transport, use_tls, verify_tls, net_transport, tunnel_ip, username_enc, password_enc, write_username_enc, write_password_enc, created_at, updated_at)
-        VALUES (?, ?, 80, 'rest', 0, 0, 'tunnel', ?, ?, ?, ?, ?, ?, ?)`).run(
-        name, peer.tunnel_ip, peer.tunnel_ip, box.encrypt(username), box.encrypt(password),
-        wu ? box.encrypt(wu) : null, wp ? box.encrypt(wp) : null, now, now,
+        (name, host, port, transport, use_tls, verify_tls, site_id, net_transport, tunnel_ip, username_enc, password_enc, write_username_enc, write_password_enc, backups_enabled, created_at, updated_at)
+        VALUES (?, ?, 80, 'rest', 0, 0, ?, 'tunnel', ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        name, peer.tunnel_ip, siteId, peer.tunnel_ip, box.encrypt(username), box.encrypt(password),
+        wu ? box.encrypt(wu) : null, wp ? box.encrypt(wp) : null, backupsEnabled, now, now,
       ).lastInsertRowid as number;
       db.prepare('UPDATE wg_peers SET device_id = ?, updated_at = ? WHERE id = ?').run(id, now, peer.id);
       audit(actorOf(req), 'wg.peer.adopt', `${peer.label} → device #${id}`, `Adopted "${name}" as a tunnel device at ${peer.tunnel_ip}`, 'Device created with tunnel transport.');

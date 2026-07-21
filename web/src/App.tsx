@@ -13,6 +13,7 @@ import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
 import RemoteAccess from './pages/RemoteAccess';
+import Onboard from './pages/Onboard';
 import Audit from './pages/Audit';
 
 export default function App() {
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/topology" element={<Topology />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/devices" element={<Devices />} />
+          <Route path="/onboard" element={<Onboard />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />

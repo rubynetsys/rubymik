@@ -63,6 +63,11 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   every feature — monitoring, DHCP, firewall, DNS/NTP, backup — works over it
   unchanged. **Off by default and invisible to the same-LAN experience.** See
   [Remote access](#remote-access-over-wireguard-behind-nat-sites).
+- **Onboarding wizard** — a guided flow to bring an *existing, live* router under
+  management (same-LAN or behind-NAT). Its default posture is **touch nothing**:
+  monitoring is read-only, and you can complete it with RubyMIK making zero changes
+  to the router. Any write is explicit, opt-in, and shown first. See
+  [Onboarding](#onboarding-an-existing-router).
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -240,6 +245,35 @@ Singleton menus (`/ip/dns`, `/system/ntp/client`) are written with a REST
 every config feature, monitor-only devices are read-only and a write is rejected
 with `403` before the device is ever contacted.
 
+## Onboarding an existing router
+
+Most routers you'll add are **already live**, routing a client's real traffic. The
+onboarding wizard (**Onboard** in the nav) brings one under management safely, and
+its governing principle is **do no harm**: the default posture is touch nothing.
+
+- **Two paths.** *Router on my network* (direct) or *Router at a remote site behind
+  NAT* (tunnel, via the WireGuard hub). The wizard routes everything through the
+  same transport layer, so the router is either a `direct` or a `tunnel` device and
+  every feature works the same afterward.
+- **Read-only by default.** The direct path is a pure monitoring attach — it
+  connection-tests, identifies the device (model / RouterOS / serial), stores an
+  encrypted **read** credential, assigns a site, and finishes. **Zero configuration
+  is written to the router.** Providing a *write* credential is a separate, explicit
+  choice that makes the device manageable later — it still writes nothing during
+  onboarding.
+- **The tunnel is the only additive change, and you see it first.** On the remote
+  path the wizard generates the RouterOS bootstrap and shows *exactly* what it adds
+  (a `rmik-wg` interface, an overlay IP, a peer, one RUBYMIK-tagged accept rule) —
+  purely additive, nothing existing modified or removed, and cleanly removable. A
+  human applies it once; the router generates its own key (the script holds no
+  secret); RubyMIK detects the handshake and manages it over the tunnel.
+- **Extras are opt-in and default OFF.** An initial backup (a read) and inclusion in
+  scheduled backups are offered explicitly and skippable — skip them and RubyMIK
+  touches nothing. (Config changes — firewall, DNS/NTP, etc. — are never bundled
+  into onboarding; you make them deliberately later from the device page.)
+
+The wizard ends with a plain statement of what was done and what was **not** touched.
+
 ## Remote access over WireGuard (behind-NAT sites)
 
 RubyMIK can also manage routers it has **no direct network path to** — a router
@@ -339,9 +373,9 @@ need no native compilation.
 - More config features on the safe-apply framework: VLANs and interface config —
   each reusing snapshot → verify → rollback → audit (firewall, backups, and
   DNS/NTP already ship on it)
-- Remote-access UX: guided onboarding wizard, a browser WinBox-style terminal over
-  the tunnel, per-site firewall hardening applied over WireGuard (the tunnel
-  plumbing + transport abstraction already ship)
+- Remote-access UX: a browser WinBox-style terminal over the tunnel, per-site
+  firewall hardening applied over WireGuard (the tunnel plumbing, transport
+  abstraction, and the existing-router onboarding wizard already ship)
 - Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
 - Email (SMTP) notification channel; per-site / per-device alert-rule overrides
   (the rules schema already carries the scope columns)
