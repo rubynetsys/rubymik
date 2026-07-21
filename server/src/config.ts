@@ -12,6 +12,10 @@ export interface Config {
   pollIntervalSec: number;
   /** Max devices polled in parallel within a cycle. */
   pollConcurrency: number;
+  /** Seconds between scheduled config-backup runs (all devices). */
+  backupIntervalSec: number;
+  /** How many backups to retain per device. */
+  backupKeep: number;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -45,6 +49,8 @@ export function loadConfig(): Config {
 
   const pollIntervalSec = intEnv('RUBYMIK_POLL_INTERVAL', 30, 5, 3600);
   const pollConcurrency = intEnv('RUBYMIK_POLL_CONCURRENCY', 4, 1, 16);
+  const backupIntervalSec = intEnv('RUBYMIK_BACKUP_INTERVAL', 86400, 60, 2592000);
+  const backupKeep = intEnv('RUBYMIK_BACKUP_KEEP', 10, 1, 500);
 
-  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency };
+  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, backupIntervalSec, backupKeep };
 }

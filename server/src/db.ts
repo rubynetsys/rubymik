@@ -218,6 +218,32 @@ const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // 8: config backups. The full text export is gzip-compressed into a BLOB
+  // (SQLite-light — a big router's export compresses ~10x), with
+  // self-describing metadata so a backup knows which device/version it is.
+  `
+  CREATE TABLE device_backup (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+    device_name TEXT NOT NULL,
+    identity TEXT,
+    model TEXT,
+    serial TEXT,
+    version TEXT,
+    source TEXT NOT NULL,
+    raw_bytes INTEGER NOT NULL,
+    gz BLOB NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_device_backup_device ON device_backup(device_id, created_at);
+  `,
+  // 9: backup format. 'export' = canonical RouterOS /export (needs an
+  // ftp-capable write credential; importable → restorable). 'snapshot' = a
+  // read-only GET reconstruction (works with a plain read credential; diffable
+  // but not directly importable). Restore requires an 'export' backup.
+  `
+  ALTER TABLE device_backup ADD COLUMN format TEXT NOT NULL DEFAULT 'export';
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

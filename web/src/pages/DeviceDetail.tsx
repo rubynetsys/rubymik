@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Loader2,
+  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import StatusBadge from '../components/StatusBadge';
 import TrafficChart from '../components/TrafficChart';
 import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
+import BackupManager from '../components/BackupManager';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -213,6 +214,12 @@ export default function DeviceDetail() {
       <Section title="Firewall" icon={Shield}
         subtitle="preset-driven, mgmt-accept always first · writes go through snapshot → verify → auto-rollback → audit">
         <FirewallManager deviceId={deviceId} />
+      </Section>
+
+      {/* ===== Config backups (read-safe) + restore (safe-apply, manageable) ===== */}
+      <Section title="Config backups" icon={Archive}
+        subtitle="full text export, diffable · backups are read-safe · restore runs through the audited dead-man pipeline">
+        <BackupManager deviceId={deviceId} />
       </Section>
 
       {/* ===== Wireless ===== */}

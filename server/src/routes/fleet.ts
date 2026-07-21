@@ -62,6 +62,13 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
       ORDER BY d.name
     `).all(...deviceFilter.params) as unknown as FleetRow[];
 
+    // Last backup time per device (config backup freshness).
+    const lastBackupByDevice = new Map<number, string>();
+    for (const b of db.prepare(`SELECT device_id, MAX(created_at) AS last FROM device_backup GROUP BY device_id`)
+      .all() as unknown as Array<{ device_id: number; last: string }>) {
+      lastBackupByDevice.set(b.device_id, b.last);
+    }
+
     // Active-alert flags per device (count + highest severity).
     const alertsByDevice = new Map<number, { count: number; severity: 'critical' | 'warning' | 'info' }>();
     const alertRows = db.prepare(`
@@ -125,6 +132,7 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
         consecutiveFailures: row.consecutive_failures ?? 0,
         history: historyByDevice.get(row.id) ?? [],
         alerts: alertsByDevice.get(row.id) ?? null,
+        lastBackupAt: lastBackupByDevice.get(row.id) ?? null,
       };
     }
     for (const row of rows) {

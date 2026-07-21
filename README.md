@@ -48,6 +48,11 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   custom rules, with a **management-accept rule always emitted first** so a
   preset can't lock RubyMIK out, plus a dead-man that auto-reverts if the
   management path is lost after a change. Monitor-only devices show it read-only.
+- **Config backup & restore** — scheduled fleet-wide config backups + one-click
+  manual backup, stored compressed with a "what changed" **diff** between any two.
+  Backups are read-safe (a read-only snapshot on monitor-only devices; a
+  canonical export on manageable ones). **Restore** re-applies a backup through
+  the audited dead-man pipeline, with a device-mismatch guard.
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -99,6 +104,8 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_ENCRYPTION_KEY` | auto-generated | 64-hex-char AES-256 key for credentials at rest |
 | `RUBYMIK_POLL_INTERVAL` | `30` | Seconds between health poll cycles (5–3600) |
 | `RUBYMIK_POLL_CONCURRENCY` | `4` | Max devices polled in parallel (1–16) |
+| `RUBYMIK_BACKUP_INTERVAL` | `86400` | Seconds between scheduled config backups (60–2592000) |
+| `RUBYMIK_BACKUP_KEEP` | `10` | Config backups retained per device (1–500) |
 
 Device credentials are stored **AES-256-GCM encrypted** in SQLite — never plaintext.
 
@@ -150,8 +157,35 @@ distinct, opt-in capability with a hard structural boundary:
 - **Audit log.** Every write — applied, rolled-back, failed, or rejected — is
   recorded with actor, device, before/after, and outcome (see the Audit page).
 
-The first features riding this framework are DHCP reservations and the managed
-firewall; VLAN and interface config will reuse the same pipeline.
+The first features riding this framework are DHCP reservations, the managed
+firewall, and config restore; VLAN and interface config will reuse it too.
+
+### Config backup & restore
+
+- **Backup is read-safe.** On a manageable device RubyMIK captures the
+  canonical RouterOS text export (faithful + importable); on a monitor-only
+  device it captures a read-only GET reconstruction of the key config (nothing
+  is written to the device — not even a temp file). Both are self-describing
+  (device, model, serial, RouterOS version), gzip-compressed into SQLite
+  (a large router's export compresses ~10×), retained to the last N per device.
+- **Scheduled + manual + diff + download.** A low-frequency backup timer runs
+  independently of the metrics poller (it never disturbs the monitoring
+  cadence). Any two backups of a device can be diffed ("what changed since last
+  week?") and any backup downloaded as an `.rsc`.
+- **Restore** runs through the safe-apply dead-man (snapshot → apply → verify
+  mgmt reachable → auto-rollback → audit) and is guarded against restoring one
+  device's config onto another (identity/serial mismatch is refused). Restore
+  is a write — monitor-only devices refuse it (403).
+
+> **RouterOS constraints (honest scope):** `/export` requires the `ftp` policy,
+> so backups of a manageable device use its write/management credential; a plain
+> read credential can only produce the GET snapshot. A text export is a list of
+> `add` commands and is **not** idempotent (re-running it aborts on the first
+> existing item), and there is no ftp-free way to pull a binary backup or do a
+> clean wipe-replace over REST. RubyMIK therefore restores by **idempotent
+> reconcile** of the config it models (DHCP static reservations today); the
+> full ruleset is preserved in the backup for diff/download, and bit-for-bit
+> whole-device restore (reset-and-import / binary backups) is on the roadmap.
 
 ### Managed firewall — never sever the management path
 

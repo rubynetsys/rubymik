@@ -94,6 +94,42 @@ export interface LockoutTestResult {
   auditId: number;
 }
 
+// --- Config backup & restore (P7) ---
+
+export interface Backup {
+  id: number;
+  deviceId: number | null;
+  deviceName: string;
+  identity: string | null;
+  model: string | null;
+  serial: string | null;
+  version: string | null;
+  source: string;
+  format: 'export' | 'snapshot';
+  rawBytes: number;
+  gzBytes: number;
+  createdAt: string;
+}
+
+export interface BackupsView {
+  manageable: boolean;
+  backups: Backup[];
+}
+
+export interface DiffResult {
+  from: { id: number; createdAt: string };
+  to: { id: number; createdAt: string };
+  added: number;
+  removed: number;
+  lines: Array<{ t: ' ' | '+' | '-'; s: string }>;
+}
+
+export interface RestoreOutcome {
+  result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
+  auditId: number;
+  detail: string;
+}
+
 export interface AuditEntry {
   id: number;
   deviceId: number | null;
@@ -171,6 +207,8 @@ export interface FleetDevice {
   history: Array<number | null>;
   /** Active alert flags, null when none firing. */
   alerts: { count: number; severity: 'critical' | 'warning' | 'info' } | null;
+  /** ISO timestamp of the most recent config backup, or null. */
+  lastBackupAt: string | null;
 }
 
 export interface FleetSite {

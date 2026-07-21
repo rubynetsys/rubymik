@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Bell, Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
+  Archive, Bell, Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
   Router as RouterIcon, Search, Server,
 } from 'lucide-react';
 import { api } from '../api';
@@ -392,8 +392,12 @@ function DeviceCard({ device: d }: { device: FleetDevice }) {
         </div>
       )}
 
-      <div className="mt-3 border-t border-zinc-100 pt-2 text-[11px] text-zinc-400">
-        Polled {fmtAgo(d.lastAttemptAt)}
+      <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2 text-[11px] text-zinc-400">
+        <span>Polled {fmtAgo(d.lastAttemptAt)}</span>
+        <span title={d.lastBackupAt ? `Last config backup ${new Date(d.lastBackupAt).toLocaleString()}` : 'No config backup yet'}
+          className={`inline-flex items-center gap-1 ${!d.lastBackupAt || Date.now() - Date.parse(d.lastBackupAt) > 8 * 864e5 ? 'text-amber-600' : ''}`}>
+          <Archive className="h-3 w-3" /> {d.lastBackupAt ? `backed up ${fmtAgo(d.lastBackupAt)}` : 'no backup'}
+        </span>
       </div>
     </div>
   );

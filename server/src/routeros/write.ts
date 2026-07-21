@@ -19,7 +19,7 @@ import { RouterOsError } from './rest.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-type WriteMethod = 'PUT' | 'PATCH' | 'DELETE';
+type WriteMethod = 'PUT' | 'PATCH' | 'DELETE' | 'POST';
 
 function writeRequest(
   target: DeviceTarget,
@@ -99,4 +99,15 @@ export function restSet(t: DeviceTarget, tr: WriteTransport, apiPath: string, id
 /** Remove by id (RouterOS REST DELETE). */
 export function restRemove(t: DeviceTarget, tr: WriteTransport, apiPath: string, id: string): Promise<unknown> {
   return writeRequest(t, tr.scheme, tr.port, 'DELETE', `${apiPath}/${encodeURIComponent(id)}`, undefined);
+}
+
+/**
+ * Run a RouterOS command (REST POST). Used by config backup/restore for:
+ *  - `/export` — a READ-ONLY command that generates the config text and
+ *    changes nothing on the device (the sole read that isn't a GET; it lives
+ *    here so this module stays the single home of every non-GET verb).
+ *  - `/system/script/run`, `/system/backup/*` — config-modifying restore ops.
+ */
+export function restCommand(t: DeviceTarget, tr: WriteTransport, apiPath: string, body: Record<string, unknown>): Promise<unknown> {
+  return writeRequest(t, tr.scheme, tr.port, 'POST', apiPath, body);
 }
