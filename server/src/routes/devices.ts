@@ -5,6 +5,7 @@ import type { SecretBox } from '../secretbox.js';
 import type { Poller } from '../poller.js';
 import { allSites, scopeFilter } from '../scope.js';
 import { connectDevice, type DeviceTarget } from '../routeros/index.js';
+import { readTarget, resolveEndpoint } from '../transport.js';
 import { log } from '../log.js';
 
 interface DeviceRow {
@@ -21,6 +22,8 @@ interface DeviceRow {
   password_enc: string;
   write_username_enc: string | null;
   write_password_enc: string | null;
+  net_transport?: string | null;
+  tunnel_ip?: string | null;
   created_at: string;
   site_name?: string | null;
   status_state?: string | null;
@@ -34,6 +37,8 @@ function toPublic(row: DeviceRow) {
     host: row.host,
     port: row.port,
     transport: row.transport,
+    netTransport: row.net_transport === 'tunnel' ? 'tunnel' : 'direct',
+    tunnelIp: row.tunnel_ip ?? null,
     useTls: row.use_tls === null ? null : row.use_tls === 1,
     siteId: row.site_id,
     siteName: row.site_name ?? null,
@@ -216,14 +221,7 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       res.status(404).json({ error: 'Device not found.' });
       return;
     }
-    const ok = await runTest(res, row.host, {
-      host: row.host,
-      port: row.port ?? undefined,
-      useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-      verifyTls: row.verify_tls === 1,
-      username: box.decrypt(row.username_enc),
-      password: box.decrypt(row.password_enc),
-    });
+    const ok = await runTest(res, resolveEndpoint(row).host, readTarget(box, row));
     // Persist what auto-probe discovered so future connections skip the probe.
     if (ok && row.use_tls === null) {
       db.prepare('UPDATE devices SET use_tls = ?, port = ?, updated_at = ? WHERE id = ?')

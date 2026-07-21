@@ -12,6 +12,7 @@ import Alerts from './pages/Alerts';
 import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
+import RemoteAccess from './pages/RemoteAccess';
 import Audit from './pages/Audit';
 
 export default function App() {
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/devices" element={<Devices />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
+          <Route path="/remote-access" element={<RemoteAccess />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

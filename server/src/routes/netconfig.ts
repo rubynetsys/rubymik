@@ -3,9 +3,8 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth, type SessionUser } from '../auth.js';
 import type { SecretBox } from '../secretbox.js';
 import { allSites, scopeFilter } from '../scope.js';
-import { restConnect } from '../routeros/rest.js';
-import type { DeviceTarget } from '../routeros/types.js';
 import type { WriteTransport } from '../routeros/write.js';
+import { readTarget, writeTarget, transportFor } from '../transport.js';
 import { auditRejected } from '../safeapply.js';
 import {
   readDns, readNtp, applyDns, applyNtp, addStatic, editStatic, removeStatic,
@@ -18,6 +17,7 @@ interface DeviceRow {
   use_tls: number | null; verify_tls: number; site_id: number | null;
   username_enc: string; password_enc: string;
   write_username_enc: string | null; write_password_enc: string | null;
+  net_transport?: string | null; tunnel_ip?: string | null;
 }
 
 export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
@@ -29,17 +29,6 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     return db.prepare(`SELECT d.* FROM devices d WHERE d.id = ?${filter.sql}`).get(id, ...filter.params) as unknown as DeviceRow | undefined;
   };
   const actorOf = (req: Request) => (req as Request & { user: SessionUser }).user.username;
-  const readTarget = (row: DeviceRow): DeviceTarget => ({
-    host: row.host, port: row.port ?? undefined,
-    useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-    verifyTls: row.verify_tls === 1,
-    username: box.decrypt(row.username_enc), password: box.decrypt(row.password_enc),
-  });
-  async function transportFor(row: DeviceRow, read: DeviceTarget): Promise<WriteTransport> {
-    if (row.use_tls !== null) return { scheme: row.use_tls === 1 ? 'https' : 'http', port: row.port ?? (row.use_tls === 1 ? 443 : 80) };
-    const probed = await restConnect(read);
-    return { scheme: probed.scheme, port: probed.port };
-  }
   const sac = (row: DeviceRow, actor: string, action: string, target: string | null) =>
     ({ db, actor, deviceId: row.id, deviceName: row.name, action, targetLabel: target });
 
@@ -47,7 +36,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
   router.get('/:id/netconfig', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
     catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
@@ -67,7 +56,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
   router.get('/:id/netconfig/ntp', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     try {
       const transport = await transportFor(row, read);
       res.json(await readNtp({ read, write: read, transport }));
@@ -81,16 +70,11 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
       res.status(403).json({ error: 'This device is monitor-only. Add a write credential to manage DNS/NTP.' });
       return null;
     }
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
     catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
-    const write: DeviceTarget = {
-      host: row.host, port: row.port ?? undefined,
-      useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-      verifyTls: row.verify_tls === 1,
-      username: box.decrypt(row.write_username_enc), password: box.decrypt(row.write_password_enc),
-    };
+    const write = writeTarget(box, row);
     return { row, ctx: { read, write, transport }, actor: actorOf(req) };
   }
 

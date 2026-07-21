@@ -3,9 +3,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth, type SessionUser } from '../auth.js';
 import type { SecretBox } from '../secretbox.js';
 import { allSites, scopeFilter } from '../scope.js';
-import { restConnect, restGet } from '../routeros/rest.js';
+import { restGet } from '../routeros/rest.js';
 import type { DeviceTarget } from '../routeros/types.js';
 import type { WriteTransport } from '../routeros/write.js';
+import { readTarget, writeTarget, transportFor } from '../transport.js';
 import { auditRejected, writeAudit } from '../safeapply.js';
 import { listBackups, getBackupRow, diffExports } from '../backup.js';
 import { restoreBackup, type RestoreContext } from '../restore.js';
@@ -28,19 +29,6 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
     return db.prepare(`SELECT d.* FROM devices d WHERE d.id = ?${filter.sql}`).get(id, ...filter.params) as unknown as DeviceRow | undefined;
   };
   const actorOf = (req: Request) => (req as Request & { user: SessionUser }).user.username;
-
-  const readTarget = (row: DeviceRow): DeviceTarget => ({
-    host: row.host, port: row.port ?? undefined,
-    useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-    verifyTls: row.verify_tls === 1,
-    username: box.decrypt(row.username_enc), password: box.decrypt(row.password_enc),
-  });
-
-  async function transportFor(row: DeviceRow, read: DeviceTarget): Promise<WriteTransport> {
-    if (row.use_tls !== null) return { scheme: row.use_tls === 1 ? 'https' : 'http', port: row.port ?? (row.use_tls === 1 ? 443 : 80) };
-    const probed = await restConnect(read);
-    return { scheme: probed.scheme, port: probed.port };
-  }
 
   // List backups + manageability (backups are reads → allowed on any device).
   router.get('/:id/backups', (req, res) => {
@@ -110,7 +98,7 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
       return;
     }
 
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
     catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
@@ -127,13 +115,7 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
       }
     } catch { /* if routerboard unreadable, fall through — export-header serial still stored */ }
 
-    const write: DeviceTarget = {
-      host: row.host, port: row.port ?? undefined,
-      useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-      verifyTls: row.verify_tls === 1,
-      username: box.decrypt(row.write_username_enc), password: box.decrypt(row.write_password_enc),
-    };
-    const ctx: RestoreContext = { read, write, transport };
+    const ctx: RestoreContext = { read, write: writeTarget(box, row), transport };
     const forceRollback = (req.body?._forceRollback === true);
 
     try {

@@ -57,6 +57,12 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   allow-remote-requests, cache), manage static DNS host entries, and enable the
   NTP client with sync status. Every change runs the safe-apply pipeline and is
   audited; monitor-only devices show DNS/NTP read-only.
+- **Remote access over WireGuard** *(opt-in)* — manage routers that sit behind
+  NAT with no direct path. RubyMIK runs a WireGuard hub the routers dial
+  **outbound** into (no port-forward on the router side); once the tunnel is up,
+  every feature — monitoring, DHCP, firewall, DNS/NTP, backup — works over it
+  unchanged. **Off by default and invisible to the same-LAN experience.** See
+  [Remote access](#remote-access-over-wireguard-behind-nat-sites).
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -234,6 +240,67 @@ Singleton menus (`/ip/dns`, `/system/ntp/client`) are written with a REST
 every config feature, monitor-only devices are read-only and a write is rejected
 with `403` before the device is ever contacted.
 
+## Remote access over WireGuard (behind-NAT sites)
+
+RubyMIK can also manage routers it has **no direct network path to** — a router
+behind NAT at a remote site — by acting as a WireGuard hub the routers dial
+**outbound** into. This turns RubyMIK into a self-hosted cloud controller as well
+as a same-LAN tool. It is **opt-in and off by default**, and it never touches the
+zero-config LAN experience.
+
+**The transport abstraction is the whole design.** Every device is reached over
+one of two transports, resolved centrally in `server/src/transport.ts`:
+
+- **direct** — the device's LAN address (`host`). The default, and the only thing
+  a same-LAN deployment ever uses.
+- **tunnel** — a WireGuard overlay IP (`tunnel_ip`), for a behind-NAT device.
+
+The monitoring GET client and the write module both build their target through
+`resolveEndpoint()`, so *every* feature — monitoring, DHCP, firewall, DNS/NTP,
+backup — works over either transport with **no per-feature code**. A device that
+never opts into WireGuard has `net_transport = 'direct'` and behaves exactly as it
+did before this feature existed.
+
+**Solving the chicken-and-egg (the outbound dial).** RubyMIK can't push config to
+a router it can't reach. So onboarding is one human step:
+
+1. In RubyMIK, add a remote site → it allocates an overlay IP and generates a
+   one-time **RouterOS bootstrap script**.
+2. A human applies that script once on the router (WinBox terminal / SSH, on-site
+   or via existing access). It creates a WireGuard interface that dials the hub
+   **outbound** (traverses NAT — no port-forward on the router side), assigns the
+   overlay IP, and adds a minimal accept rule so RubyMIK can manage it over the
+   tunnel.
+3. The script prints the router's public key; paste it back into RubyMIK to
+   finish. The tunnel comes up and RubyMIK manages the router over the overlay
+   from then on.
+
+**Key handling (security).** The **router generates its own private key** — it
+never leaves the router, so the bootstrap script contains no secret (only the
+hub's *public* key + endpoint). The **only** private key RubyMIK stores is the
+hub's, AES-GCM encrypted at rest, decrypted in memory only to configure the
+interface (via a 0600 temp file deleted immediately) and never logged.
+
+**Docker requirement (honest).** The hub uses kernel WireGuard, which needs the
+container run with `NET_ADMIN`, as root, and the UDP port published. Those are
+**not** in the base image/compose — they're an opt-in override so a home-lab
+`docker run` is unaffected:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.wireguard.yml up -d --build
+```
+
+Open the UDP port (default 51820) on your host/cloud firewall, and set RubyMIK's
+reachable endpoint in **Remote Access**. The WireGuard kernel module must be
+available on the host (it is on modern Linux and Docker Desktop); if it isn't, the
+hub reports the error honestly and the rest of RubyMIK keeps working.
+
+> **Tested vs. real-world.** This was validated by having a real MikroTik dial the
+> hub and then managing it **exclusively over the overlay IP** (direct path unused;
+> killing the tunnel makes only the tunnel device go unreachable). The hub ran on a
+> dev host standing in for a VPS. A public-VPS-to-real-remote-NAT deployment is the
+> real-world validation; the mechanism (outbound dial + hub) is identical.
+
 ## Polling at scale
 
 The poller is designed so a large fleet doesn't get hammered and one dead
@@ -272,7 +339,9 @@ need no native compilation.
 - More config features on the safe-apply framework: VLANs and interface config —
   each reusing snapshot → verify → rollback → audit (firewall, backups, and
   DNS/NTP already ship on it)
-- WireGuard / remote-access management (the keystone config feature)
+- Remote-access UX: guided onboarding wizard, a browser WinBox-style terminal over
+  the tunnel, per-site firewall hardening applied over WireGuard (the tunnel
+  plumbing + transport abstraction already ship)
 - Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
 - Email (SMTP) notification channel; per-site / per-device alert-rule overrides
   (the rules schema already carries the scope columns)

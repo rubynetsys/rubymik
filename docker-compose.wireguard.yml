@@ -1,0 +1,36 @@
+# ============================================================================
+# OPT-IN WireGuard remote-access override.
+#
+# The base docker-compose.yml is the zero-config LAN experience: non-root, no
+# extra capabilities, no exposed UDP port. It stays that way. This override is
+# ONLY for operators who want RubyMIK to also act as a WireGuard hub for remote,
+# behind-NAT routers.
+#
+# Run it alongside the base file:
+#     docker compose -f docker-compose.yml -f docker-compose.wireguard.yml up -d --build
+#
+# What it adds and WHY:
+#   - cap_add: NET_ADMIN   → create/manage the WireGuard interface (`ip`, `wg`).
+#   - user: "0:0" (root)   → NET_ADMIN is only effective for root; the default
+#                            image runs as the unprivileged `node` user, which
+#                            cannot manage network interfaces even with the cap.
+#   - ports 51820/udp      → the UDP port remote routers dial INBOUND. Must be
+#                            reachable at the endpoint you configure in the UI
+#                            (open it on your host/cloud firewall).
+#   - /dev/net/tun + sysctl are included for portability across kernels.
+#
+# The WireGuard kernel module must be available on the host (it is on modern
+# Linux and Docker Desktop). If it isn't, the hub reports the error honestly and
+# the rest of RubyMIK keeps working.
+# ============================================================================
+services:
+  rubymik:
+    user: "0:0"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    ports:
+      - "51820:51820/udp"

@@ -27,6 +27,10 @@ ENV NODE_ENV=production \
     RUBYMIK_DATA_DIR=/data \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning
 WORKDIR /app
+# wireguard-tools + iproute2 are used ONLY by the opt-in remote-access hub. They
+# are inert for a default (LAN-only) deployment — nothing runs them unless the
+# operator enables WireGuard AND runs with NET_ADMIN (see docker-compose.wireguard.yml).
+RUN apk add --no-cache wireguard-tools iproute2
 COPY --from=serverbuild /srv/package.json ./package.json
 COPY --from=serverbuild /srv/node_modules ./node_modules
 COPY --from=serverbuild /srv/dist ./dist

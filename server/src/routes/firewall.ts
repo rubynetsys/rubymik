@@ -3,9 +3,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth, type SessionUser } from '../auth.js';
 import type { SecretBox } from '../secretbox.js';
 import { allSites, scopeFilter } from '../scope.js';
-import { restConnect, restGet } from '../routeros/rest.js';
+import { restGet } from '../routeros/rest.js';
 import type { DeviceTarget } from '../routeros/types.js';
 import type { WriteTransport } from '../routeros/write.js';
+import { readTarget, writeTarget, transportFor } from '../transport.js';
 import { auditRejected } from '../safeapply.js';
 import {
   applyFirewall, removeFirewall, readManagedRules, lockoutTest,
@@ -32,28 +33,9 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
       .get(id, ...filter.params) as unknown as DeviceRow | undefined;
   };
 
-  const readTarget = (row: DeviceRow): DeviceTarget => ({
-    host: row.host, port: row.port ?? undefined,
-    useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-    verifyTls: row.verify_tls === 1,
-    username: box.decrypt(row.username_enc), password: box.decrypt(row.password_enc),
-  });
-
-  async function transportFor(row: DeviceRow, read: DeviceTarget): Promise<WriteTransport> {
-    if (row.use_tls !== null) return { scheme: row.use_tls === 1 ? 'https' : 'http', port: row.port ?? (row.use_tls === 1 ? 443 : 80) };
-    const probed = await restConnect(read);
-    return { scheme: probed.scheme, port: probed.port };
-  }
-
   function fwContext(row: DeviceRow, read: DeviceTarget, transport: WriteTransport): FirewallContext | null {
     if (!row.write_username_enc || !row.write_password_enc) return null;
-    const write: DeviceTarget = {
-      host: row.host, port: row.port ?? undefined,
-      useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-      verifyTls: row.verify_tls === 1,
-      username: box.decrypt(row.write_username_enc), password: box.decrypt(row.write_password_enc),
-    };
-    return { read, write, transport };
+    return { read, write: writeTarget(box, row), transport };
   }
 
   const sac = (row: DeviceRow, actor: string, action: string, target: string | null) =>
@@ -84,7 +66,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
   router.get('/:id/firewall', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
     catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
@@ -116,7 +98,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
   async function requireManageable(req: Request, res: Response): Promise<{ row: DeviceRow; ctx: FirewallContext; actor: string } | null> {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return null; }
-    const read = readTarget(row);
+    const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
     catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }

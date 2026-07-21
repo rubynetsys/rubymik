@@ -130,6 +130,48 @@ export interface RestoreOutcome {
   detail: string;
 }
 
+// --- Remote access / WireGuard (P9) ---
+
+export interface HubLivePeer {
+  publicKey: string;
+  endpoint: string | null;
+  latestHandshakeUnix: number;
+  rxBytes: number;
+  txBytes: number;
+  state: 'never' | 'recent' | 'stale';
+}
+
+export interface HubStatus {
+  configured: boolean;
+  enabled: boolean;
+  running: boolean;
+  endpoint: string | null;
+  listenPort: number;
+  overlayCidr: string;
+  hubAddress: string;
+  publicKey: string | null;
+  runtimeError: string | null;
+  peers: HubLivePeer[];
+}
+
+export interface PeerView {
+  id: number;
+  label: string;
+  tunnelIp: string;
+  hasKey: boolean;
+  status: string;
+  deviceId: number | null;
+  deviceName: string | null;
+  lastHandshakeAt: string | null;
+  createdAt: string;
+}
+
+export interface RemoteAccessView {
+  hub: HubStatus;
+  peers: PeerView[];
+  live: Record<number, { state: 'never' | 'recent' | 'stale'; latestHandshakeUnix: number; rxBytes: number; txBytes: number } | null>;
+}
+
 // --- DNS & NTP config (P8) ---
 
 export interface NetConfigView {

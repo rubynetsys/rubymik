@@ -244,6 +244,42 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE device_backup ADD COLUMN format TEXT NOT NULL DEFAULT 'export';
   `,
+  // 10: WireGuard remote-access (P9). A device is reached via DIRECT (its LAN
+  // host, today's default) or TUNNEL (a WireGuard overlay IP). net_transport
+  // defaults to 'direct' so EVERY existing device is byte-for-byte unchanged and
+  // the zero-config LAN path is untouched. The hub is a singleton row; peers are
+  // one per remote site. The only private key RubyMIK ever stores is the hub's,
+  // AES-GCM encrypted; routers generate their own keys and register only pubkeys.
+  `
+  ALTER TABLE devices ADD COLUMN net_transport TEXT NOT NULL DEFAULT 'direct';
+  ALTER TABLE devices ADD COLUMN tunnel_ip TEXT;
+
+  CREATE TABLE wg_hub (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0,
+    endpoint TEXT,
+    listen_port INTEGER NOT NULL DEFAULT 51820,
+    overlay_cidr TEXT NOT NULL DEFAULT '10.9.0.0/24',
+    hub_address TEXT NOT NULL DEFAULT '10.9.0.1',
+    private_key_enc TEXT,
+    public_key TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE wg_peers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+    label TEXT NOT NULL,
+    tunnel_ip TEXT NOT NULL UNIQUE,
+    public_key TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    last_handshake_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_wg_peers_device ON wg_peers(device_id);
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

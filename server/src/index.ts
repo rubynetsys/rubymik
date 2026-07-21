@@ -18,6 +18,8 @@ import { dhcpRoutes, auditRoutes } from './routes/dhcp.js';
 import { firewallRoutes } from './routes/firewall.js';
 import { backupRoutes } from './routes/backup.js';
 import { netconfigRoutes } from './routes/netconfig.js';
+import { remoteAccessRoutes } from './routes/remoteaccess.js';
+import { WireguardHub } from './wireguard.js';
 import { siteRoutes } from './routes/sites.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { topologyRoutes } from './routes/topology.js';
@@ -31,6 +33,7 @@ const notifier = new Notifier(db);
 const alertEngine = new AlertEngine(db, notifier);
 const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine);
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);
+const wgHub = new WireguardHub(db, box);
 
 const app = express();
 app.disable('x-powered-by');
@@ -43,6 +46,7 @@ app.use('/api/devices', dhcpRoutes(db, box));
 app.use('/api/devices', firewallRoutes(db, box));
 app.use('/api/devices', backupRoutes(db, box, backupScheduler));
 app.use('/api/devices', netconfigRoutes(db, box));
+app.use('/api/remote-access', remoteAccessRoutes(db, box, wgHub));
 app.use('/api/sites', siteRoutes(db));
 app.use('/api/fleet', fleetRoutes(db, poller, config.pollIntervalSec));
 app.use('/api/topology', topologyRoutes(db));
@@ -75,6 +79,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   log.info(`RubyMIK listening on http://0.0.0.0:${config.port} (data: ${config.dataDir}, log: ${config.logLevel})`);
   poller.start();
   backupScheduler.start();
+  void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

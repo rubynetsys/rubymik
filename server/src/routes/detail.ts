@@ -6,6 +6,7 @@ import type { Poller } from '../poller.js';
 import { allSites, scopeFilter } from '../scope.js';
 import { restConnect, restGet, RouterOsError, type Scheme } from '../routeros/rest.js';
 import type { DeviceTarget } from '../routeros/types.js';
+import { readTarget } from '../transport.js';
 import { log } from '../log.js';
 
 /**
@@ -97,17 +98,6 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       LEFT JOIN sites s ON s.id = d.site_id
       WHERE d.id = ?${filter.sql}
     `).get(id, ...filter.params) as unknown as DeviceRow | undefined;
-  }
-
-  function targetFor(row: DeviceRow): DeviceTarget {
-    return {
-      host: row.host,
-      port: row.port ?? undefined,
-      useTls: row.use_tls === null ? undefined : row.use_tls === 1,
-      verifyTls: row.verify_tls === 1,
-      username: box.decrypt(row.username_enc),
-      password: box.decrypt(row.password_enc),
-    };
   }
 
   /** Resolve scheme/port — auto-probing (and persisting) if never connected. */
@@ -214,7 +204,7 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       }
     }
 
-    const target = targetFor(row);
+    const target = readTarget(box, row);
     let scheme: Scheme;
     let port: number;
     try {

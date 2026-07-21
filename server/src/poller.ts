@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { restConnect, restGet } from './routeros/rest.js';
 import type { RouterSystemInfo } from './routeros/types.js';
 import type { SecretBox } from './secretbox.js';
+import { readTarget } from './transport.js';
 import type { AlertEngine, IfaceState } from './alerts.js';
 import { log } from './log.js';
 
@@ -38,9 +39,11 @@ interface PollDeviceRow {
   verify_tls: number;
   username_enc: string;
   password_enc: string;
+  net_transport: string | null;
+  tunnel_ip: string | null;
 }
 
-const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc';
+const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc, net_transport, tunnel_ip';
 
 export class Poller {
   private timer: NodeJS.Timeout | undefined;
@@ -126,15 +129,7 @@ export class Poller {
     const t0 = Date.now();
     log.debug(`→ polling "${d.name}" (${d.host})`);
     try {
-      const target = {
-        host: d.host,
-        port: d.port ?? undefined,
-        useTls: d.use_tls === null ? undefined : d.use_tls === 1,
-        verifyTls: d.verify_tls === 1,
-        username: this.box.decrypt(d.username_enc),
-        password: this.box.decrypt(d.password_enc),
-        timeoutMs: POLL_TIMEOUT_MS,
-      };
+      const target = readTarget(this.box, d, POLL_TIMEOUT_MS);
       const result = await restConnect(target);
       const temp = await this.fetchTemp(target, result.scheme, result.port);
       this.recordSuccess(d.id, result.info, temp);

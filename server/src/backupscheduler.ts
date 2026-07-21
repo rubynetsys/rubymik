@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { restConnect } from './routeros/rest.js';
-import type { DeviceTarget } from './routeros/types.js';
 import type { WriteTransport } from './routeros/write.js';
 import type { SecretBox } from './secretbox.js';
+import { readTarget, writeTarget } from './transport.js';
 import { exportCanonical, snapshotReadonly, storeBackup, type StoredBackup } from './backup.js';
 import { log } from './log.js';
 
@@ -17,9 +17,10 @@ interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
   use_tls: number | null; verify_tls: number; username_enc: string; password_enc: string;
   write_username_enc: string | null; write_password_enc: string | null;
+  net_transport: string | null; tunnel_ip: string | null;
 }
 
-const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc, write_username_enc, write_password_enc';
+const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc, write_username_enc, write_password_enc, net_transport, tunnel_ip';
 const STAGGER_MS = 400;
 
 export class BackupScheduler {
@@ -41,28 +42,16 @@ export class BackupScheduler {
 
   stop(): void { if (this.timer) clearInterval(this.timer); }
 
-  private target(d: DeviceRow, which: 'read' | 'write'): DeviceTarget {
-    const [u, p] = which === 'write'
-      ? [d.write_username_enc!, d.write_password_enc!]
-      : [d.username_enc, d.password_enc];
-    return {
-      host: d.host, port: d.port ?? undefined,
-      useTls: d.use_tls === null ? undefined : d.use_tls === 1,
-      verifyTls: d.verify_tls === 1,
-      username: this.box.decrypt(u), password: this.box.decrypt(p),
-    };
-  }
-
   async backupOne(d: DeviceRow, source: string): Promise<StoredBackup | null> {
     try {
-      const read = this.target(d, 'read');
+      const read = readTarget(this.box, d);
       const result = await restConnect(read); // resolves scheme/port (and confirms reachable)
       const transport: WriteTransport = { scheme: result.scheme, port: result.port };
       // Manageable (has an ftp-capable write cred) → canonical, importable export.
       // Monitor-only → read-only GET snapshot (nothing written to the device).
       const manageable = !!(d.write_username_enc && d.write_password_enc);
       const { text, meta } = manageable
-        ? await exportCanonical(this.target(d, 'write'), transport)
+        ? await exportCanonical(writeTarget(this.box, d), transport)
         : await snapshotReadonly(read, transport);
       return storeBackup(this.db, d.id, d.name, source, manageable ? 'export' : 'snapshot', text, meta, this.keepN);
     } catch (err) {
