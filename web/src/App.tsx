@@ -14,6 +14,7 @@ import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
 import RemoteAccess from './pages/RemoteAccess';
 import Onboard from './pages/Onboard';
+import Provision from './pages/Provision';
 import Audit from './pages/Audit';
 
 export default function App() {
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/devices" element={<Devices />} />
           <Route path="/onboard" element={<Onboard />} />
+          <Route path="/provision" element={<Provision />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />

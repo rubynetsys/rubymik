@@ -68,6 +68,12 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   monitoring is read-only, and you can complete it with RubyMIK making zero changes
   to the router. Any write is explicit, opt-in, and shown first. See
   [Onboarding](#onboarding-an-existing-router).
+- **Provisioning wizard** — build a complete baseline for a *blank/factory* router
+  (identity, LAN bridge, addressing, WAN, DHCP, NAT, firewall, and — for a remote
+  site — the tunnel-back), with **ruthless validation** that refuses to emit an
+  incoherent or lockout config. Generate a script the human applies once (safe,
+  default), or live-apply it to a reachable blank router in safe order with the
+  dead-man armed. See [Provisioning](#provisioning-a-new-blank-router).
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -273,6 +279,42 @@ its governing principle is **do no harm**: the default posture is touch nothing.
   into onboarding; you make them deliberately later from the device page.)
 
 The wizard ends with a plain statement of what was done and what was **not** touched.
+
+## Provisioning a new (blank) router
+
+Where onboarding attaches to a *live* router, the **provisioning wizard**
+(`server/src/provision.ts`) builds a *blank/factory* one from nothing: identity,
+LAN bridge + ports, addressing, WAN (DHCP client / static / PPPoE), DHCP server,
+NAT, firewall, and — for a remote site — the WireGuard tunnel-back. This is the
+highest-stakes config in RubyMIK, so it's built around two disciplines:
+
+- **Ruthless validation.** Before it generates anything, `validateSpec` proves the
+  whole spec is internally coherent and **refuses** otherwise, with specific errors:
+  DHCP pool inside the LAN subnet, no WAN/LAN overlap, no double-assigned interface,
+  the router's own IP excluded from the pool, static WAN has IP/gw/dns, PPPoE has
+  credentials, sane subnets/leases. It never emits a config it can't prove correct.
+- **The firewall can't lock you out.** The generated firewall is P6's — so it
+  *always* leads with the management-accept guard. A provisioned router can never
+  come up locked out of management.
+
+Two application modes:
+
+- **Mode A — generate a script (safe, and the default).** The wizard produces the
+  complete baseline as a RouterOS script; a human applies it once to the blank
+  router. RubyMIK applies nothing live, so there's no mid-build lockout risk. For a
+  **remote/behind-NAT** router this is the *only* mode (the tunnel-back is part of
+  the baseline, so the router dials in once it's applied); RubyMIK then adopts it
+  over the tunnel. Requires the hub enabled for the remote case.
+- **Mode B — live-apply (LAN-only).** For a blank router already reachable on the
+  LAN, RubyMIK applies the baseline itself, in **safe order** — management first,
+  the lockout-capable firewall **last** (through the P6 dead-man), every step
+  verified before the next. If any step severs management, the baseline is unwound
+  (the router goes back toward blank/reachable, never orphaned half-configured) and
+  the failing step is reported.
+
+Everything reuses the proven primitives — the firewall is P6's generator, the
+tunnel is P9's bootstrap, the safe-apply/dead-man is P5/P6, adoption is P10's — so
+this phase validates, generates, and orchestrates rather than re-deriving rules.
 
 ## Remote access over WireGuard (behind-NAT sites)
 
