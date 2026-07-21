@@ -26,7 +26,10 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   registrations, switch ports, health/temperature, recent log — the
   RouterOS-native depth generic SNMP tools can't cleanly show. Sections
   capability-detect per device and say "not applicable" honestly instead of
-  faking panels.
+  faking panels. Organised into **tabs** (Overview · Interfaces · Network ·
+  DHCP · Firewall · DNS & NTP · Backups · Logs) with the active tab in the URL
+  (`#firewall`) so it survives refresh and deep-links; heavy tabs fetch only
+  when opened, while Overview keeps live-polling.
 - **Sites** — group devices by location or client (MSP-style). The data model is
   built for per-user site scoping later; today a single admin sees everything.
 - **Background poller** — staggered, timeout-isolated REST polling on a

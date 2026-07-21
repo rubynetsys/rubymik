@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, Loader2,
+  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
@@ -22,6 +22,35 @@ const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
 const CHART_REFRESH_MS = 30_000;
 
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'interfaces', label: 'Interfaces', icon: Network },
+  { id: 'network', label: 'Network', icon: RouteIcon },
+  { id: 'dhcp', label: 'DHCP', icon: Activity },
+  { id: 'firewall', label: 'Firewall', icon: Shield },
+  { id: 'dns', label: 'DNS & NTP', icon: Globe },
+  { id: 'backups', label: 'Backups', icon: Archive },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+const TAB_IDS = TABS.map((t) => t.id) as readonly string[];
+
+/** Tab state mirrored to the URL hash, so refresh/back keep the tab. */
+function useTabHash(): [TabId, (t: TabId) => void] {
+  const read = (): TabId => {
+    const h = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+    return (TAB_IDS.includes(h) ? h : 'overview') as TabId;
+  };
+  const [tab, setTabState] = useState<TabId>(read);
+  useEffect(() => {
+    const onHash = () => setTabState(read());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const setTab = (t: TabId) => { window.location.hash = t; setTabState(t); };
+  return [tab, setTab];
+}
+
 export default function DeviceDetail() {
   const { id } = useParams();
   const deviceId = Number(id);
@@ -31,6 +60,7 @@ export default function DeviceDetail() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [openIface, setOpenIface] = useState<string | null>(null);
+  const [tab, setTab] = useTabHash();
 
   const loadFull = useCallback(async () => {
     try {
@@ -101,8 +131,8 @@ export default function DeviceDetail() {
 
   return (
     <Shell name={dev.name}>
-      {/* ===== Overview header ===== */}
-      <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+      {/* ===== Persistent device header (visible on every tab) ===== */}
+      <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle">
@@ -141,30 +171,39 @@ export default function DeviceDetail() {
             <span className="text-danger"> — showing last-known information.</span>
           </div>
         )}
-
-        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border-subtle pt-4 sm:grid-cols-4 lg:grid-cols-6">
-          <Meta label="Model" value={rb?.model ?? dev.model ?? dev.boardName ?? '—'} />
-          <Meta label="RouterOS" value={dev.version ?? '—'} />
-          <Meta label="Serial" value={rb?.serial ?? '—'} />
-          <Meta label="Firmware" value={rb?.firmware ?? '—'} />
-          <Meta label="Uptime" value={live?.uptime ?? '—'} icon={Clock} />
-          {temp?.value && <Meta label="Temp" value={`${temp.value}°${temp.type ?? 'C'}`} icon={Thermometer} />}
-          <MetricMeter label="CPU" icon={Cpu}
-            pct={live?.cpuLoad ?? null}
-            detail={live?.cpuCount ? `${live.cpuCount} cores` : undefined} warnAt={85} />
-          <MetricMeter label="Memory" icon={MemoryStick}
-            pct={live?.memUsedPct ?? null}
-            detail={live ? `${fmtBytes(live.memTotal - live.memFree)} / ${fmtBytes(live.memTotal)}` : undefined}
-            warnAt={90} />
-        </dl>
-        {live && (
-          <div className="mt-3 text-[11px] text-fg-faint">
-            Live · updated {fmtAgo(live.fetchedAt)} · refreshes every {LIVE_REFRESH_MS / 1000}s while this page is open
-          </div>
-        )}
       </div>
 
-      {/* ===== Interfaces ===== */}
+      {/* ===== Tabs ===== */}
+      <TabBar active={tab} onSelect={setTab} />
+
+      {/* ===== Overview tab: at-a-glance metrics ===== */}
+      {tab === 'overview' && (
+        <Section title="At a glance" icon={LayoutGrid}>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4 lg:grid-cols-6">
+            <Meta label="Model" value={rb?.model ?? dev.model ?? dev.boardName ?? '—'} />
+            <Meta label="RouterOS" value={dev.version ?? '—'} />
+            <Meta label="Serial" value={rb?.serial ?? '—'} />
+            <Meta label="Firmware" value={rb?.firmware ?? '—'} />
+            <Meta label="Uptime" value={live?.uptime ?? '—'} icon={Clock} />
+            {temp?.value && <Meta label="Temp" value={`${temp.value}°${temp.type ?? 'C'}`} icon={Thermometer} />}
+            <MetricMeter label="CPU" icon={Cpu}
+              pct={live?.cpuLoad ?? null}
+              detail={live?.cpuCount ? `${live.cpuCount} cores` : undefined} warnAt={85} />
+            <MetricMeter label="Memory" icon={MemoryStick}
+              pct={live?.memUsedPct ?? null}
+              detail={live ? `${fmtBytes(live.memTotal - live.memFree)} / ${fmtBytes(live.memTotal)}` : undefined}
+              warnAt={90} />
+          </dl>
+          {live && (
+            <div className="mt-3 text-[11px] text-fg-faint">
+              Live · updated {fmtAgo(live.fetchedAt)} · refreshes every {LIVE_REFRESH_MS / 1000}s while this page is open
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ===== Interfaces tab ===== */}
+      {tab === 'interfaces' && (
       <Section title="Interfaces" icon={Network}
         subtitle={live ? `${live.interfaces.filter((i) => i.running).length} of ${live.interfaces.length} running · rates derived from counters (read-only)` : undefined}>
         {!live ? (
@@ -197,9 +236,10 @@ export default function DeviceDetail() {
           </div>
         )}
       </Section>
+      )}
 
-      {/* ===== DHCP (manageable — reservations via safe-apply pipeline) ===== */}
-      {detail.sections.dhcp.ok && detail.sections.dhcp.data.servers.length > 0 ? (
+      {/* ===== DHCP tab ===== */}
+      {tab === 'dhcp' && (detail.sections.dhcp.ok && detail.sections.dhcp.data.servers.length > 0 ? (
         <Section title="DHCP reservations" icon={Activity}
           subtitle="static leases + active dynamic leases · writes go through snapshot → verify → auto-rollback → audit">
           <DhcpManager deviceId={deviceId} />
@@ -209,27 +249,35 @@ export default function DeviceDetail() {
           naText="No DHCP server on this device."
           render={() => <Unavailable text="No DHCP server configured on this device." />}
         />
-      )}
+      ))}
 
-      {/* ===== Firewall (managed — safe-apply with mgmt-lockout protection) ===== */}
+      {/* ===== Firewall tab ===== */}
+      {tab === 'firewall' && (
       <Section title="Firewall" icon={Shield}
         subtitle="preset-driven, mgmt-accept always first · writes go through snapshot → verify → auto-rollback → audit">
         <FirewallManager deviceId={deviceId} />
       </Section>
+      )}
 
-      {/* ===== Config backups (read-safe) + restore (safe-apply, manageable) ===== */}
+      {/* ===== Backups tab ===== */}
+      {tab === 'backups' && (
       <Section title="Config backups" icon={Archive}
         subtitle="full text export, diffable · backups are read-safe · restore runs through the audited dead-man pipeline">
         <BackupManager deviceId={deviceId} />
       </Section>
+      )}
 
-      {/* ===== DNS & NTP (read-safe) + set (safe-apply, manageable) ===== */}
+      {/* ===== DNS & NTP tab ===== */}
+      {tab === 'dns' && (
       <Section title="DNS & NTP" icon={Globe}
         subtitle="resolver, static hosts & time sync · reads are safe · changes run through snapshot → verify → auto-rollback → audit">
         <DnsNtpManager deviceId={deviceId} />
       </Section>
+      )}
 
-      {/* ===== Wireless ===== */}
+      {/* ===== Network tab: wireless, switch, ARP, routes ===== */}
+      {tab === 'network' && (
+      <>
       <SectionFor title="Wireless" icon={Wifi} section={detail.sections.wireless}
         naText="Not applicable — this device has no wireless interface."
         render={(w) => (
@@ -305,8 +353,11 @@ export default function DeviceDetail() {
           </>
         )}
       />
+      </>
+      )}
 
-      {/* ===== System / update + logs ===== */}
+      {/* ===== System info (shown in Overview) ===== */}
+      {tab === 'overview' && (
       <SectionFor title="System" icon={FileText} section={detail.sections.update}
         naText="Package update info not available."
         render={(u) => (
@@ -332,7 +383,10 @@ export default function DeviceDetail() {
           </div>
         )}
       />
+      )}
 
+      {/* ===== Logs tab ===== */}
+      {tab === 'logs' && (
       <SectionFor title="Recent log" icon={ScrollText} section={detail.sections.logs}
         naText="Log not accessible via REST on this device."
         render={(logs) => (
@@ -350,6 +404,7 @@ export default function DeviceDetail() {
           </div>
         )}
       />
+      )}
     </Shell>
   );
 }
@@ -398,6 +453,30 @@ function MetricMeter({ label, icon: Icon, pct, detail, warnAt }: {
         </div>
         {detail && <div className="mt-0.5 text-[10px] text-fg-faint">{detail}</div>}
       </dd>
+    </div>
+  );
+}
+
+/** Themed, horizontally-scrollable tab bar (underline style). Works in every P12 theme. */
+function TabBar({ active, onSelect }: { active: TabId; onSelect: (t: TabId) => void }) {
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex min-w-max gap-1 border-b border-border">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => onSelect(id)}
+            aria-current={active === id ? 'page' : undefined}
+            className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors ${
+              active === id
+                ? 'border-accent text-accent-text'
+                : 'border-transparent text-fg-dim hover:border-border-strong hover:text-fg'
+            }`}
+          >
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
