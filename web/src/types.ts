@@ -200,6 +200,17 @@ export interface DiffResult {
   lines: Array<{ t: ' ' | '+' | '-'; s: string }>;
 }
 
+// --- native QoS simple queues (P23) ---
+export interface SimpleQueue {
+  id: string; order: number; name: string; target: string | null;
+  maxLimit: string | null; limitAt: string | null; burstLimit: string | null; burstThreshold: string | null; burstTime: string | null;
+  priority: string | null; parent: string | null; queueType: string | null; timeSchedule: string | null;
+  disabled: boolean; dynamic: boolean; invalid: boolean; comment: string | null; managed: boolean;
+  rate: string | null; bytes: string | null; packets: string | null; totalBytes: string | null;
+}
+export interface QosMgmtInfo { mgmtIp: string; mgmtInterface: string | null; mgmtPort: number; mgmtScheme: string }
+export interface QosView { manageable: boolean; queues: SimpleQueue[]; mgmt: QosMgmtInfo }
+
 // --- native NAT rules (P22) ---
 export interface NatRule {
   id: string; order: number; chain: string; action: string;

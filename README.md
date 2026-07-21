@@ -138,6 +138,21 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   an all-port redirect on the management interface, and a masquerade/src-nat that
   provably rewrites the management return path. Ambiguous cases aren't refused —
   they fall through to the dead-man. Monitor-only devices show NAT read-only.
+- **Native QoS — simple queues** — create / edit / delete / reorder / enable
+  `/queue/simple` rate-limits with a rule builder and live per-queue rate stats.
+  A queue can't sever management, but it can **strangle** it (an 8k cap over the
+  management flow leaves the router pingable yet operationally partitioned) — a
+  hazard the reachability-only dead-man would miss. So QoS adds two things: a
+  **queue management guard** that refuses a *provable* strangle (target = the
+  management IP/interface, or 0.0.0.0/0, below a bandwidth floor), and a **latency
+  dimension on the dead-man** — after a queue write, management round-trip is
+  measured and compared to a pre-write baseline; if the median blows past
+  max(baseline × 10, 2s) the change auto-rolls-back even though the router still
+  answers. Broad shaping that merely *includes* the management IP isn't refused —
+  it rides that latency dead-man. RubyMIK-created queues are `RUBYMIK-QOS`-tagged;
+  foreign queues are flagged unmanaged (take-ownership to edit). The queue *tree*
+  (marks + mangle) is deliberately out of scope. Monitor-only devices show QoS
+  read-only.
 - **Config backup & restore** — scheduled fleet-wide config backups + one-click
   manual backup, stored compressed with a "what changed" **diff** between any two.
   Backups are read-safe (a read-only snapshot on monitor-only devices; a
@@ -238,6 +253,10 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_BACKUP_INTERVAL` | `86400` | Seconds between scheduled config backups (60–2592000) |
 | `RUBYMIK_BACKUP_KEEP` | `10` | Config backups retained per device (1–500) |
 | `RUBYMIK_SNAPSHOT_INTERVAL` | `86400` | Seconds between scheduled config snapshots (60–2592000; a router snapshotted within 20h is skipped) |
+| `RUBYMIK_QOS_FLOOR_BPS` | `1000000` | Bandwidth floor (bps) below which a mgmt-targeting queue is a provable strangle (guard-refused) |
+| `RUBYMIK_QOS_LATENCY_CEIL` | `2000` | Latency dead-man ceiling (ms) for queue writes — a strangle above max(baseline×mult, this) rolls back |
+| `RUBYMIK_QOS_LATENCY_MULT` | `10` | Latency dead-man multiplier over the pre-write baseline |
+| `RUBYMIK_QOS_LATENCY_SAMPLES` | `5` | Round-trips sampled per latency measurement (median) |
 
 Device credentials are stored **AES-256-GCM encrypted** in SQLite — never plaintext.
 

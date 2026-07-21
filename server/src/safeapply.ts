@@ -35,6 +35,15 @@ export interface SafeApplyContext {
   targetLabel: string | null;
   /** Override the reachability probe (tests inject a stub; prod uses GET). */
   probe?: () => Promise<boolean>;
+  /**
+   * P23: a latency dimension to the dead-man, for changes (queues) that can leave
+   * the router "reachable" yet strangled. When set, verify also requires the median
+   * management round-trip to stay under max(baseline × multiplier, ceilingMs); a
+   * breach rolls back. Only queue ops set this — every other phase is unchanged.
+   */
+  latency?: { samples: number; multiplier: number; ceilingMs: number };
+  /** TEST ONLY: inject a latency sampler (ms) instead of timing a real GET. */
+  latencyProbe?: () => Promise<number>;
 }
 
 export interface SafeApplySteps<B> {
@@ -69,6 +78,20 @@ async function reachable(ctx: SafeApplyContext): Promise<boolean> {
   }
 }
 
+/** Median management round-trip over N serial-check GETs (ms). A failed probe
+ *  counts as the timeout, so a strangle that also drops packets still reads slow. */
+async function medianLatency(ctx: SafeApplyContext, samples: number): Promise<number> {
+  const times: number[] = [];
+  for (let i = 0; i < samples; i++) {
+    if (ctx.latencyProbe) { times.push(await ctx.latencyProbe()); continue; }
+    const t0 = performance.now();
+    try { await restGet({ ...ctx.target, timeoutMs: 6000 }, ctx.transport.scheme, ctx.transport.port, '/system/routerboard'); times.push(performance.now() - t0); }
+    catch { times.push(6000); }
+  }
+  times.sort((a, b) => a - b);
+  return times[Math.floor(times.length / 2)] ?? 0;
+}
+
 function audit(
   ctx: SafeApplyContext, result: ApplyResult, summary: string,
   before: unknown, after: unknown, detail: string,
@@ -96,6 +119,9 @@ async function runSafeApplyInner<B>(ctx: SafeApplyContext, steps: SafeApplySteps
   const before = await steps.snapshot();
   const summary = steps.summary(before);
 
+  // P23: baseline the management latency BEFORE the change (queue ops only).
+  const baseline = ctx.latency ? await medianLatency(ctx, ctx.latency.samples) : 0;
+
   // 1. Apply
   try {
     log.info(`[safe-apply] ${ctx.action} on "${ctx.deviceName}" by ${ctx.actor}: applying — ${summary}`);
@@ -117,6 +143,19 @@ async function runSafeApplyInner<B>(ctx: SafeApplyContext, steps: SafeApplySteps
   } else if (steps.forceVerifyFail) {
     ok = false;
     verifyDetail = 'FORCED TEST FAILURE: simulating a post-apply verification failure to exercise auto-rollback.';
+  } else if (ctx.latency && await (async () => {
+    // P23: reachable but is management STRANGLED? Compare post-change median latency
+    // to the budget. This catches a queue that leaves the router pingable yet
+    // operationally partitioned — which the reachability-only check above passes.
+    const post = await medianLatency(ctx, ctx.latency!.samples);
+    const budget = Math.max(baseline * ctx.latency!.multiplier, ctx.latency!.ceilingMs);
+    if (post > budget) {
+      verifyDetail = `Management latency ${Math.round(post)}ms exceeds the ${Math.round(budget)}ms budget (baseline ${Math.round(baseline)}ms ×${ctx.latency!.multiplier}, ceiling ${ctx.latency!.ceilingMs}ms) — the change is strangling the management path even though the router still answers. Rolling back.`;
+      return true;
+    }
+    return false;
+  })()) {
+    ok = false;
   } else {
     try {
       const v = await steps.verifyTook();

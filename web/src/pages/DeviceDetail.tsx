@@ -18,6 +18,7 @@ import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import SnapshotManager from '../components/SnapshotManager';
 import NatManager from '../components/NatManager';
+import QosManager from '../components/QosManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
@@ -37,6 +38,7 @@ const TABS = [
   { id: 'dhcp', label: 'DHCP', icon: Activity },
   { id: 'firewall', label: 'Firewall', icon: Shield },
   { id: 'nat', label: 'NAT', icon: ArrowLeftRight },
+  { id: 'qos', label: 'QoS', icon: Gauge },
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
   { id: 'wireless', label: 'Wireless', icon: Wifi },
   { id: 'vpn', label: 'VPN', icon: KeyRound },
@@ -282,6 +284,14 @@ export default function DeviceDetail() {
       <Section title="NAT" icon={ArrowLeftRight}
         subtitle="src-nat / dst-nat rules · order-sensitive · a rule that would steal the management socket is refused; everything else rides the dead-man + is snapshotted pre/post">
         <NatManager deviceId={deviceId} />
+      </Section>
+      )}
+
+      {/* ===== QoS tab ===== */}
+      {tab === 'qos' && (
+      <Section title="QoS — simple queues" icon={Gauge}
+        subtitle="per-target rate limits · a queue that would strangle the management flow is refused; broader shaping rides a dead-man that checks latency (not just reachability) + is snapshotted pre/post">
+        <QosManager deviceId={deviceId} />
       </Section>
       )}
 
