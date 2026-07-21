@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, LayoutGrid, Loader2,
+  Activity, AppWindow, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import DnsNtpManager from '../components/DnsNtpManager';
+import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -31,6 +32,7 @@ const TABS = [
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
   { id: 'backups', label: 'Backups', icon: Archive },
   { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'admin', label: 'Router Admin', icon: AppWindow },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 const TAB_IDS = TABS.map((t) => t.id) as readonly string[];
@@ -404,6 +406,11 @@ export default function DeviceDetail() {
           </div>
         )}
       />
+      )}
+
+      {/* ===== Router Admin tab (WebFig proxy) ===== */}
+      {tab === 'admin' && (
+        <WebfigPanel deviceId={deviceId} />
       )}
     </Shell>
   );

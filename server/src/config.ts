@@ -12,6 +12,9 @@ export interface Config {
   pollIntervalSec: number;
   /** Max devices polled in parallel within a cycle. */
   pollConcurrency: number;
+  /** Dedicated port for the WebFig reverse proxy (router admin UIs need web-root
+   *  '/', so they get their own listener). 0 disables the WebFig feature. */
+  webfigPort: number;
   /** Seconds between scheduled config-backup runs (all devices). */
   backupIntervalSec: number;
   /** How many backups to retain per device. */
@@ -56,11 +59,16 @@ export function loadConfig(): Config {
     ? 0
     : intEnv('RUBYMIK_POLL_INTERVAL', 30, 5, 3600);
   const pollConcurrency = intEnv('RUBYMIK_POLL_CONCURRENCY', 4, 1, 16);
+  // WebFig proxy gets its own port (default main+1) because WebFig assumes it is
+  // served from web-root '/'. 0 turns the feature off.
+  const webfigPort = process.env.RUBYMIK_WEBFIG_PORT === '0'
+    ? 0
+    : intEnv('RUBYMIK_WEBFIG_PORT', port + 1, 1, 65535);
   const backupIntervalSec = intEnv('RUBYMIK_BACKUP_INTERVAL', 86400, 60, 2592000);
   const backupKeep = intEnv('RUBYMIK_BACKUP_KEEP', 10, 1, 500);
 
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
 
-  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, backupIntervalSec, backupKeep, defaultTheme, defaultAccent };
+  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, defaultTheme, defaultAccent };
 }

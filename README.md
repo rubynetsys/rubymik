@@ -35,9 +35,18 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   RouterOS-native depth generic SNMP tools can't cleanly show. Sections
   capability-detect per device and say "not applicable" honestly instead of
   faking panels. Organised into **tabs** (Overview · Interfaces · Network ·
-  DHCP · Firewall · DNS & NTP · Backups · Logs) with the active tab in the URL
-  (`#firewall`) so it survives refresh and deep-links; heavy tabs fetch only
-  when opened, while Overview keeps live-polling.
+  DHCP · Firewall · DNS & NTP · Backups · Logs · Router Admin) with the active
+  tab in the URL (`#firewall`) so it survives refresh and deep-links; heavy tabs
+  fetch only when opened, while Overview keeps live-polling.
+- **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
+  UI *through* RubyMIK, over whichever transport the device uses — including a
+  behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a
+  logged-in, authorized user), and **target-by-device-id only**: the browser
+  never supplies a host, so it can't be turned into an open proxy. Credentials
+  are pass-through — you log in with the router's own login; RubyMIK never
+  injects or stores it in the proxy path, so nothing leaks. Every open is
+  audited. WebFig assumes web-root, so it is served on its own port (see
+  `RUBYMIK_WEBFIG_PORT`).
 - **Sites** — group devices by location or client (MSP-style). The data model is
   built for per-user site scoping later; today a single admin sees everything.
 - **Background poller** — staggered, timeout-isolated REST polling on a
@@ -140,6 +149,7 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `RUBYMIK_ENCRYPTION_KEY` | auto-generated | 64-hex-char AES-256 key for credentials at rest |
 | `RUBYMIK_POLL_INTERVAL` | `30` | Seconds between health poll cycles (5–3600, or `0` to disable polling and serve stored data only) |
+| `RUBYMIK_WEBFIG_PORT` | main port + 1 (`8081`) | Port for the WebFig router-admin reverse proxy (WebFig needs web-root, so it gets its own listener). Must be browser-reachable, like the main port. `0` disables the feature |
 | `RUBYMIK_POLL_CONCURRENCY` | `4` | Max devices polled in parallel (1–16) |
 | `RUBYMIK_BACKUP_INTERVAL` | `86400` | Seconds between scheduled config backups (60–2592000) |
 | `RUBYMIK_BACKUP_KEEP` | `10` | Config backups retained per device (1–500) |

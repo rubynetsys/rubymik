@@ -24,6 +24,8 @@ import { WireguardHub } from './wireguard.js';
 import { siteRoutes } from './routes/sites.js';
 import { fleetRoutes } from './routes/fleet.js';
 import { topologyRoutes } from './routes/topology.js';
+import http from 'node:http';
+import { webfigSessionRoutes, webfigProxyApp } from './routes/webfig.js';
 
 const config = loadConfig();
 setLogLevel(config.logLevel);
@@ -38,9 +40,12 @@ const wgHub = new WireguardHub(db, box);
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json());
+// JSON body parsing is scoped to the API only — the WebFig proxy paths
+// (/webfig, /jsproxy) must receive the RAW request stream to pipe upstream.
+app.use('/api', express.json());
 
 app.use('/api', authRoutes(db, { theme: config.defaultTheme, accent: config.defaultAccent }));
+app.use('/api/devices', webfigSessionRoutes(db, box, config.webfigPort));
 app.use('/api/devices', deviceRoutes(db, box, poller));
 app.use('/api/devices', detailRoutes(db, box, poller));
 app.use('/api/devices', dhcpRoutes(db, box));
@@ -67,6 +72,7 @@ const publicDir = [path.resolve(here, '..', 'public'), path.resolve(here, '..', 
   .find((dir) => fs.existsSync(path.join(dir, 'index.html')))
   ?? path.resolve(here, '..', 'public');
 const indexHtml = path.join(publicDir, 'index.html');
+
 if (fs.existsSync(indexHtml)) {
   app.use(express.static(publicDir));
   app.use((req, res, next) => {
@@ -85,11 +91,23 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });
 
+// The WebFig reverse proxy runs on its own port (router admin UIs need web-root
+// '/'). Every request is auth+scope-gated and resolved by device id — see
+// routes/webfig.ts. Set RUBYMIK_WEBFIG_PORT=0 to disable the feature entirely.
+let webfigServer: http.Server | undefined;
+if (config.webfigPort > 0) {
+  webfigServer = http.createServer(webfigProxyApp(db, box));
+  webfigServer.listen(config.webfigPort, '0.0.0.0', () => {
+    log.info(`WebFig proxy listening on http://0.0.0.0:${config.webfigPort} (router admin UIs, auth+scope-gated by RubyMIK session)`);
+  });
+}
+
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     log.info(`${signal} received, shutting down`);
     poller.stop();
     backupScheduler.stop();
+    webfigServer?.close();
     server.close(() => {
       db.close();
       process.exit(0);

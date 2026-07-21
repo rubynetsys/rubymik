@@ -38,7 +38,9 @@ COPY --from=webbuild /web/dist ./public
 RUN mkdir -p /data && chown node:node /data /app
 USER node
 VOLUME /data
-EXPOSE 8080
+# 8080 = dashboard/API; 8081 = WebFig reverse proxy (router admin UIs need
+# web-root '/', so they get their own listener). See RUBYMIK_WEBFIG_PORT.
+EXPOSE 8080 8081
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.RUBYMIK_PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/index.js"]
