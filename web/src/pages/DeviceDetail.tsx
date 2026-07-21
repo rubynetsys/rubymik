@@ -18,6 +18,7 @@ import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
+import RoutesManager from '../components/RoutesManager';
 import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -344,27 +345,11 @@ export default function DeviceDetail() {
         )}
       />
 
-      {/* ===== Routes ===== */}
-      <SectionFor title="Routes" icon={RouteIcon} section={detail.sections.routes}
-        naText="Routing table not available."
-        render={(r) => (
-          <>
-            {r.total > r.entries.length && (
-              <div className="mb-3 text-xs text-fg-dim">
-                Showing first {r.entries.length} of {r.total} routes.
-              </div>
-            )}
-            <SimpleTable
-              headers={['Destination', 'Gateway', 'Distance', 'Flags']}
-              rows={r.entries.map((e) => [
-                e.dst ?? '—', e.gateway ?? '—', e.distance === null ? '—' : String(e.distance),
-                [e.active ? 'active' : 'inactive', e.static ? 'static' : e.dynamic ? 'dynamic' : null]
-                  .filter(Boolean).join(' · '),
-              ])}
-            />
-          </>
-        )}
-      />
+      {/* ===== Routes (read + static-route config via safe-apply) ===== */}
+      <Section title="Routes" icon={RouteIcon}
+        subtitle="static routes only · RUBYMIK-tagged, reversible · management-path guarded · changes run reachable-then-commit with auto-revert on lockout">
+        <RoutesManager deviceId={deviceId} />
+      </Section>
       </>
       )}
 

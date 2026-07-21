@@ -68,6 +68,20 @@ export interface WirelessView {
   clients: Array<Record<string, string | null>>;
 }
 
+// --- Routes (P17) ---
+export type RouteKind = 'connected' | 'dynamic' | 'static';
+export interface RouteEntry {
+  id: string; dst: string | null; gateway: string | null; distance: number | null;
+  active: boolean; kind: RouteKind; managed: boolean; comment: string | null;
+}
+export interface RoutesView {
+  manageable: boolean;
+  routes: RouteEntry[];
+  mgmtPrefixes: string[];
+  mgmtHost: string;
+  mgmtNet: string;   // 'direct' | 'tunnel'
+}
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {

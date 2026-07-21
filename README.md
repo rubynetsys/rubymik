@@ -47,6 +47,17 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   are secrets: never shown in the UI, never logged, never written to the audit
   trail (it records "security changed", not the value). A wireless interface that
   carries the device's own management connection is flagged before you change it.
+- **Native static-route config** — view the routing table (dst/gateway/distance/
+  static-vs-dynamic-vs-connected) and add/edit/remove **static** routes, riding the
+  same snapshot → verify → auto-rollback → audit pipeline with the **dead-man
+  mandatory** — because a bad route can black-hole the very path RubyMIK manages
+  the router through. A **transport-aware management-path guard** refuses the
+  obvious mgmt-severing changes up front (the default route, or a route overlapping
+  the subnet RubyMIK reaches the device on — the LAN subnet for a direct device,
+  the WireGuard overlay for a tunnel device); anything subtler is caught post-apply
+  by verify-reachability-then-commit-or-revert. RubyMIK-added routes are
+  `RUBYMIK:`-tagged (idempotent, removable); dynamic/connected/protocol routes are
+  read-only.
 - **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
   UI *through* RubyMIK, over whichever transport the device uses — including a
   behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a
