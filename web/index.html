@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>RubyMIK</title>
+    <script>
+      /* Apply the cached theme before first paint — no flash-of-wrong-theme.
+         The server (users.theme) is authoritative and re-syncs after load. */
+      (function () {
+        try {
+          var t = localStorage.getItem('rk-theme'), a = localStorage.getItem('rk-accent');
+          if (t && t !== 'ruby-light') document.documentElement.setAttribute('data-theme', t);
+          if (a) document.documentElement.setAttribute('data-accent', a);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -82,14 +82,14 @@ export default function DeviceDetail() {
   if (error) {
     return (
       <Shell name={detail?.device.name}>
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">{error}</div>
+        <div className="rounded-2xl border border-danger-line bg-danger-bg p-6 text-sm text-danger-fg-strong">{error}</div>
       </Shell>
     );
   }
   if (!detail) {
     return (
       <Shell>
-        <div className="h-40 animate-pulse rounded-2xl border border-zinc-200 bg-white" />
+        <div className="h-40 animate-pulse rounded-2xl border border-border bg-surface" />
       </Shell>
     );
   }
@@ -102,22 +102,22 @@ export default function DeviceDetail() {
   return (
     <Shell name={dev.name}>
       {/* ===== Overview header ===== */}
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-ruby-50">
-              <RouterIcon className="h-6 w-6 text-ruby-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-subtle">
+              <RouterIcon className="h-6 w-6 text-accent" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-bold tracking-tight text-zinc-900">{dev.name}</h1>
+                <h1 className="text-xl font-bold tracking-tight text-fg-strong">{dev.name}</h1>
                 <StatusBadge status={status as never} />
               </div>
-              <div className="mt-0.5 text-sm text-zinc-500">
+              <div className="mt-0.5 text-sm text-fg-dim">
                 {dev.scheme}://{dev.host}:{dev.port}
                 {dev.identity ? ` · ${dev.identity}` : ''}
                 {dev.siteName && (
-                  <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-600">
+                  <span className="ml-2 rounded-full bg-app px-2 py-0.5 text-xs font-semibold text-fg-muted">
                     {dev.siteName}
                   </span>
                 )}
@@ -127,7 +127,7 @@ export default function DeviceDetail() {
           <button
             onClick={() => void refreshNow()}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
           >
             {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Poll now
@@ -135,14 +135,14 @@ export default function DeviceDetail() {
         </div>
 
         {liveError && (
-          <div className="mt-4 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">
+          <div className="mt-4 rounded-lg bg-danger-bg px-3 py-2.5 text-sm text-danger-fg-strong">
             Cannot reach the device right now: {liveError}
-            {dev.lastSeenAt && <span className="text-red-400"> · last seen {fmtAgo(dev.lastSeenAt)}</span>}
-            <span className="text-red-400"> — showing last-known information.</span>
+            {dev.lastSeenAt && <span className="text-danger"> · last seen {fmtAgo(dev.lastSeenAt)}</span>}
+            <span className="text-danger"> — showing last-known information.</span>
           </div>
         )}
 
-        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-zinc-100 pt-4 sm:grid-cols-4 lg:grid-cols-6">
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border-subtle pt-4 sm:grid-cols-4 lg:grid-cols-6">
           <Meta label="Model" value={rb?.model ?? dev.model ?? dev.boardName ?? '—'} />
           <Meta label="RouterOS" value={dev.version ?? '—'} />
           <Meta label="Serial" value={rb?.serial ?? '—'} />
@@ -158,7 +158,7 @@ export default function DeviceDetail() {
             warnAt={90} />
         </dl>
         {live && (
-          <div className="mt-3 text-[11px] text-zinc-400">
+          <div className="mt-3 text-[11px] text-fg-faint">
             Live · updated {fmtAgo(live.fetchedAt)} · refreshes every {LIVE_REFRESH_MS / 1000}s while this page is open
           </div>
         )}
@@ -173,7 +173,7 @@ export default function DeviceDetail() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                   <th className="pb-2 pl-2">Interface</th>
                   <th className="pb-2">Type</th>
                   <th className="pb-2">MAC</th>
@@ -234,7 +234,7 @@ export default function DeviceDetail() {
         naText="Not applicable — this device has no wireless interface."
         render={(w) => (
           <>
-            <div className="mb-3 text-xs text-zinc-500">
+            <div className="mb-3 text-xs text-fg-dim">
               Stack: {w.stack} · {w.clients.length} client{w.clients.length === 1 ? '' : 's'} connected
             </div>
             {w.clients.length === 0 ? (
@@ -257,7 +257,7 @@ export default function DeviceDetail() {
         naText="Not applicable — no switch chip on this device."
         render={(sw) => (
           <>
-            <div className="mb-3 text-xs text-zinc-500">
+            <div className="mb-3 text-xs text-fg-dim">
               {sw.chips.map((c) => `${c.name ?? 'switch'}${c.type ? ` (${c.type})` : ''}`).join(' · ')}
               {' '}· link speed needs the RouterOS monitor command (write-path) — not shown by design
             </div>
@@ -290,7 +290,7 @@ export default function DeviceDetail() {
         render={(r) => (
           <>
             {r.total > r.entries.length && (
-              <div className="mb-3 text-xs text-zinc-500">
+              <div className="mb-3 text-xs text-fg-dim">
                 Showing first {r.entries.length} of {r.total} routes.
               </div>
             )}
@@ -314,17 +314,17 @@ export default function DeviceDetail() {
             <Meta label="Installed" value={u.installed ?? '—'} />
             <Meta label="Channel" value={u.channel ?? '—'} />
             {u.updateAvailable === true && (
-              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+              <span className="rounded-full bg-warning-bg px-2.5 py-1 text-xs font-semibold text-warning-fg">
                 Update available: {u.latest}
               </span>
             )}
             {u.updateAvailable === false && (
-              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+              <span className="rounded-full bg-success-bg px-2.5 py-1 text-xs font-semibold text-success-fg">
                 Up to date ({u.latest})
               </span>
             )}
             {u.updateAvailable === null && (
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-500"
+              <span className="rounded-full bg-app px-2.5 py-1 text-xs font-semibold text-fg-dim"
                 title="RouterOS only knows the latest version after check-for-updates runs on the router; RubyMIK won't trigger it (write path) or guess.">
                 Update status unknown — check not run on the router
               </span>
@@ -336,12 +336,12 @@ export default function DeviceDetail() {
       <SectionFor title="Recent log" icon={ScrollText} section={detail.sections.logs}
         naText="Log not accessible via REST on this device."
         render={(logs) => (
-          <div className="max-h-80 overflow-y-auto rounded-lg bg-zinc-50 p-3 font-mono text-xs leading-5 text-zinc-700">
-            {logs.length === 0 && <div className="text-zinc-400">Log buffer is empty.</div>}
+          <div className="max-h-80 overflow-y-auto rounded-lg bg-sunken p-3 font-mono text-xs leading-5 text-fg-body">
+            {logs.length === 0 && <div className="text-fg-faint">Log buffer is empty.</div>}
             {logs.map((l, i) => (
               <div key={i} className="flex gap-2">
-                <span className="shrink-0 text-zinc-400">{l.time ?? ''}</span>
-                <span className={`shrink-0 ${l.topics?.includes('error') || l.topics?.includes('critical') ? 'text-red-700' : 'text-zinc-400'}`}>
+                <span className="shrink-0 text-fg-faint">{l.time ?? ''}</span>
+                <span className={`shrink-0 ${l.topics?.includes('error') || l.topics?.includes('critical') ? 'text-danger-fg' : 'text-fg-faint'}`}>
                   {l.topics ?? ''}
                 </span>
                 <span className="break-all">{l.message ?? ''}</span>
@@ -359,7 +359,7 @@ export default function DeviceDetail() {
 function Shell({ name, children }: { name?: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition hover:text-ruby-700">
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-dim transition hover:text-accent-text">
         <ArrowLeft className="h-4 w-4" /> Fleet
       </Link>
       <div className="mt-3 space-y-5">{children}</div>
@@ -371,10 +371,10 @@ function Shell({ name, children }: { name?: string; children: React.ReactNode })
 function Meta({ label, value, icon: Icon }: { label: string; value: string; icon?: React.ComponentType<{ className?: string }> }) {
   return (
     <div>
-      <dt className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+      <dt className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
         {Icon && <Icon className="h-3 w-3" />} {label}
       </dt>
-      <dd className="mt-0.5 truncate text-sm font-medium text-zinc-800" title={value}>{value}</dd>
+      <dd className="mt-0.5 truncate text-sm font-medium text-fg" title={value}>{value}</dd>
     </div>
   );
 }
@@ -385,18 +385,18 @@ function MetricMeter({ label, icon: Icon, pct, detail, warnAt }: {
 }) {
   return (
     <div>
-      <dt className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+      <dt className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
         <span className="flex items-center gap-1"><Icon className="h-3 w-3" /> {label}</span>
-        <span className="font-semibold normal-case text-zinc-700">{pct === null ? '—' : `${pct}%`}</span>
+        <span className="font-semibold normal-case text-fg-body">{pct === null ? '—' : `${pct}%`}</span>
       </dt>
       <dd className="mt-1.5">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-app">
           <div
-            className={`h-full rounded-full ${pct !== null && pct >= warnAt ? 'bg-amber-500' : 'bg-zinc-400'}`}
+            className={`h-full rounded-full ${pct !== null && pct >= warnAt ? 'bg-warning' : 'bg-fg-faint'}`}
             style={{ width: `${Math.min(pct ?? 0, 100)}%` }}
           />
         </div>
-        {detail && <div className="mt-0.5 text-[10px] text-zinc-400">{detail}</div>}
+        {detail && <div className="mt-0.5 text-[10px] text-fg-faint">{detail}</div>}
       </dd>
     </div>
   );
@@ -407,12 +407,12 @@ function Section({ title, icon: Icon, subtitle, children }: {
   subtitle?: string; children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
       <div className="mb-4 flex items-baseline gap-2">
-        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-zinc-700">
-          <Icon className="h-4 w-4 text-zinc-400" /> {title}
+        <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-fg-body">
+          <Icon className="h-4 w-4 text-fg-faint" /> {title}
         </h2>
-        {subtitle && <span className="text-xs text-zinc-400">{subtitle}</span>}
+        {subtitle && <span className="text-xs text-fg-faint">{subtitle}</span>}
       </div>
       {children}
     </section>
@@ -428,14 +428,14 @@ function SectionFor<T>({ title, icon, naText, section, render }: {
     <Section title={title} icon={icon}>
       {section.ok ? render(section.data)
         : section.na ? <Unavailable text={naText} muted />
-        : <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">Could not load: {section.error}</div>}
+        : <div className="rounded-lg bg-danger-bg px-3 py-2.5 text-sm text-danger-fg-strong">Could not load: {section.error}</div>}
     </Section>
   );
 }
 
 function Unavailable({ text, muted }: { text: string; muted?: boolean }) {
   return (
-    <div className={`rounded-lg px-3 py-2.5 text-sm ${muted ? 'bg-zinc-50 text-zinc-500' : 'bg-zinc-50 text-zinc-600'}`}>
+    <div className={`rounded-lg px-3 py-2.5 text-sm ${muted ? 'bg-sunken text-fg-dim' : 'bg-sunken text-fg-muted'}`}>
       {text}
     </div>
   );
@@ -449,15 +449,15 @@ function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] })
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
             {headers.map((h) => <th key={h} className="pb-2 pr-4 first:pl-2">{h}</th>)}
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i} className="border-t border-zinc-100 text-zinc-700">
+            <tr key={i} className="border-t border-border-subtle text-fg-body">
               {r.map((c, j) => (
-                <td key={j} className={`py-1.5 pr-4 first:pl-2 ${j === 0 ? 'font-medium text-zinc-800' : ''}`}>{c}</td>
+                <td key={j} className={`py-1.5 pr-4 first:pl-2 ${j === 0 ? 'font-medium text-fg' : ''}`}>{c}</td>
               ))}
             </tr>
           ))}
@@ -474,29 +474,29 @@ function InterfaceRow({ iface: i, deviceId, open, onToggle }: {
     <>
       <tr
         onClick={onToggle}
-        className={`cursor-pointer border-t border-zinc-100 transition hover:bg-zinc-50 ${open ? 'bg-zinc-50' : ''}`}
+        className={`cursor-pointer border-t border-border-subtle transition hover:bg-sunken ${open ? 'bg-sunken' : ''}`}
       >
-        <td className="py-2 pl-2 font-medium text-zinc-800">
+        <td className="py-2 pl-2 font-medium text-fg">
           <span className="flex items-center gap-2">
             <span
               title={i.disabled ? 'Disabled' : i.running ? 'Running' : 'Not running'}
-              className={`h-2 w-2 rounded-full ${i.disabled ? 'bg-zinc-300' : i.running ? 'bg-emerald-500' : 'bg-red-600'}`}
+              className={`h-2 w-2 rounded-full ${i.disabled ? 'bg-border-strong' : i.running ? 'bg-success-strong' : 'bg-danger'}`}
             />
             {i.name}
-            {i.comment && <span className="text-xs font-normal text-zinc-400">({i.comment})</span>}
-            <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+            {i.comment && <span className="text-xs font-normal text-fg-faint">({i.comment})</span>}
+            <ChevronDown className={`h-3.5 w-3.5 text-fg-faint transition-transform ${open ? 'rotate-180' : ''}`} />
           </span>
         </td>
-        <td className="py-2 text-zinc-500">{i.type ?? '—'}</td>
-        <td className="py-2 font-mono text-xs text-zinc-500">{i.mac ?? '—'}</td>
-        <td className="py-2 text-zinc-500">{i.mtu ?? '—'}</td>
-        <td className="py-2 text-right tabular-nums text-zinc-700">{fmtRate(i.rxRate)}</td>
-        <td className="py-2 text-right tabular-nums text-zinc-700">{fmtRate(i.txRate)}</td>
-        <td className="py-2 text-right tabular-nums text-zinc-500">{fmtBytes(i.rxByte)}</td>
-        <td className="py-2 pr-2 text-right tabular-nums text-zinc-500">{fmtBytes(i.txByte)}</td>
+        <td className="py-2 text-fg-dim">{i.type ?? '—'}</td>
+        <td className="py-2 font-mono text-xs text-fg-dim">{i.mac ?? '—'}</td>
+        <td className="py-2 text-fg-dim">{i.mtu ?? '—'}</td>
+        <td className="py-2 text-right tabular-nums text-fg-body">{fmtRate(i.rxRate)}</td>
+        <td className="py-2 text-right tabular-nums text-fg-body">{fmtRate(i.txRate)}</td>
+        <td className="py-2 text-right tabular-nums text-fg-dim">{fmtBytes(i.rxByte)}</td>
+        <td className="py-2 pr-2 text-right tabular-nums text-fg-dim">{fmtBytes(i.txByte)}</td>
       </tr>
       {open && (
-        <tr className="border-t border-zinc-100 bg-zinc-50/60">
+        <tr className="border-t border-border-subtle bg-sunken/60">
           <td colSpan={8} className="px-3 py-4">
             <IfaceChart deviceId={deviceId} iface={i.name} />
           </td>
@@ -532,7 +532,7 @@ function IfaceChart({ deviceId, iface }: { deviceId: number; iface: string }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-fg-dim">
           {iface} — traffic ({windowSec / 3600}h, {`30s`} samples)
         </span>
         <div className="flex gap-1">
@@ -541,7 +541,7 @@ function IfaceChart({ deviceId, iface }: { deviceId: number; iface: string }) {
               key={w}
               onClick={() => setWindowSec(w)}
               className={`rounded-md px-2 py-1 text-xs font-semibold transition ${
-                windowSec === w ? 'bg-ruby-600 text-white' : 'text-zinc-500 hover:bg-zinc-100'
+                windowSec === w ? 'bg-accent text-inverse' : 'text-fg-dim hover:bg-app'
               }`}
             >
               {w / 3600}h
@@ -550,7 +550,7 @@ function IfaceChart({ deviceId, iface }: { deviceId: number; iface: string }) {
         </div>
       </div>
       {points === null
-        ? <div className="h-40 animate-pulse rounded-lg bg-zinc-100" />
+        ? <div className="h-40 animate-pulse rounded-lg bg-app" />
         : <TrafficChart points={points} />}
     </div>
   );

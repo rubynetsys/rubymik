@@ -3,11 +3,11 @@ import { fmtRate, type TrafficPoint } from '../types';
 
 /**
  * RX/TX rate over time. Two series, ONE axis; series colors validated for
- * CVD separation and surface contrast (#0284c7 / #e91e63); identity is
+ * CVD separation and surface contrast (var(--color-info-2) / var(--color-accent-hover)); identity is
  * carried by the legend + direct end labels, not color alone.
  */
-const RX_COLOR = '#0284c7';
-const TX_COLOR = '#e91e63';
+const RX_COLOR = 'var(--color-info-2)';
+const TX_COLOR = 'var(--color-accent-hover)';
 
 const W = 720;
 const H = 220;
@@ -71,7 +71,7 @@ export default function TrafficChart({ points }: { points: TrafficPoint[] }) {
 
   if (!model) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg bg-zinc-50 text-sm text-zinc-500">
+      <div className="flex h-40 items-center justify-center rounded-lg bg-sunken text-sm text-fg-dim">
         Collecting samples… the graph appears after a few poll cycles.
       </div>
     );
@@ -101,7 +101,7 @@ export default function TrafficChart({ points }: { points: TrafficPoint[] }) {
 
   return (
     <div className="relative">
-      <div className="mb-2 flex items-center gap-4 text-xs font-medium text-zinc-600">
+      <div className="mb-2 flex items-center gap-4 text-xs font-medium text-fg-muted">
         <span className="flex items-center gap-1.5">
           <span className="h-0.5 w-4 rounded" style={{ background: RX_COLOR }} /> RX (download)
         </span>
@@ -109,7 +109,7 @@ export default function TrafficChart({ points }: { points: TrafficPoint[] }) {
           <span className="h-0.5 w-4 rounded" style={{ background: TX_COLOR }} /> TX (upload)
         </span>
         {hoverPt && (
-          <span className="ml-auto tabular-nums text-zinc-500">
+          <span className="ml-auto tabular-nums text-fg-dim">
             {fmtTime(Date.parse(hoverPt.t))} · RX {fmtRate(hoverPt.rx)} · TX {fmtRate(hoverPt.tx)}
           </span>
         )}
@@ -126,15 +126,15 @@ export default function TrafficChart({ points }: { points: TrafficPoint[] }) {
         {/* recessive grid + y labels */}
         {ticksY.map(({ v, py }) => (
           <g key={v}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={py} y2={py} stroke="#f4f4f5" strokeWidth="1" />
-            <text x={PAD.left - 8} y={py + 3} textAnchor="end" fontSize="10" fill="#a1a1aa">
+            <line x1={PAD.left} x2={W - PAD.right} y1={py} y2={py} stroke="var(--color-app)" strokeWidth="1" />
+            <text x={PAD.left - 8} y={py + 3} textAnchor="end" fontSize="10" fill="var(--color-fg-faint)">
               {fmtTick(v)}
             </text>
           </g>
         ))}
-        <line x1={PAD.left} x2={W - PAD.right} y1={H - PAD.bottom} y2={H - PAD.bottom} stroke="#e4e4e7" strokeWidth="1" />
+        <line x1={PAD.left} x2={W - PAD.right} y1={H - PAD.bottom} y2={H - PAD.bottom} stroke="var(--color-border)" strokeWidth="1" />
         {ticksX.map(({ t, px }) => (
-          <text key={t} x={px} y={H - 8} textAnchor="middle" fontSize="10" fill="#a1a1aa">
+          <text key={t} x={px} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--color-fg-faint)">
             {fmtTime(t)}
           </text>
         ))}
@@ -179,13 +179,13 @@ export default function TrafficChart({ points }: { points: TrafficPoint[] }) {
           <g pointerEvents="none">
             <line
               x1={x(Date.parse(hoverPt.t))} x2={x(Date.parse(hoverPt.t))}
-              y1={PAD.top} y2={H - PAD.bottom} stroke="#d4d4d8" strokeWidth="1"
+              y1={PAD.top} y2={H - PAD.bottom} stroke="var(--color-border-strong)" strokeWidth="1"
             />
             {hoverPt.rx !== null && (
-              <circle cx={x(Date.parse(hoverPt.t))} cy={y(hoverPt.rx)} r="3.5" fill={RX_COLOR} stroke="#fff" strokeWidth="1.5" />
+              <circle cx={x(Date.parse(hoverPt.t))} cy={y(hoverPt.rx)} r="3.5" fill={RX_COLOR} stroke="var(--color-surface)" strokeWidth="1.5" />
             )}
             {hoverPt.tx !== null && (
-              <circle cx={x(Date.parse(hoverPt.t))} cy={y(hoverPt.tx)} r="3.5" fill={TX_COLOR} stroke="#fff" strokeWidth="1.5" />
+              <circle cx={x(Date.parse(hoverPt.t))} cy={y(hoverPt.tx)} r="3.5" fill={TX_COLOR} stroke="var(--color-surface)" strokeWidth="1.5" />
             )}
           </g>
         )}

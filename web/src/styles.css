@@ -1,29 +1,251 @@
 @import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
+/* ============================================================================
+ *  DESIGN TOKENS (P12)
+ *
+ *  Components reference ONLY semantic tokens (bg-surface, text-fg, bg-accent,
+ *  text-success-fg, …) — never raw palette shades. A THEME is just a set of
+ *  token VALUES applied at :root[data-theme=…]; switching theme swaps the values
+ *  instantly with zero per-component logic. The default (:root, no data-theme)
+ *  is "Ruby light" and its values are the exact pre-P12 colours, so tokenizing
+ *  did not change the default appearance.
+ *
+ *  Status tokens (success/warning/danger/info) keep the CVD-validated values in
+ *  every theme, and status is always shown icon+label, never colour-alone.
+ * ========================================================================== */
+
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: var(--rk-font-heading);
+  --font-body: var(--rk-font-body);
 
-  /* Ruby family accent */
-  --color-ruby-50: #fdf2f7;
-  --color-ruby-100: #fce7f1;
-  --color-ruby-200: #fad0e3;
-  --color-ruby-300: #f6a9ca;
-  --color-ruby-400: #ef72a5;
+  /* Ruby & ink palettes are retained for the token DEFINITIONS below; components
+     no longer reference them directly. */
   --color-ruby-500: #e91e63;
   --color-ruby-600: #c41e56;
-  --color-ruby-700: #a31848;
-  --color-ruby-800: #85153d;
-  --color-ruby-900: #6e1435;
-  --color-ruby-950: #43081d;
-
-  /* Dark plum sidebar/ink */
-  --color-ink-950: #120b1a;
   --color-ink-900: #191024;
-  --color-ink-800: #221731;
-  --color-ink-700: #2e2140;
+  --color-ink-950: #120b1a;
+
+  /* --- semantic colour tokens → CSS variables (the themeable layer) --- */
+  --color-app: var(--rk-app);
+  --color-surface: var(--rk-surface);
+  --color-sunken: var(--rk-sunken);
+  --color-sidebar: var(--rk-sidebar);
+  --color-sidebar2: var(--rk-sidebar2);
+  --color-overlay: var(--rk-overlay);
+
+  --color-fg: var(--rk-fg);
+  --color-fg-strong: var(--rk-fg-strong);
+  --color-fg-body: var(--rk-fg-body);
+  --color-fg-muted: var(--rk-fg-muted);
+  --color-fg-dim: var(--rk-fg-dim);
+  --color-fg-faint: var(--rk-fg-faint);
+  --color-inverse: var(--rk-inverse);
+  --color-sidebar-fg: var(--rk-sidebar-fg);
+  --color-sidebar-idle: var(--rk-sidebar-idle);
+  --color-sidebar-hover: var(--rk-sidebar-hover);
+
+  --color-border: var(--rk-border);
+  --color-border-strong: var(--rk-border-strong);
+  --color-border-subtle: var(--rk-border-subtle);
+
+  --color-accent: var(--rk-accent);
+  --color-accent-hover: var(--rk-accent-hover);
+  --color-accent-contrast: var(--rk-accent-contrast);
+  --color-accent-text: var(--rk-accent-text);
+  --color-accent-subtle: var(--rk-accent-subtle);
+  --color-accent-border: var(--rk-accent-border);
+  --color-accent-border-strong: var(--rk-accent-border-strong);
+
+  --color-success: var(--rk-success);
+  --color-success-strong: var(--rk-success-strong);
+  --color-success-fg: var(--rk-success-fg);
+  --color-success-bg: var(--rk-success-bg);
+  --color-success-line: var(--rk-success-line);
+  --color-danger: var(--rk-danger);
+  --color-danger-fg: var(--rk-danger-fg);
+  --color-danger-fg-strong: var(--rk-danger-fg-strong);
+  --color-danger-bg: var(--rk-danger-bg);
+  --color-danger-line: var(--rk-danger-line);
+  --color-warning: var(--rk-warning);
+  --color-warning-fg: var(--rk-warning-fg);
+  --color-warning-bg: var(--rk-warning-bg);
+  --color-warning-line: var(--rk-warning-line);
+  --color-info: var(--rk-info);
+  --color-info-2: var(--rk-info-2);
+  --color-info-fg: var(--rk-info-fg);
+  --color-info-bg: var(--rk-info-bg);
+}
+
+/* ============================================================================
+ *  DEFAULT THEME — Ruby (light). Values = exact pre-P12 colours.
+ * ========================================================================== */
+:root {
+  --rk-font-heading: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --rk-font-body: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --rk-app: #f4f4f5;            /* zinc-100 */
+  --rk-surface: #ffffff;        /* white */
+  --rk-sunken: #fafafa;         /* zinc-50 */
+  --rk-sidebar: #191024;        /* ink-900 */
+  --rk-sidebar2: #120b1a;       /* ink-950 */
+  --rk-overlay: rgba(18, 11, 26, 0.6);
+
+  --rk-fg: #27272a;             /* zinc-800 */
+  --rk-fg-strong: #18181b;      /* zinc-900 */
+  --rk-fg-body: #3f3f46;        /* zinc-700 */
+  --rk-fg-muted: #52525b;       /* zinc-600 */
+  --rk-fg-dim: #71717a;         /* zinc-500 */
+  --rk-fg-faint: #a1a1aa;       /* zinc-400 */
+  --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff;
+  --rk-sidebar-idle: #a1a1aa;   /* zinc-400 */
+  --rk-sidebar-hover: #e4e4e7;  /* zinc-200 */
+
+  --rk-border: #e4e4e7;         /* zinc-200 */
+  --rk-border-strong: #d4d4d8;  /* zinc-300 */
+  --rk-border-subtle: #f4f4f5;  /* zinc-100 */
+
+  --rk-accent: #c41e56;         /* ruby-600 */
+  --rk-accent-hover: #e91e63;   /* ruby-500 */
+  --rk-accent-contrast: #ffffff;
+  --rk-accent-text: #a31848;    /* ruby-700 */
+  --rk-accent-subtle: #fdf2f7;  /* ruby-50 */
+  --rk-accent-border: #f6a9ca;  /* ruby-300 */
+  --rk-accent-border-strong: #e91e63; /* ruby-500 */
+
+  --rk-success: #059669;        /* emerald-600 */
+  --rk-success-strong: #10b981; /* emerald-500 */
+  --rk-success-fg: #047857;     /* emerald-700 */
+  --rk-success-bg: #ecfdf5;     /* emerald-50 */
+  --rk-success-line: #a7f3d0;   /* emerald-200 */
+  --rk-danger: #dc2626;         /* red-600 */
+  --rk-danger-fg: #b91c1c;      /* red-700 */
+  --rk-danger-fg-strong: #991b1b; /* red-800 */
+  --rk-danger-bg: #fef2f2;      /* red-50 */
+  --rk-danger-line: #fecaca;    /* red-200 */
+  --rk-warning: #f59e0b;        /* amber-500 */
+  --rk-warning-fg: #b45309;     /* amber-700 */
+  --rk-warning-bg: #fffbeb;     /* amber-50 */
+  --rk-warning-line: #fde68a;   /* amber-200 */
+  --rk-info: #0ea5e9;           /* sky-500 */
+  --rk-info-2: #0284c7;         /* sky-600 */
+  --rk-info-fg: #0369a1;        /* sky-700 */
+  --rk-info-bg: #f0f9ff;        /* sky-50 */
+
+  --rk-page-bg: var(--rk-app);  /* body background (a theme may set a gradient) */
 }
 
 body {
-  @apply font-sans text-zinc-800 antialiased;
+  font-family: var(--font-body);
+  background: var(--rk-page-bg);
+  @apply text-fg antialiased;
 }
+
+/* ============================================================================
+ *  THEMES — each is a set of token VALUES. The 5 non-default themes derive the
+ *  accent tints via color-mix from --rk-accent, so the accent picker (data-accent)
+ *  changes every accent-derived token at once. Status hues stay CVD-distinct in
+ *  every theme (icon+label always accompany them in the UI).
+ * ========================================================================== */
+
+/* Shared: pickable themes derive accent tints + status-on-dark handled per group */
+:root[data-theme=modern-dark],
+:root[data-theme=modern-light],
+:root[data-theme=glass],
+:root[data-theme=classic] {
+  --rk-accent-contrast: #ffffff;
+  --rk-accent-text: color-mix(in srgb, var(--rk-accent) 82%, var(--rk-fg));
+  --rk-accent-subtle: color-mix(in srgb, var(--rk-accent) 13%, var(--rk-surface));
+  --rk-accent-border: color-mix(in srgb, var(--rk-accent) 42%, var(--rk-surface));
+  --rk-accent-border-strong: var(--rk-accent);
+}
+
+/* Shared dark-surface status (brighter hues + dark tint bgs; CVD preserved) */
+:root[data-theme=ruby-dark],
+:root[data-theme=modern-dark] {
+  --rk-success: #10b981; --rk-success-strong: #34d399; --rk-success-fg: #6ee7b7;
+  --rk-success-bg: #0b2a20; --rk-success-line: #14532d;
+  --rk-danger: #f87171; --rk-danger-fg: #fca5a5; --rk-danger-fg-strong: #fecaca;
+  --rk-danger-bg: #2a1414; --rk-danger-line: #7f1d1d;
+  --rk-warning: #fbbf24; --rk-warning-fg: #fcd34d; --rk-warning-bg: #2a2110; --rk-warning-line: #78350f;
+  --rk-info: #38bdf8; --rk-info-2: #7dd3fc; --rk-info-fg: #7dd3fc; --rk-info-bg: #0c1e2a;
+}
+
+/* --- Ruby Dark: the Ruby palette on dark plum surfaces --- */
+:root[data-theme=ruby-dark] {
+  --rk-app: #14101a; --rk-surface: #1e1626; --rk-sunken: #17111f;
+  --rk-sidebar: #0f0a16; --rk-sidebar2: #0a0710; --rk-overlay: rgba(0,0,0,0.72);
+  --rk-fg: #e7e4ea; --rk-fg-strong: #faf9fb; --rk-fg-body: #d6d2db;
+  --rk-fg-muted: #b3adba; --rk-fg-dim: #928c9c; --rk-fg-faint: #6f6a78; --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff; --rk-sidebar-idle: #9a93a6; --rk-sidebar-hover: #e7e4ea;
+  --rk-border: #332a3e; --rk-border-strong: #43384f; --rk-border-subtle: #251d30;
+  --rk-accent: #e91e63; --rk-accent-hover: #f0518a; --rk-accent-contrast: #ffffff;
+  --rk-accent-text: #f6a9ca; --rk-accent-subtle: #2a1220; --rk-accent-border: #6e1435; --rk-accent-border-strong: #c41e56;
+}
+
+/* --- Modern Dark: neutral greys + pickable accent (default blue) --- */
+:root[data-theme=modern-dark] {
+  --rk-app: #0f1115; --rk-surface: #191c22; --rk-sunken: #14171c;
+  --rk-sidebar: #0b0d11; --rk-sidebar2: #070809; --rk-overlay: rgba(0,0,0,0.72);
+  --rk-fg: #e4e7ec; --rk-fg-strong: #f8fafc; --rk-fg-body: #cbd0d8;
+  --rk-fg-muted: #9aa1ac; --rk-fg-dim: #7c828d; --rk-fg-faint: #5b616b; --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff; --rk-sidebar-idle: #8b919c; --rk-sidebar-hover: #e4e7ec;
+  --rk-border: #2a2e36; --rk-border-strong: #3a3f49; --rk-border-subtle: #20242b;
+  --rk-accent: #3b82f6; --rk-accent-hover: #60a5fa;
+}
+
+/* --- Modern Light: neutral light + pickable accent (default blue) --- */
+:root[data-theme=modern-light] {
+  --rk-app: #f6f7f9; --rk-surface: #ffffff; --rk-sunken: #f0f2f5;
+  --rk-sidebar: #1a1d23; --rk-sidebar2: #0f1115; --rk-overlay: rgba(15,17,21,0.6);
+  --rk-fg: #2b2f36; --rk-fg-strong: #12151a; --rk-fg-body: #3f444c;
+  --rk-fg-muted: #565c65; --rk-fg-dim: #767c86; --rk-fg-faint: #9ca2ac; --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff; --rk-sidebar-idle: #9aa1ac; --rk-sidebar-hover: #e4e7ec;
+  --rk-border: #e3e6ea; --rk-border-strong: #cfd3d9; --rk-border-subtle: #eef0f3;
+  --rk-accent: #2563eb; --rk-accent-hover: #3b82f6;
+}
+
+/* --- Glass: frosted translucent surfaces over a soft gradient --- */
+:root[data-theme=glass] {
+  --rk-page-bg: linear-gradient(135deg, #eef1f7 0%, #e7ecf5 40%, #f3eef6 100%);
+  --rk-app: transparent; --rk-surface: rgba(255,255,255,0.62); --rk-sunken: rgba(255,255,255,0.38);
+  --rk-sidebar: rgba(23,20,34,0.72); --rk-sidebar2: rgba(15,12,22,0.82); --rk-overlay: rgba(20,18,30,0.45);
+  --rk-fg: #1f2430; --rk-fg-strong: #12151d; --rk-fg-body: #333a49;
+  --rk-fg-muted: #4c5462; --rk-fg-dim: #626b7a; --rk-fg-faint: #8890a0; --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff; --rk-sidebar-idle: #c3c7d2; --rk-sidebar-hover: #ffffff;
+  --rk-border: rgba(255,255,255,0.55); --rk-border-strong: rgba(120,130,150,0.4); --rk-border-subtle: rgba(255,255,255,0.4);
+  --rk-accent: #6d28d9; --rk-accent-hover: #7c3aed;
+}
+:root[data-theme=glass] .bg-surface { backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); }
+:root[data-theme=glass] .bg-sunken  { backdrop-filter: blur(8px) saturate(1.2); -webkit-backdrop-filter: blur(8px) saturate(1.2); }
+
+/* --- Classic: dense, utilitarian grey admin. Evokes a classic-admin GENRE;
+       NOT WinBox / not a MikroTik product clone: own grey palette + system font. --- */
+:root[data-theme=classic] {
+  --rk-font-heading: ui-sans-serif, system-ui, sans-serif;
+  --rk-font-body: ui-sans-serif, system-ui, sans-serif;
+  --rk-app: #d7dade; --rk-surface: #eceef1; --rk-sunken: #e1e4e8;
+  --rk-sidebar: #3a3f47; --rk-sidebar2: #2b2f36; --rk-overlay: rgba(40,44,50,0.55);
+  --rk-fg: #1f2328; --rk-fg-strong: #0f1216; --rk-fg-body: #333941;
+  --rk-fg-muted: #4a515a; --rk-fg-dim: #626a74; --rk-fg-faint: #828a94; --rk-inverse: #ffffff;
+  --rk-sidebar-fg: #ffffff; --rk-sidebar-idle: #b6bcc4; --rk-sidebar-hover: #ffffff;
+  --rk-border: #b7bcc3; --rk-border-strong: #9aa0a8; --rk-border-subtle: #cbcfd5;
+  --rk-accent: #2f6fb0; --rk-accent-hover: #3b7dc0;
+}
+
+/* ACCENT PRESETS: data-accent overrides the accent core; derived tints follow. */
+:root[data-accent=ruby]   { --rk-accent: #c41e56; --rk-accent-hover: #e91e63; }
+:root[data-accent=blue]   { --rk-accent: #2563eb; --rk-accent-hover: #3b82f6; }
+:root[data-accent=red]    { --rk-accent: #dc2626; --rk-accent-hover: #ef4444; }
+:root[data-accent=green]  { --rk-accent: #15803d; --rk-accent-hover: #16a34a; }
+:root[data-accent=purple] { --rk-accent: #7c3aed; --rk-accent-hover: #8b5cf6; }
+:root[data-accent=amber]  { --rk-accent: #b45309; --rk-accent-hover: #d97706; }
+:root[data-accent=teal]   { --rk-accent: #0d9488; --rk-accent-hover: #14b8a6; }
+:root[data-theme=modern-dark][data-accent=blue]   { --rk-accent: #3b82f6; --rk-accent-hover: #60a5fa; }
+:root[data-theme=modern-dark][data-accent=red]    { --rk-accent: #f43f5e; --rk-accent-hover: #fb7185; }
+:root[data-theme=modern-dark][data-accent=green]  { --rk-accent: #22c55e; --rk-accent-hover: #4ade80; }
+:root[data-theme=modern-dark][data-accent=purple] { --rk-accent: #a855f7; --rk-accent-hover: #c084fc; }
+:root[data-theme=modern-dark][data-accent=amber]  { --rk-accent: #f59e0b; --rk-accent-hover: #fbbf24; }
+:root[data-theme=modern-dark][data-accent=teal]   { --rk-accent: #14b8a6; --rk-accent-hover: #2dd4bf; }

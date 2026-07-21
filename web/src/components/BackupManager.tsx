@@ -52,39 +52,39 @@ export default function BackupManager({ deviceId }: { deviceId: number }) {
     }
   }
 
-  if (error && !view) return <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">Could not load backups: {error}</div>;
-  if (!view) return <div className="h-24 animate-pulse rounded-lg bg-zinc-100" />;
+  if (error && !view) return <div className="rounded-lg bg-danger-bg px-3 py-2.5 text-sm text-danger-fg-strong">Could not load backups: {error}</div>;
+  if (!view) return <div className="h-24 animate-pulse rounded-lg bg-app" />;
 
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <button onClick={() => void backupNow()} disabled={busy !== null}
-          className="inline-flex items-center gap-2 rounded-lg bg-ruby-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ruby-500 disabled:opacity-50">
+          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse transition hover:bg-accent-hover disabled:opacity-50">
           {busy === 'backup' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Back up now
         </button>
         <button onClick={() => void showDiff()} disabled={sel.length !== 2}
-          className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-40">
+          className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-40">
           <GitCompare className="h-4 w-4" /> Diff selected {sel.length === 2 ? '(2)' : ''}
         </button>
-        <span className="text-xs text-zinc-400">
+        <span className="text-xs text-fg-faint">
           {view.manageable
             ? 'Restore available (this device has a write credential).'
             : 'Monitor-only — backups work; restore is disabled (a write).'}
         </span>
       </div>
 
-      {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && <div className="mb-3 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{error}</div>}
 
       {view.backups.length === 0 ? (
-        <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm text-zinc-500">
+        <div className="rounded-lg bg-sunken px-3 py-2.5 text-sm text-fg-dim">
           No backups yet. Click “Back up now”, or wait for the scheduled backup.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-100">
+        <div className="overflow-x-auto rounded-lg border border-border-subtle">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-100 bg-zinc-50 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <tr className="border-b border-border-subtle bg-sunken text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                 <th className="px-3 py-2 w-8"></th>
                 <th className="px-3 py-2">When</th>
                 <th className="px-3 py-2">RouterOS</th>
@@ -95,32 +95,32 @@ export default function BackupManager({ deviceId }: { deviceId: number }) {
             </thead>
             <tbody>
               {view.backups.map((b) => (
-                <tr key={b.id} className="border-b border-zinc-50 text-zinc-700">
+                <tr key={b.id} className="border-b border-border-subtle text-fg-body">
                   <td className="px-3 py-2">
                     <input type="checkbox" checked={sel.includes(b.id)} onChange={() => toggle(b.id)}
-                      className="h-4 w-4 accent-ruby-600" />
+                      className="h-4 w-4 accent-accent" />
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-zinc-800">{new Date(b.createdAt).toLocaleString()}</div>
-                    <div className="text-[11px] text-zinc-400">{fmtAgo(b.createdAt)}</div>
+                    <div className="font-medium text-fg">{new Date(b.createdAt).toLocaleString()}</div>
+                    <div className="text-[11px] text-fg-faint">{fmtAgo(b.createdAt)}</div>
                   </td>
-                  <td className="px-3 py-2 text-zinc-500">{b.version ?? '—'}</td>
+                  <td className="px-3 py-2 text-fg-dim">{b.version ?? '—'}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.source === 'manual' ? 'bg-sky-50 text-sky-700' : 'bg-zinc-100 text-zinc-600'}`}>{b.source}</span>
-                    {b.format === 'snapshot' && <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-500" title="Read-only GET snapshot (not restorable)">snapshot</span>}
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.source === 'manual' ? 'bg-info-bg text-info-fg' : 'bg-app text-fg-muted'}`}>{b.source}</span>
+                    {b.format === 'snapshot' && <span className="ml-1 rounded-full bg-app px-2 py-0.5 text-[10px] font-semibold text-fg-dim" title="Read-only GET snapshot (not restorable)">snapshot</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-zinc-500" title={`${b.rawBytes} B raw`}>
-                    {fmtBytes(b.gzBytes)} <span className="text-[10px] text-zinc-400">gz</span>
+                  <td className="px-3 py-2 text-right tabular-nums text-fg-dim" title={`${b.rawBytes} B raw`}>
+                    {fmtBytes(b.gzBytes)} <span className="text-[10px] text-fg-faint">gz</span>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-1.5">
                       <a href={`/api/devices/backups/${b.id}/download`} title="Download .rsc"
-                        className="rounded-md p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700">
+                        className="rounded-md p-1.5 text-fg-faint transition hover:bg-app hover:text-fg-body">
                         <Download className="h-4 w-4" />
                       </a>
                       {view.manageable && b.format === 'export' && (
                         <button title="Restore this backup" onClick={() => setRestoring(b)}
-                          className="rounded-md p-1.5 text-zinc-400 transition hover:bg-amber-50 hover:text-amber-700">
+                          className="rounded-md p-1.5 text-fg-faint transition hover:bg-warning-bg hover:text-warning-fg">
                           <RotateCcw className="h-4 w-4" />
                         </button>
                       )}
@@ -145,24 +145,24 @@ export default function BackupManager({ deviceId }: { deviceId: number }) {
 
 function DiffModal({ diff, onClose }: { diff: DiffResult; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-lg font-bold text-zinc-900">Config diff</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">
+            <h3 className="text-lg font-bold text-fg-strong">Config diff</h3>
+            <p className="mt-0.5 text-xs text-fg-dim">
               #{diff.from.id} ({new Date(diff.from.createdAt).toLocaleString()}) → #{diff.to.id} ({new Date(diff.to.createdAt).toLocaleString()})
-              {' · '}<span className="font-semibold text-emerald-700">+{diff.added}</span> <span className="font-semibold text-red-700">−{diff.removed}</span>
+              {' · '}<span className="font-semibold text-success-fg">+{diff.added}</span> <span className="font-semibold text-danger-fg">−{diff.removed}</span>
             </p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app"><X className="h-5 w-5" /></button>
         </div>
-        <div className="mt-4 flex-1 overflow-auto rounded-lg bg-zinc-950 p-3 font-mono text-xs leading-5">
-          {diff.added === 0 && diff.removed === 0 && <div className="text-zinc-400">No differences.</div>}
-          {diff.lines.filter((l) => l.t !== ' ').length === 0 && diff.lines.length > 0 && <div className="text-zinc-400">Only unchanged lines.</div>}
+        <div className="mt-4 flex-1 overflow-auto rounded-lg bg-sidebar2 p-3 font-mono text-xs leading-5">
+          {diff.added === 0 && diff.removed === 0 && <div className="text-fg-faint">No differences.</div>}
+          {diff.lines.filter((l) => l.t !== ' ').length === 0 && diff.lines.length > 0 && <div className="text-fg-faint">Only unchanged lines.</div>}
           {diff.lines.map((l, i) => (
             l.t === ' ' ? null : (
-              <div key={i} className={l.t === '+' ? 'text-emerald-400' : 'text-red-400'}>
+              <div key={i} className={l.t === '+' ? 'text-success' : 'text-danger'}>
                 <span className="select-none opacity-60">{l.t} </span>{l.s || ' '}
               </div>
             )
@@ -203,13 +203,13 @@ function RestoreModal({ deviceId, backup, onClose, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
-          <h3 className="text-lg font-bold text-zinc-900">Restore backup #{backup.id}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100"><X className="h-5 w-5" /></button>
+          <h3 className="text-lg font-bold text-fg-strong">Restore backup #{backup.id}</h3>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app"><X className="h-5 w-5" /></button>
         </div>
-        <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-warning-bg px-3 py-2.5 text-sm text-warning-fg">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
             <strong>This replaces the device configuration</strong> with the backup from{' '}
@@ -218,18 +218,18 @@ function RestoreModal({ deviceId, backup, onClose, onDone }: {
           </span>
         </div>
         {diff && (
-          <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg bg-zinc-950 p-3 font-mono text-xs leading-5">
-            <div className="mb-1 text-zinc-400">newest backup → this backup ({diff.added + diff.removed} changed lines):</div>
+          <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg bg-sidebar2 p-3 font-mono text-xs leading-5">
+            <div className="mb-1 text-fg-faint">newest backup → this backup ({diff.added + diff.removed} changed lines):</div>
             {diff.lines.filter((l) => l.t !== ' ').slice(0, 200).map((l, i) => (
-              <div key={i} className={l.t === '+' ? 'text-emerald-400' : 'text-red-400'}><span className="opacity-60">{l.t} </span>{l.s || ' '}</div>
+              <div key={i} className={l.t === '+' ? 'text-success' : 'text-danger'}><span className="opacity-60">{l.t} </span>{l.s || ' '}</div>
             ))}
           </div>
         )}
-        {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div>}
+        {err && <div className="mt-3 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
         <div className="mt-4 flex justify-end gap-3">
-          <button onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>
           <button onClick={() => void doRestore()} disabled={busy}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50">
+            className="inline-flex items-center gap-2 rounded-lg bg-warning px-5 py-2 text-sm font-semibold text-inverse transition hover:bg-warning disabled:opacity-50">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             Restore configuration
           </button>
@@ -240,22 +240,22 @@ function RestoreModal({ deviceId, backup, onClose, onDone }: {
 }
 
 const RESULT_META: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  applied: { label: 'Restored & verified', cls: 'text-emerald-700 bg-emerald-50', Icon: CheckCircle2 },
-  rolled_back: { label: 'Auto-rolled back (dead-man fired)', cls: 'text-amber-700 bg-amber-50', Icon: RotateCcw },
-  rollback_failed: { label: 'Rollback failed', cls: 'text-red-700 bg-red-50', Icon: AlertTriangle },
-  failed: { label: 'Failed', cls: 'text-red-700 bg-red-50', Icon: AlertTriangle },
+  applied: { label: 'Restored & verified', cls: 'text-success-fg bg-success-bg', Icon: CheckCircle2 },
+  rolled_back: { label: 'Auto-rolled back (dead-man fired)', cls: 'text-warning-fg bg-warning-bg', Icon: RotateCcw },
+  rollback_failed: { label: 'Rollback failed', cls: 'text-danger-fg bg-danger-bg', Icon: AlertTriangle },
+  failed: { label: 'Failed', cls: 'text-danger-fg bg-danger-bg', Icon: AlertTriangle },
 };
 
 function OutcomeModal({ title, result, detail, auditId, onClose }: { title: string; result: string; detail: string; auditId?: number; onClose: () => void }) {
   const m = RESULT_META[result] ?? RESULT_META.failed;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className={`mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${m.cls}`}><m.Icon className="h-4 w-4" /> {m.label}</div>
-        <h3 className="text-base font-semibold text-zinc-900">{title}</h3>
-        <p className="mt-1.5 text-sm text-zinc-600">{detail}</p>
-        {auditId !== undefined && <p className="mt-3 text-xs text-zinc-400">Recorded in the audit log (#{auditId}).</p>}
-        <div className="mt-5 flex justify-end"><button onClick={onClose} className="rounded-lg bg-ruby-600 px-5 py-2 text-sm font-semibold text-white hover:bg-ruby-500">Close</button></div>
+        <h3 className="text-base font-semibold text-fg-strong">{title}</h3>
+        <p className="mt-1.5 text-sm text-fg-muted">{detail}</p>
+        {auditId !== undefined && <p className="mt-3 text-xs text-fg-faint">Recorded in the audit log (#{auditId}).</p>}
+        <div className="mt-5 flex justify-end"><button onClick={onClose} className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Close</button></div>
       </div>
     </div>
   );

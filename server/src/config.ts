@@ -16,6 +16,9 @@ export interface Config {
   backupIntervalSec: number;
   /** How many backups to retain per device. */
   backupKeep: number;
+  /** Instance default theme (a user's own choice overrides it). */
+  defaultTheme: string;
+  defaultAccent: string | null;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -52,5 +55,8 @@ export function loadConfig(): Config {
   const backupIntervalSec = intEnv('RUBYMIK_BACKUP_INTERVAL', 86400, 60, 2592000);
   const backupKeep = intEnv('RUBYMIK_BACKUP_KEEP', 10, 1, 500);
 
-  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, backupIntervalSec, backupKeep };
+  const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
+  const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
+
+  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, backupIntervalSec, backupKeep, defaultTheme, defaultAccent };
 }

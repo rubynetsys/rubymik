@@ -41,12 +41,12 @@ export default function Devices() {
     <div className="mx-auto max-w-5xl">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Devices</h1>
-          <p className="mt-1 text-sm text-zinc-500">MikroTik devices RubyMIK polls on this network.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Devices</h1>
+          <p className="mt-1 text-sm text-fg-dim">MikroTik devices RubyMIK polls on this network.</p>
         </div>
         <button
           onClick={() => setModal({ mode: 'add' })}
-          className="inline-flex items-center gap-2 rounded-lg bg-ruby-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ruby-500"
+          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover"
         >
           <Plus className="h-4 w-4" /> Add device
         </button>
@@ -54,51 +54,51 @@ export default function Devices() {
 
       <div className="mt-6 space-y-3">
         {devices.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/60 p-10 text-center text-sm text-zinc-500">
+          <div className="rounded-2xl border border-dashed border-border-strong bg-surface/60 p-10 text-center text-sm text-fg-dim">
             No devices yet — add your first MikroTik with its IP and a RouterOS login.
           </div>
         )}
         {devices.map((d) => {
           const t = tests[d.id];
           return (
-            <div key={d.id} className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+            <div key={d.id} className="rounded-2xl border border-border bg-surface shadow-sm">
               <div className="flex items-center gap-4 px-5 py-4">
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ruby-50">
-                  <RouterIcon className="h-5 w-5 text-ruby-600" />
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-subtle">
+                  <RouterIcon className="h-5 w-5 text-accent" />
                   <span
                     title={d.status === 'up' ? 'Up' : d.status === 'down' ? 'Down' : 'Not polled yet'}
-                    className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white ${
-                      d.status === 'up' ? 'bg-emerald-500' : d.status === 'down' ? 'bg-red-600' : 'bg-zinc-300'
+                    className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface ${
+                      d.status === 'up' ? 'bg-success-strong' : d.status === 'down' ? 'bg-danger' : 'bg-border-strong'
                     }`}
                   />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Link to={`/devices/${d.id}`} className="truncate font-semibold text-zinc-900 hover:text-ruby-700">
+                    <Link to={`/devices/${d.id}`} className="truncate font-semibold text-fg-strong hover:text-accent-text">
                       {d.name}
                     </Link>
                     {d.notes && (
-                      <span title={d.notes}><StickyNote className="h-3.5 w-3.5 shrink-0 text-zinc-400" /></span>
+                      <span title={d.notes}><StickyNote className="h-3.5 w-3.5 shrink-0 text-fg-faint" /></span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 truncate text-xs text-zinc-500">
+                  <div className="flex items-center gap-2 truncate text-xs text-fg-dim">
                     <span>
                       {d.host}{d.port ? `:${d.port}` : ''} · REST{' '}
                       {d.useTls === null ? '(auto)' : d.useTls ? '(https)' : '(http)'}
                     </span>
                     {d.siteName && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-app px-2 py-0.5 text-[11px] font-semibold text-fg-muted">
                         <Building2 className="h-3 w-3" /> {d.siteName}
                       </span>
                     )}
                   </div>
                 </div>
-                {t?.state === 'ok' && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-                {t?.state === 'fail' && <XCircle className="h-5 w-5 text-red-600" />}
+                {t?.state === 'ok' && <CheckCircle2 className="h-5 w-5 text-success-strong" />}
+                {t?.state === 'fail' && <XCircle className="h-5 w-5 text-danger" />}
                 <button
                   onClick={() => void testDevice(d.id)}
                   disabled={t?.state === 'busy'}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
                 >
                   {t?.state === 'busy'
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -108,25 +108,25 @@ export default function Devices() {
                 <button
                   onClick={() => setModal({ mode: 'edit', device: d })}
                   title="Edit device"
-                  className="rounded-lg p-2 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                  className="rounded-lg p-2 text-fg-faint transition hover:bg-app hover:text-fg-body"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => void removeDevice(d.id)}
                   title="Remove device"
-                  className="rounded-lg p-2 text-zinc-400 transition hover:bg-ruby-50 hover:text-ruby-700"
+                  className="rounded-lg p-2 text-fg-faint transition hover:bg-accent-subtle hover:text-accent-text"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
               {t?.state === 'ok' && (
-                <div className="border-t border-zinc-100 px-5 py-4">
+                <div className="border-t border-border-subtle px-5 py-4">
                   <InfoGrid info={t.result.info} conn={`${t.result.scheme}:${t.result.port}`} />
                 </div>
               )}
               {t?.state === 'fail' && (
-                <div className="border-t border-zinc-100 px-5 py-3 text-sm text-red-800">{t.error}</div>
+                <div className="border-t border-border-subtle px-5 py-3 text-sm text-danger-fg-strong">{t.error}</div>
               )}
             </div>
           );
@@ -167,10 +167,10 @@ export function InfoGrid({ info, conn }: { info: RouterSystemInfo; conn: string 
     <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
       {items.map(({ label, value, icon: Icon }) => (
         <div key={label}>
-          <dt className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <dt className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
             {Icon && <Icon className="h-3 w-3" />} {label}
           </dt>
-          <dd className="mt-0.5 truncate text-sm font-medium text-zinc-800" title={value}>{value}</dd>
+          <dd className="mt-0.5 truncate text-sm font-medium text-fg" title={value}>{value}</dd>
         </div>
       ))}
     </dl>
@@ -284,28 +284,28 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
   const canTest = host.trim() !== '' && username !== '' && password !== '' && busy === null;
 
   const inputCls =
-    'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-ruby-500 focus:ring-2 focus:ring-ruby-500/20';
-  const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500';
+    'w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
+  const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
       <div
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900">{editing ? 'Edit device' : 'Add device'}</h2>
-            <p className="mt-0.5 text-sm text-zinc-500">RouterOS 7.1+ with the www or www-ssl service enabled.</p>
+            <h2 className="text-lg font-bold text-fg-strong">{editing ? 'Edit device' : 'Add device'}</h2>
+            <p className="mt-0.5 text-sm text-fg-dim">RouterOS 7.1+ with the www or www-ssl service enabled.</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app hover:text-fg-body">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); void save(false); }} className="mt-5 space-y-4">
           {savedFlash && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+            <div className="rounded-lg border border-success-line bg-success-bg px-3 py-2 text-sm font-medium text-success-fg">
               {savedFlash}
             </div>
           )}
@@ -357,13 +357,13 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
           </div>
 
           {/* Optional write credential → makes the device manageable */}
-          <div className="rounded-xl border border-zinc-200 p-3.5">
+          <div className="rounded-xl border border-border p-3.5">
             <label className="flex items-start gap-2.5">
               <input type="checkbox" checked={manage} onChange={(e) => setManage(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-ruby-600" />
+                className="mt-0.5 h-4 w-4 accent-accent" />
               <span>
-                <span className="block text-sm font-semibold text-zinc-800">Enable configuration (manageable)</span>
-                <span className="block text-xs text-zinc-500">
+                <span className="block text-sm font-semibold text-fg">Enable configuration (manageable)</span>
+                <span className="block text-xs text-fg-dim">
                   Add a separate write-capable RouterOS credential (group=write or full). Monitoring keeps
                   using the read credential above; writes use this one. Leave off for monitor-only.
                 </span>
@@ -386,12 +386,12 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
           </div>
 
           <button type="button" onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-xs font-semibold text-zinc-500 hover:text-ruby-700">
+            className="flex items-center gap-1 text-xs font-semibold text-fg-dim hover:text-accent-text">
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
             Advanced
           </button>
           {showAdvanced && (
-            <div className="grid grid-cols-2 gap-4 rounded-xl bg-zinc-50 p-4">
+            <div className="grid grid-cols-2 gap-4 rounded-xl bg-sunken p-4">
               <label className="block">
                 <span className={labelCls}>Connection</span>
                 <select className={inputCls} value={conn} onChange={(e) => setConn(e.target.value as typeof conn)}>
@@ -409,13 +409,13 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
           )}
 
           {test && !test.ok && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+            <div className="flex items-start gap-2 rounded-lg border border-danger-line bg-danger-bg px-3 py-2.5 text-sm text-danger-fg-strong">
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" /> {test.error}
             </div>
           )}
           {test?.ok && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3.5">
-              <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
+            <div className="rounded-lg border border-success-line bg-success-bg p-3.5">
+              <div className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-success-fg">
                 <CheckCircle2 className="h-4 w-4" /> Connected successfully
               </div>
               <InfoGrid info={test.result.info} conn={`${test.result.scheme}:${test.result.port}`} />
@@ -428,7 +428,7 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
               onClick={() => void runTest()}
               disabled={!canTest}
               title={editing && password === '' ? 'Enter the password to run a live test, or save and use Test on the list' : undefined}
-              className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
             >
               {busy === 'test' && <Loader2 className="h-4 w-4 animate-spin" />}
               Test connection
@@ -438,7 +438,7 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
                 type="button"
                 onClick={() => void save(true)}
                 disabled={!canSubmit}
-                className="rounded-lg border border-ruby-300 px-4 py-2 text-sm font-semibold text-ruby-700 transition hover:bg-ruby-50 disabled:opacity-50"
+                className="rounded-lg border border-accent-border px-4 py-2 text-sm font-semibold text-accent-text transition hover:bg-accent-subtle disabled:opacity-50"
               >
                 {busy === 'saveMore' ? 'Saving…' : 'Save & add another'}
               </button>
@@ -446,7 +446,7 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-lg bg-ruby-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-ruby-500 disabled:opacity-50"
+              className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse transition hover:bg-accent-hover disabled:opacity-50"
             >
               {busy === 'save' ? 'Saving…' : editing ? 'Save changes' : 'Save device'}
             </button>

@@ -11,10 +11,10 @@ export const STATUS_META: Record<HealthStatus, {
   chip: string;
   dot: string;
 }> = {
-  up: { label: 'Up', Icon: CircleCheck, chip: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
-  warning: { label: 'Warning', Icon: TriangleAlert, chip: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
-  down: { label: 'Down', Icon: CircleX, chip: 'bg-red-50 text-red-700', dot: 'bg-red-600' },
-  pending: { label: 'Pending', Icon: CircleDashed, chip: 'bg-zinc-100 text-zinc-500', dot: 'bg-zinc-400' },
+  up: { label: 'Up', Icon: CircleCheck, chip: 'bg-success-bg text-success-fg', dot: 'bg-success-strong' },
+  warning: { label: 'Warning', Icon: TriangleAlert, chip: 'bg-warning-bg text-warning-fg', dot: 'bg-warning' },
+  down: { label: 'Down', Icon: CircleX, chip: 'bg-danger-bg text-danger-fg', dot: 'bg-danger' },
+  pending: { label: 'Pending', Icon: CircleDashed, chip: 'bg-app text-fg-dim', dot: 'bg-fg-faint' },
 };
 
 export default function StatusBadge({ status }: { status: HealthStatus }) {

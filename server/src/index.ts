@@ -40,7 +40,7 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json());
 
-app.use('/api', authRoutes(db));
+app.use('/api', authRoutes(db, { theme: config.defaultTheme, accent: config.defaultAccent }));
 app.use('/api/devices', deviceRoutes(db, box, poller));
 app.use('/api/devices', detailRoutes(db, box, poller));
 app.use('/api/devices', dhcpRoutes(db, box));

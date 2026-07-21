@@ -4,6 +4,7 @@ import { Bell, Building2, HardDriveDownload, LayoutDashboard, LogOut, RadioTower
 import { api } from '../api';
 import type { AlertSummary } from '../types';
 import Logo from './Logo';
+import ThemePicker from './ThemePicker';
 
 const NAV = [
   { to: '/', label: 'Fleet', icon: LayoutDashboard },
@@ -41,12 +42,12 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
   }
 
   const badgeCls = summary && summary.firing > 0
-    ? summary.critical > 0 ? 'bg-red-600' : summary.warning > 0 ? 'bg-amber-500' : 'bg-sky-500'
+    ? summary.critical > 0 ? 'bg-danger' : summary.warning > 0 ? 'bg-warning' : 'bg-info'
     : null;
 
   return (
-    <div className="flex min-h-screen bg-zinc-100">
-      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-ink-900">
+    <div className="flex min-h-screen bg-app">
+      <aside className="fixed inset-y-0 left-0 flex w-60 flex-col bg-sidebar">
         <div className="px-5 py-5">
           <Logo dark />
         </div>
@@ -59,8 +60,8 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-ruby-600/15 text-white shadow-[inset_2px_0_0_0_theme(colors.ruby.500)]'
-                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                    ? 'bg-accent/15 text-sidebar-fg shadow-[inset_2px_0_0_0_var(--color-accent-hover)]'
+                    : 'text-sidebar-idle hover:bg-sidebar-fg/10 hover:text-sidebar-hover'
                 }`
               }
             >
@@ -68,7 +69,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               {label}
               {label === 'Alerts' && badgeCls && (
                 <span
-                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${badgeCls}`}
+                  className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-inverse ${badgeCls}`}
                   title={`${summary!.firing} active alert${summary!.firing === 1 ? '' : 's'}`}
                 >
                   {summary!.firing}
@@ -77,18 +78,19 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-white/10 px-4 py-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-1 border-t border-sidebar-fg/10 px-3 py-3">
+          <ThemePicker />
+          <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2.5 overflow-hidden">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ruby-600 text-sm font-bold text-white">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-inverse">
                 {(username[0] ?? '?').toUpperCase()}
               </div>
-              <div className="truncate text-sm text-zinc-300">{username}</div>
+              <div className="truncate text-sm text-sidebar-idle">{username}</div>
             </div>
             <button
               onClick={() => void logout()}
               title="Sign out"
-              className="rounded-md p-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-200"
+              className="rounded-md p-2 text-sidebar-idle transition-colors hover:bg-sidebar-fg/10 hover:text-sidebar-hover"
             >
               <LogOut className="h-4 w-4" />
             </button>

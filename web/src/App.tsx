@@ -16,6 +16,7 @@ import RemoteAccess from './pages/RemoteAccess';
 import Onboard from './pages/Onboard';
 import Provision from './pages/Provision';
 import Audit from './pages/Audit';
+import { applyTheme } from './theme';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
@@ -23,8 +24,20 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await api.get<AppStatus>('/api/status'));
+      const st = await api.get<AppStatus>('/api/status');
+      setStatus(st);
       setError(null);
+      // Apply the effective theme: the user's own override wins, else the
+      // install default. (The inline script already painted the cached choice.)
+      const def = st.installDefault ?? { theme: 'ruby-light', accent: null };
+      if (st.authenticated) {
+        try {
+          const me = await api.get<{ theme: string | null; accent: string | null }>('/api/me');
+          applyTheme(me.theme ?? def.theme, me.accent ?? def.accent);
+        } catch { applyTheme(def.theme, def.accent); }
+      } else {
+        applyTheme(def.theme, def.accent);
+      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -37,10 +50,10 @@ export default function App() {
   if (error) {
     return (
       <Splash>
-        <p className="text-sm text-zinc-400">Cannot reach the RubyMIK server: {error}</p>
+        <p className="text-sm text-fg-faint">Cannot reach the RubyMIK server: {error}</p>
         <button
           onClick={() => void refresh()}
-          className="mt-4 rounded-lg bg-ruby-600 px-4 py-2 text-sm font-semibold text-white hover:bg-ruby-500"
+          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover"
         >
           Retry
         </button>
@@ -51,7 +64,7 @@ export default function App() {
   if (!status) {
     return (
       <Splash>
-        <p className="text-sm text-zinc-500">Loading…</p>
+        <p className="text-sm text-fg-dim">Loading…</p>
       </Splash>
     );
   }
@@ -82,7 +95,7 @@ export default function App() {
 
 function Splash({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-ink-900">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-sidebar">
       <RubyDiamond className="h-12 w-12" />
       <div className="mt-4 text-center">{children}</div>
     </div>

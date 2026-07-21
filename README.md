@@ -78,6 +78,11 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
   Configuration is a **separate, explicit** capability (see below).
+- **Themes** — the whole UI is tokenized (semantic CSS variables — surfaces, text,
+  borders, accent, status), so it ships six themes (Ruby light/dark, Modern
+  dark/light with a pickable accent, Glass, Classic) that swap instantly with no
+  per-component logic. Per-user choice, an install default, and CVD-safe status
+  colours in every theme. See [Theming](#theming).
 
 _Screenshots coming soon._
 
@@ -376,6 +381,31 @@ hub reports the error honestly and the rest of RubyMIK keeps working.
 > killing the tunnel makes only the tunnel device go unreachable). The hub ran on a
 > dev host standing in for a VPS. A public-VPS-to-real-remote-NAT deployment is the
 > real-world validation; the mechanism (outbound dial + hub) is identical.
+
+## Theming
+
+The UI is **fully tokenized**: every component references semantic design tokens
+(`bg-surface`, `text-fg`, `bg-accent`, `text-success-fg`, `border-border`, …),
+never a raw palette shade. The tokens are CSS custom properties defined in
+`web/src/styles.css`; a **theme is just a set of token values** applied at
+`:root[data-theme=…]`, so switching theme swaps the values instantly and a new
+component works in every theme automatically (it only ever names tokens).
+
+Six themes ship: **Ruby** (light, the default and unchanged brand look), **Ruby
+Dark**, **Modern Dark** and **Modern Light** (neutral, with a user-pickable
+accent), **Glass** (frosted translucency over a soft gradient), and **Classic** (a
+dense utilitarian grey admin aesthetic — its own look, not a clone of any vendor
+tool). The Modern themes derive their accent tints via `color-mix` from a single
+`--accent`, so the **accent picker** (blue / red / green / purple / amber / teal)
+re-tints everything at once while keeping button-text contrast legible.
+
+- **Status stays accessible.** `--success/--warning/--danger/--info` keep
+  CVD-validated hues in every theme and are always shown as **icon + label**, never
+  colour alone.
+- **Selection.** An instance default theme (`RUBYMIK_DEFAULT_THEME`, defaults to
+  `ruby-light`); each user can override it (stored on the user, `null` = use the
+  default). The choice is applied before first paint by a tiny inline script (no
+  flash-of-wrong-theme) and re-synced from the server on load.
 
 ## Polling at scale
 

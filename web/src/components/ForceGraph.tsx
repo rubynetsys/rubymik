@@ -23,10 +23,10 @@ export interface GraphEdge {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  up: '#10b981',
-  warning: '#f59e0b',
-  down: '#dc2626',
-  pending: '#a1a1aa',
+  up: 'var(--color-success-strong)',
+  warning: 'var(--color-warning)',
+  down: 'var(--color-danger)',
+  pending: 'var(--color-fg-faint)',
 };
 
 interface Body {
@@ -203,7 +203,7 @@ export default function ForceGraph({ nodes, edges, onNodeClick, tooltip }: {
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-        className="h-[600px] w-full cursor-grab rounded-xl bg-white active:cursor-grabbing"
+        className="h-[600px] w-full cursor-grab rounded-xl bg-surface active:cursor-grabbing"
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -220,11 +220,11 @@ export default function ForceGraph({ nodes, edges, onNodeClick, tooltip }: {
           const my = (a.y + b.y) / 2;
           return (
             <g key={`${e.source}~${e.target}`}>
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d4d4d8" strokeWidth="1.5" />
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--color-border-strong)" strokeWidth="1.5" />
               {e.label && (
                 <text
-                  x={mx} y={my - 5} textAnchor="middle" fontSize="9.5" fill="#71717a"
-                  stroke="#ffffff" strokeWidth="3" paintOrder="stroke"
+                  x={mx} y={my - 5} textAnchor="middle" fontSize="9.5" fill="var(--color-fg-dim)"
+                  stroke="var(--color-surface)" strokeWidth="3" paintOrder="stroke"
                 >
                   {e.label}
                 </text>
@@ -238,7 +238,7 @@ export default function ForceGraph({ nodes, edges, onNodeClick, tooltip }: {
           if (!b) return null;
           const managed = n.kind === 'managed';
           const r = managed ? 27 : 22;
-          const ring = managed ? STATUS_COLOR[n.status ?? 'pending'] : '#a1a1aa';
+          const ring = managed ? STATUS_COLOR[n.status ?? 'pending'] : 'var(--color-fg-faint)';
           return (
             <g
               key={n.key}
@@ -252,24 +252,24 @@ export default function ForceGraph({ nodes, edges, onNodeClick, tooltip }: {
             >
               <circle
                 r={r}
-                fill={managed ? '#ffffff' : '#fafafa'}
+                fill={managed ? 'var(--color-surface)' : 'var(--color-sunken)'}
                 stroke={ring}
                 strokeWidth={managed ? 3 : 1.8}
                 strokeDasharray={managed ? undefined : '5 4'}
               />
               {managed
-                ? <RouterIcon x={-11} y={-11} width={22} height={22} color="#3f3f46" strokeWidth={1.8} />
-                : <Network x={-9} y={-9} width={18} height={18} color="#a1a1aa" strokeWidth={1.8} />}
+                ? <RouterIcon x={-11} y={-11} width={22} height={22} color="var(--color-fg-body)" strokeWidth={1.8} />
+                : <Network x={-9} y={-9} width={18} height={18} color="var(--color-fg-faint)" strokeWidth={1.8} />}
               {managed && n.status && (
-                <circle cx={r * 0.72} cy={-r * 0.72} r={5.5} fill={STATUS_COLOR[n.status]} stroke="#fff" strokeWidth="2" />
+                <circle cx={r * 0.72} cy={-r * 0.72} r={5.5} fill={STATUS_COLOR[n.status]} stroke="var(--color-surface)" strokeWidth="2" />
               )}
-              <text y={r + 15} textAnchor="middle" fontSize="12" fontWeight="600" fill="#27272a"
-                stroke="#ffffff" strokeWidth="3.5" paintOrder="stroke">
+              <text y={r + 15} textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--color-fg)"
+                stroke="var(--color-surface)" strokeWidth="3.5" paintOrder="stroke">
                 {n.label}
               </text>
               {n.sub && (
-                <text y={r + 28} textAnchor="middle" fontSize="9.5" fill="#71717a"
-                  stroke="#ffffff" strokeWidth="3" paintOrder="stroke">
+                <text y={r + 28} textAnchor="middle" fontSize="9.5" fill="var(--color-fg-dim)"
+                  stroke="var(--color-surface)" strokeWidth="3" paintOrder="stroke">
                   {n.sub}
                 </text>
               )}
@@ -279,7 +279,7 @@ export default function ForceGraph({ nodes, edges, onNodeClick, tooltip }: {
       </svg>
       {hoverNode && hoverBody && (
         <div
-          className="pointer-events-none absolute z-10 w-56 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg"
+          className="pointer-events-none absolute z-10 w-56 rounded-xl border border-border bg-surface p-3 shadow-lg"
           style={{
             left: `${(((hoverBody.x - view.x) / view.w) * 100).toFixed(2)}%`,
             top: `calc(${(((hoverBody.y - view.y) / view.h) * 100).toFixed(2)}% + 36px)`,

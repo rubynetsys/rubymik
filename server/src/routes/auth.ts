@@ -23,7 +23,10 @@ function validCredentials(username: unknown, password: unknown): string | null {
   return null;
 }
 
-export function authRoutes(db: DatabaseSync): Router {
+const THEMES = ['ruby-light', 'ruby-dark', 'modern-dark', 'modern-light', 'glass', 'classic'];
+const ACCENTS = ['ruby', 'blue', 'red', 'green', 'purple', 'amber', 'teal'];
+
+export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: string | null }): Router {
   const router = Router();
 
   router.get('/health', (_req, res) => {
@@ -34,6 +37,7 @@ export function authRoutes(db: DatabaseSync): Router {
     res.json({
       needsSetup: userCount(db) === 0,
       authenticated: getSessionUser(db, req) !== undefined,
+      installDefault: { theme: defaults.theme, accent: defaults.accent },
     });
   });
 
@@ -85,7 +89,22 @@ export function authRoutes(db: DatabaseSync): Router {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
-    res.json({ username: user.username });
+    const row = db.prepare('SELECT theme, accent FROM users WHERE id = ?').get(user.id) as { theme: string | null; accent: string | null } | undefined;
+    res.json({ username: user.username, theme: row?.theme ?? null, accent: row?.accent ?? null });
+  });
+
+  // Per-user theme override (purely presentational). null clears → install default.
+  router.put('/me/theme', (req, res) => {
+    const user = getSessionUser(db, req);
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return; }
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const theme = b.theme === null ? null : typeof b.theme === 'string' && THEMES.includes(b.theme) ? b.theme : undefined;
+    const accent = b.accent === null ? null : typeof b.accent === 'string' && ACCENTS.includes(b.accent) ? b.accent : undefined;
+    if (theme === undefined && accent === undefined) { res.status(400).json({ error: 'Provide a valid theme and/or accent.' }); return; }
+    if (theme !== undefined) db.prepare('UPDATE users SET theme = ? WHERE id = ?').run(theme, user.id);
+    if (accent !== undefined) db.prepare('UPDATE users SET accent = ? WHERE id = ?').run(accent, user.id);
+    const row = db.prepare('SELECT theme, accent FROM users WHERE id = ?').get(user.id) as { theme: string | null; accent: string | null };
+    res.json({ theme: row.theme, accent: row.accent });
   });
 
   return router;

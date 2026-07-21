@@ -44,14 +44,14 @@ export default function Sparkline({ points, width = 88, height = 22 }: {
           key={i}
           points={seg.join(' ')}
           fill="none"
-          stroke="#a1a1aa"
+          style={{ stroke: 'var(--color-fg-faint)' }}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       ))}
       {lastIdx >= 0 && (
-        <circle cx={x(lastIdx)} cy={y(points[lastIdx]!)} r="2.5" fill="#52525b" />
+        <circle cx={x(lastIdx)} cy={y(points[lastIdx]!)} r="2.5" style={{ fill: 'var(--color-fg-muted)' }} />
       )}
     </svg>
   );

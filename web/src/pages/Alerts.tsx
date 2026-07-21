@@ -12,9 +12,9 @@ import {
 const REFRESH_MS = 10_000;
 
 const SEV: Record<AlertSeverity, { label: string; chip: string; Icon: typeof ShieldAlert }> = {
-  critical: { label: 'Critical', chip: 'bg-red-50 text-red-700', Icon: ShieldAlert },
-  warning: { label: 'Warning', chip: 'bg-amber-50 text-amber-700', Icon: TriangleAlert },
-  info: { label: 'Info', chip: 'bg-sky-50 text-sky-700', Icon: BellRing },
+  critical: { label: 'Critical', chip: 'bg-danger-bg text-danger-fg', Icon: ShieldAlert },
+  warning: { label: 'Warning', chip: 'bg-warning-bg text-warning-fg', Icon: TriangleAlert },
+  info: { label: 'Info', chip: 'bg-info-bg text-info-fg', Icon: BellRing },
 };
 
 type Tab = 'active' | 'history' | 'settings';
@@ -49,22 +49,22 @@ export default function Alerts() {
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Alerts</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Alerts</h1>
+          <p className="mt-1 text-sm text-fg-dim">
             Evaluated on every poll cycle with debounce + hysteresis — no flapping, no spam.
           </p>
         </div>
         <select
           value={String(siteFilter)}
           onChange={(e) => setSiteFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-ruby-500"
+          className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong"
         >
           <option value="all">All sites</option>
           {sites.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
         </select>
       </div>
 
-      <div className="mt-5 flex gap-1 border-b border-zinc-200">
+      <div className="mt-5 flex gap-1 border-b border-border">
         {([
           ['active', 'Active', BellRing, active?.length ?? 0],
           ['history', 'History', History, null],
@@ -75,13 +75,13 @@ export default function Alerts() {
             onClick={() => setTab(key)}
             className={`inline-flex items-center gap-1.5 rounded-t-lg px-4 py-2.5 text-sm font-semibold transition ${
               tab === key
-                ? 'border-b-2 border-ruby-600 text-ruby-700'
-                : 'text-zinc-500 hover:text-zinc-800'
+                ? 'border-b-2 border-accent text-accent-text'
+                : 'text-fg-dim hover:text-fg'
             }`}
           >
             <Icon className="h-4 w-4" /> {label}
             {count !== null && count > 0 && (
-              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{count}</span>
+              <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold text-inverse">{count}</span>
             )}
           </button>
         ))}
@@ -97,16 +97,16 @@ export default function Alerts() {
 }
 
 function ActiveTab({ alerts }: { alerts: Alert[] | null }) {
-  if (!alerts) return <div className="h-32 animate-pulse rounded-2xl border border-zinc-200 bg-white" />;
+  if (!alerts) return <div className="h-32 animate-pulse rounded-2xl border border-border bg-surface" />;
   if (alerts.length === 0) {
     return (
-      <div className="rounded-2xl border border-zinc-200 bg-white p-12 shadow-sm">
+      <div className="rounded-2xl border border-border bg-surface p-12 shadow-sm">
         <div className="mx-auto flex max-w-md flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50">
-            <CircleCheck className="h-7 w-7 text-emerald-600" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-success-bg">
+            <CircleCheck className="h-7 w-7 text-success" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold text-zinc-900">All healthy</h2>
-          <p className="mt-1.5 text-sm text-zinc-500">
+          <h2 className="mt-4 text-lg font-semibold text-fg-strong">All healthy</h2>
+          <p className="mt-1.5 text-sm text-fg-dim">
             No active alerts — every monitored condition is within its thresholds.
           </p>
         </div>
@@ -118,25 +118,25 @@ function ActiveTab({ alerts }: { alerts: Alert[] | null }) {
       {alerts.map((a) => {
         const sev = SEV[a.severity];
         return (
-          <div key={a.id} className={`rounded-2xl border bg-white p-4 shadow-sm ${
-            a.severity === 'critical' ? 'border-red-200' : a.severity === 'warning' ? 'border-amber-200' : 'border-zinc-200'
+          <div key={a.id} className={`rounded-2xl border bg-surface p-4 shadow-sm ${
+            a.severity === 'critical' ? 'border-danger-line' : a.severity === 'warning' ? 'border-warning-line' : 'border-border'
           }`}>
             <div className="flex flex-wrap items-center gap-3">
               <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${sev.chip}`}>
                 <sev.Icon className="h-3.5 w-3.5" /> {sev.label}
               </span>
-              <span className="font-semibold text-zinc-900">{a.ruleLabel}{a.target ? ` — ${a.target}` : ''}</span>
-              <Link to={`/devices/${a.deviceId}`} className="text-sm font-medium text-ruby-700 hover:underline">
+              <span className="font-semibold text-fg-strong">{a.ruleLabel}{a.target ? ` — ${a.target}` : ''}</span>
+              <Link to={`/devices/${a.deviceId}`} className="text-sm font-medium text-accent-text hover:underline">
                 {a.deviceName}
               </Link>
               {a.siteName && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600">{a.siteName}</span>
+                <span className="rounded-full bg-app px-2 py-0.5 text-[11px] font-semibold text-fg-muted">{a.siteName}</span>
               )}
-              <span className="ml-auto text-xs text-zinc-400">
+              <span className="ml-auto text-xs text-fg-faint">
                 firing {fmtAgo(a.firedAt).replace(' ago', '')} · {a.cycles} cycle{a.cycles === 1 ? '' : 's'} · last seen {fmtAgo(a.lastSeenAt)}
               </span>
             </div>
-            <div className="mt-2 text-sm text-zinc-600">{a.message}</div>
+            <div className="mt-2 text-sm text-fg-muted">{a.message}</div>
           </div>
         );
       })}
@@ -145,19 +145,19 @@ function ActiveTab({ alerts }: { alerts: Alert[] | null }) {
 }
 
 function HistoryTab({ alerts }: { alerts: Alert[] | null }) {
-  if (!alerts) return <div className="h-32 animate-pulse rounded-2xl border border-zinc-200 bg-white" />;
+  if (!alerts) return <div className="h-32 animate-pulse rounded-2xl border border-border bg-surface" />;
   if (alerts.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/60 p-10 text-center text-sm text-zinc-500">
+      <div className="rounded-2xl border border-dashed border-border-strong bg-surface/60 p-10 text-center text-sm text-fg-dim">
         No resolved alerts yet — history shows what fired, when, and how long it lasted (kept 30 days).
       </div>
     );
   }
   return (
-    <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-2xl border border-border bg-surface shadow-sm">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-100 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <tr className="border-b border-border-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
             <th className="px-4 py-2.5">Severity</th>
             <th className="px-4 py-2.5">Alert</th>
             <th className="px-4 py-2.5">Device</th>
@@ -172,22 +172,22 @@ function HistoryTab({ alerts }: { alerts: Alert[] | null }) {
             const sev = SEV[a.severity];
             const duration = a.resolvedAt ? (Date.parse(a.resolvedAt) - Date.parse(a.firedAt)) / 1000 : null;
             return (
-              <tr key={a.id} className="border-b border-zinc-50 text-zinc-700">
+              <tr key={a.id} className="border-b border-border-subtle text-fg-body">
                 <td className="px-4 py-2">
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${sev.chip}`}>
                     <sev.Icon className="h-3 w-3" /> {sev.label}
                   </span>
                 </td>
-                <td className="px-4 py-2 font-medium text-zinc-800" title={a.message}>
+                <td className="px-4 py-2 font-medium text-fg" title={a.message}>
                   {a.ruleLabel}{a.target ? ` — ${a.target}` : ''}
                 </td>
                 <td className="px-4 py-2">
-                  <Link to={`/devices/${a.deviceId}`} className="text-ruby-700 hover:underline">{a.deviceName}</Link>
+                  <Link to={`/devices/${a.deviceId}`} className="text-accent-text hover:underline">{a.deviceName}</Link>
                 </td>
-                <td className="px-4 py-2 text-zinc-500">{a.siteName ?? '—'}</td>
-                <td className="px-4 py-2 text-zinc-500">{fmtAgo(a.firedAt)}</td>
-                <td className="px-4 py-2 text-zinc-500">{a.resolvedAt ? fmtAgo(a.resolvedAt) : '—'}</td>
-                <td className="px-4 py-2 tabular-nums text-zinc-500">{duration !== null ? fmtDuration(duration) : '—'}</td>
+                <td className="px-4 py-2 text-fg-dim">{a.siteName ?? '—'}</td>
+                <td className="px-4 py-2 text-fg-dim">{fmtAgo(a.firedAt)}</td>
+                <td className="px-4 py-2 text-fg-dim">{a.resolvedAt ? fmtAgo(a.resolvedAt) : '—'}</td>
+                <td className="px-4 py-2 tabular-nums text-fg-dim">{duration !== null ? fmtDuration(duration) : '—'}</td>
               </tr>
             );
           })}
@@ -262,22 +262,22 @@ function SettingsTab() {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-ruby-500 focus:ring-2 focus:ring-ruby-500/20';
-  const numCls = 'w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm text-zinc-900 outline-none transition focus:border-ruby-500';
+    'w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
+  const numCls = 'w-20 rounded-lg border border-border-strong px-2 py-1.5 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong';
 
-  if (!rules) return <div className="h-40 animate-pulse rounded-2xl border border-zinc-200 bg-white" />;
+  if (!rules) return <div className="h-40 animate-pulse rounded-2xl border border-border bg-surface" />;
 
   return (
     <div className="space-y-6">
       {flash && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+        <div className="rounded-lg border border-success-line bg-success-bg px-3 py-2 text-sm font-medium text-success-fg">
           {flash}
         </div>
       )}
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-700">Rules</h2>
-        <p className="mt-1 text-xs text-zinc-500">
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-fg-body">Rules</h2>
+        <p className="mt-1 text-xs text-fg-dim">
           Global defaults — fire after N consecutive breach cycles, resolve after N consecutive clear
           cycles; the gap between threshold and clear-threshold is the anti-flap band. Per-site and
           per-device overrides are on the roadmap.
@@ -285,7 +285,7 @@ function SettingsTab() {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
                 <th className="pb-2">Rule</th>
                 <th className="pb-2">Severity</th>
                 <th className="pb-2">Threshold</th>
@@ -297,21 +297,21 @@ function SettingsTab() {
             </thead>
             <tbody>
               {rules.map((r) => (
-                <tr key={r.id} className="border-t border-zinc-100">
-                  <td className="py-2.5 font-medium text-zinc-800">{r.label}</td>
+                <tr key={r.id} className="border-t border-border-subtle">
+                  <td className="py-2.5 font-medium text-fg">{r.label}</td>
                   <td className="py-2.5">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${SEV[r.severity].chip}`}>
                       {SEV[r.severity].label}
                     </span>
                   </td>
                   <td className="py-2.5">
-                    {r.threshold === null ? <span className="text-zinc-400">—</span> : (
+                    {r.threshold === null ? <span className="text-fg-faint">—</span> : (
                       <RuleNumber value={r.threshold} unit={r.unit} cls={numCls}
                         onCommit={(v) => void patchRule(r, { threshold: v })} />
                     )}
                   </td>
                   <td className="py-2.5">
-                    {r.threshold === null ? <span className="text-zinc-400">—</span> : (
+                    {r.threshold === null ? <span className="text-fg-faint">—</span> : (
                       <RuleNumber value={r.clearThreshold} unit={r.unit} cls={numCls}
                         onCommit={(v) => void patchRule(r, { clearThreshold: v })} />
                     )}
@@ -327,10 +327,10 @@ function SettingsTab() {
                   <td className="py-2.5 text-right">
                     <button
                       onClick={() => void patchRule(r, { enabled: !r.enabled })}
-                      className={`relative h-6 w-11 rounded-full transition ${r.enabled ? 'bg-ruby-600' : 'bg-zinc-300'}`}
+                      className={`relative h-6 w-11 rounded-full transition ${r.enabled ? 'bg-accent' : 'bg-border-strong'}`}
                       title={r.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
                     >
-                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${r.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-all ${r.enabled ? 'left-[22px]' : 'left-0.5'}`} />
                     </button>
                   </td>
                 </tr>
@@ -340,37 +340,37 @@ function SettingsTab() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-zinc-700">Notifications</h2>
-        <p className="mt-1 text-xs text-zinc-500">
+      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-fg-body">Notifications</h2>
+        <p className="mt-1 text-xs text-fg-dim">
           Off by default. RubyMIK sends alerts ONLY to endpoints you configure here — nothing phones
           home, ever. The webhook posts JSON on fire and resolve; it feeds ntfy, Gotify, Discord,
           Slack, Telegram bridges, Home Assistant, n8n… SMTP email is on the roadmap.
         </p>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <label className="min-w-72 flex-1">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">Webhook URL</span>
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim">Webhook URL</span>
             <input className={inputCls} value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)}
               placeholder="https://ntfy.example.com/rubymik  ·  http://192.168.1.10:8123/api/webhook/…" />
           </label>
-          <label className="flex items-center gap-2 pb-2 text-sm font-medium text-zinc-700">
+          <label className="flex items-center gap-2 pb-2 text-sm font-medium text-fg-body">
             <input type="checkbox" checked={webhookEnabled} onChange={(e) => setWebhookEnabled(e.target.checked)}
-              className="h-4 w-4 accent-ruby-600" />
+              className="h-4 w-4 accent-accent" />
             Enabled
           </label>
           <button onClick={() => void saveNotifications()} disabled={saving}
-            className="rounded-lg bg-ruby-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ruby-500 disabled:opacity-50">
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse transition hover:bg-accent-hover disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button onClick={() => void sendTest()} disabled={!notif?.webhookEnabled}
             title={notif?.webhookEnabled ? 'POST a test payload' : 'Save an enabled webhook first'}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700 disabled:opacity-50">
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50">
             <Send className="h-3.5 w-3.5" /> Send test
           </button>
         </div>
         {testResult && (
           <div className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ${
-            testResult.startsWith('Failed') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+            testResult.startsWith('Failed') ? 'bg-danger-bg text-danger-fg' : 'bg-success-bg text-success-fg'
           }`}>
             {testResult.startsWith('Failed') ? <TriangleAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {testResult}
@@ -404,7 +404,7 @@ function RuleNumber({ value, unit, cls, onCommit }: {
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
       />
-      {unit && <span className="text-xs text-zinc-400">{unit}</span>}
+      {unit && <span className="text-xs text-fg-faint">{unit}</span>}
     </span>
   );
 }

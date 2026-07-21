@@ -57,43 +57,43 @@ export default function DhcpManager({ deviceId }: { deviceId: number }) {
   }
 
   if (error && !data) {
-    return <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-800">Could not load DHCP: {error}</div>;
+    return <div className="rounded-lg bg-danger-bg px-3 py-2.5 text-sm text-danger-fg-strong">Could not load DHCP: {error}</div>;
   }
-  if (!data) return <div className="h-24 animate-pulse rounded-lg bg-zinc-100" />;
+  if (!data) return <div className="h-24 animate-pulse rounded-lg bg-app" />;
 
   if (data.servers.length === 0) {
-    return <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm text-zinc-600">No DHCP server configured on this device.</div>;
+    return <div className="rounded-lg bg-sunken px-3 py-2.5 text-sm text-fg-muted">No DHCP server configured on this device.</div>;
   }
 
   return (
     <div>
       {/* manageable banner */}
       {data.manageable ? (
-        <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-success-bg px-3 py-2 text-xs font-medium text-success-fg">
           <ShieldCheck className="h-4 w-4" /> Manageable — changes go through snapshot → apply → verify → auto-rollback → audit.
         </div>
       ) : (
-        <div className="mb-3 flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-600">
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-app px-3 py-2 text-xs font-medium text-fg-muted">
           <Lock className="h-4 w-4" /> Monitor-only — showing DHCP read-only. Add a write credential (Edit device) to manage reservations.
         </div>
       )}
 
-      {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && <div className="mb-3 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{error}</div>}
 
       {/* Reservations */}
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-fg-dim">
           Reservations (static) · {data.reservations.length}
         </h3>
         {data.manageable && (
           <button onClick={() => setModal({ mode: 'add' })}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ruby-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-ruby-500">
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-inverse transition hover:bg-accent-hover">
             <Plus className="h-3.5 w-3.5" /> Add reservation
           </button>
         )}
       </div>
       {data.reservations.length === 0 ? (
-        <div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-500">No static reservations.</div>
+        <div className="rounded-lg bg-sunken px-3 py-2 text-sm text-fg-dim">No static reservations.</div>
       ) : (
         <LeaseTable leases={data.reservations} manageable={data.manageable} busyId={busyId}
           actions={(l) => (
@@ -106,17 +106,17 @@ export default function DhcpManager({ deviceId }: { deviceId: number }) {
 
       {/* Dynamic leases */}
       <div className="mb-2 mt-5">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Active dynamic leases · {data.dynamic.length}</h3>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-fg-dim">Active dynamic leases · {data.dynamic.length}</h3>
       </div>
       {data.dynamic.length === 0 ? (
-        <div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-500">
+        <div className="rounded-lg bg-sunken px-3 py-2 text-sm text-fg-dim">
           No dynamic leases right now{data.manageable ? ' — nothing to pin.' : '.'}
         </div>
       ) : (
         <LeaseTable leases={data.dynamic} manageable={data.manageable} busyId={busyId}
           actions={(l) => (
             <button onClick={() => void makeStatic(l)}
-              className="inline-flex items-center gap-1 rounded-md border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700 transition hover:border-ruby-400 hover:text-ruby-700">
+              className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text">
               <Pin className="h-3 w-3" /> Make static
             </button>
           )} />
@@ -138,10 +138,10 @@ function LeaseTable({ leases, manageable, actions, busyId }: {
   actions: (l: DhcpLease) => React.ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-100">
+    <div className="overflow-x-auto rounded-lg border border-border-subtle">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-100 bg-zinc-50 text-left text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          <tr className="border-b border-border-subtle bg-sunken text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
             <th className="px-3 py-2">IP address</th>
             <th className="px-3 py-2">MAC</th>
             <th className="px-3 py-2">Host / comment</th>
@@ -151,15 +151,15 @@ function LeaseTable({ leases, manageable, actions, busyId }: {
         </thead>
         <tbody>
           {leases.map((l) => (
-            <tr key={l['.id']} className="border-b border-zinc-50 text-zinc-700">
-              <td className="px-3 py-2 font-medium text-zinc-800">{l.address ?? '—'}</td>
+            <tr key={l['.id']} className="border-b border-border-subtle text-fg-body">
+              <td className="px-3 py-2 font-medium text-fg">{l.address ?? '—'}</td>
               <td className="px-3 py-2 font-mono text-xs">{l['mac-address'] ?? '—'}</td>
-              <td className="px-3 py-2 text-zinc-500">{l['host-name'] || l.comment || '—'}</td>
-              <td className="px-3 py-2 text-zinc-500">{l.server ?? '—'}</td>
+              <td className="px-3 py-2 text-fg-dim">{l['host-name'] || l.comment || '—'}</td>
+              <td className="px-3 py-2 text-fg-dim">{l.server ?? '—'}</td>
               {manageable && (
                 <td className="px-3 py-2">
                   <div className="flex items-center justify-end gap-1.5">
-                    {busyId === l['.id'] ? <Loader2 className="h-4 w-4 animate-spin text-zinc-400" /> : actions(l)}
+                    {busyId === l['.id'] ? <Loader2 className="h-4 w-4 animate-spin text-fg-faint" /> : actions(l)}
                   </div>
                 </td>
               )}
@@ -176,7 +176,7 @@ function IconBtn({ title, onClick, icon: Icon, danger }: {
 }) {
   return (
     <button title={title} onClick={onClick}
-      className={`rounded-md p-1.5 text-zinc-400 transition ${danger ? 'hover:bg-red-50 hover:text-red-700' : 'hover:bg-zinc-100 hover:text-zinc-700'}`}>
+      className={`rounded-md p-1.5 text-fg-faint transition ${danger ? 'hover:bg-danger-bg hover:text-danger-fg' : 'hover:bg-app hover:text-fg-body'}`}>
       <Icon className="h-4 w-4" />
     </button>
   );
@@ -218,21 +218,21 @@ function ReservationModal({ deviceId, servers, lease, onClose, onDone }: {
     }
   }
 
-  const inputCls = 'w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none transition focus:border-ruby-500 focus:ring-2 focus:ring-ruby-500/20';
-  const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500';
+  const inputCls = 'w-full rounded-lg border border-border-strong px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
+  const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-lg font-bold text-zinc-900">{editing ? 'Edit reservation' : 'Add reservation'}</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">This is a write action — it goes through the safe-apply pipeline and is audited.</p>
+            <h2 className="text-lg font-bold text-fg-strong">{editing ? 'Edit reservation' : 'Add reservation'}</h2>
+            <p className="mt-0.5 text-xs text-fg-dim">This is a write action — it goes through the safe-apply pipeline and is audited.</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app"><X className="h-5 w-5" /></button>
         </div>
         <form onSubmit={(e) => void submit(e)} className="mt-4 space-y-4">
-          {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+          {error && <div className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{error}</div>}
           {!editing && (
             <label className="block">
               <span className={labelCls}>DHCP server</span>
@@ -257,17 +257,17 @@ function ReservationModal({ deviceId, servers, lease, onClose, onDone }: {
           </label>
           {/* before → after */}
           {editing && (
-            <div className="rounded-lg bg-zinc-50 p-3 text-xs">
-              <div className="text-zinc-400">before</div>
-              <div className="font-mono text-zinc-600">{lease.address} · {lease.comment || '(no comment)'}</div>
-              <div className="mt-1.5 text-zinc-400">after</div>
-              <div className="font-mono text-zinc-800">{address} · {comment || '(no comment)'}</div>
+            <div className="rounded-lg bg-sunken p-3 text-xs">
+              <div className="text-fg-faint">before</div>
+              <div className="font-mono text-fg-muted">{lease.address} · {lease.comment || '(no comment)'}</div>
+              <div className="mt-1.5 text-fg-faint">after</div>
+              <div className="font-mono text-fg">{address} · {comment || '(no comment)'}</div>
             </div>
           )}
           <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50">Cancel</button>
+            <button type="button" onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>
             <button type="submit" disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg bg-ruby-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-ruby-500 disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse transition hover:bg-accent-hover disabled:opacity-50">
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? 'Apply change' : 'Add reservation'}
             </button>
@@ -279,25 +279,25 @@ function ReservationModal({ deviceId, servers, lease, onClose, onDone }: {
 }
 
 const RESULT_META: Record<ApplyOutcome['result'], { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  applied: { label: 'Applied & verified', cls: 'text-emerald-700 bg-emerald-50', Icon: CheckCircle2 },
-  rolled_back: { label: 'Auto-rolled back', cls: 'text-amber-700 bg-amber-50', Icon: RotateCcw },
-  rollback_failed: { label: 'Rollback failed', cls: 'text-red-700 bg-red-50', Icon: AlertTriangle },
-  failed: { label: 'Failed', cls: 'text-red-700 bg-red-50', Icon: AlertTriangle },
+  applied: { label: 'Applied & verified', cls: 'text-success-fg bg-success-bg', Icon: CheckCircle2 },
+  rolled_back: { label: 'Auto-rolled back', cls: 'text-warning-fg bg-warning-bg', Icon: RotateCcw },
+  rollback_failed: { label: 'Rollback failed', cls: 'text-danger-fg bg-danger-bg', Icon: AlertTriangle },
+  failed: { label: 'Failed', cls: 'text-danger-fg bg-danger-bg', Icon: AlertTriangle },
 };
 
 function OutcomeModal({ title, o, onClose }: { title: string; o: ApplyOutcome; onClose: () => void }) {
   const m = RESULT_META[o.result];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4" onMouseDown={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className={`mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${m.cls}`}>
           <m.Icon className="h-4 w-4" /> {m.label}
         </div>
-        <h2 className="text-base font-semibold text-zinc-900">{title}</h2>
-        <p className="mt-1.5 text-sm text-zinc-600">{o.detail}</p>
-        <p className="mt-3 text-xs text-zinc-400">Recorded in the audit log (#{o.auditId}).</p>
+        <h2 className="text-base font-semibold text-fg-strong">{title}</h2>
+        <p className="mt-1.5 text-sm text-fg-muted">{o.detail}</p>
+        <p className="mt-3 text-xs text-fg-faint">Recorded in the audit log (#{o.auditId}).</p>
         <div className="mt-5 flex justify-end">
-          <button onClick={onClose} className="rounded-lg bg-ruby-600 px-5 py-2 text-sm font-semibold text-white hover:bg-ruby-500">Close</button>
+          <button onClick={onClose} className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Close</button>
         </div>
       </div>
     </div>

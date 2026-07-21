@@ -286,6 +286,12 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE devices ADD COLUMN backups_enabled INTEGER NOT NULL DEFAULT 1;
   `,
+  // 12: per-user theme + accent override (P12). Both nullable — null means "use
+  // the install default theme". Purely presentational.
+  `
+  ALTER TABLE users ADD COLUMN theme TEXT;
+  ALTER TABLE users ADD COLUMN accent TEXT;
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

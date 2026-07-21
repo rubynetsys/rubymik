@@ -1,6 +1,7 @@
 export interface AppStatus {
   needsSetup: boolean;
   authenticated: boolean;
+  installDefault?: { theme: string; accent: string | null };
 }
 
 export interface Site {

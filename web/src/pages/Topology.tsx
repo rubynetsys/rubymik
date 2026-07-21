@@ -89,24 +89,24 @@ export default function Topology() {
     return n.kind === 'managed' ? (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-bold text-zinc-900">{n.name}</span>
+          <span className="text-sm font-bold text-fg-strong">{n.name}</span>
           {n.status && <StatusBadge status={n.status} />}
         </div>
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-fg-dim">
           {[n.model, n.version && `RouterOS ${n.version}`].filter(Boolean).join(' · ') || '—'}
         </div>
-        {n.siteName && <div className="text-xs text-zinc-400">Site: {n.siteName}</div>}
-        <div className="text-[11px] font-medium text-ruby-600">Click to open device view →</div>
+        {n.siteName && <div className="text-xs text-fg-faint">Site: {n.siteName}</div>}
+        <div className="text-[11px] font-medium text-accent">Click to open device view →</div>
       </div>
     ) : (
       <div className="space-y-1.5">
-        <div className="text-sm font-bold text-zinc-900">{n.name}</div>
-        <div className="text-xs text-zinc-500">
+        <div className="text-sm font-bold text-fg-strong">{n.name}</div>
+        <div className="text-xs text-fg-dim">
           {[n.platform, n.board].filter(Boolean).join(' · ') || 'Unknown device'}
         </div>
-        {n.address && <div className="text-xs text-zinc-500">{n.address}</div>}
-        {n.mac && <div className="font-mono text-[11px] text-zinc-400">{n.mac}</div>}
-        <div className="text-[11px] font-medium text-zinc-400">Discovered (not managed) — click for options</div>
+        {n.address && <div className="text-xs text-fg-dim">{n.address}</div>}
+        {n.mac && <div className="font-mono text-[11px] text-fg-faint">{n.mac}</div>}
+        <div className="text-[11px] font-medium text-fg-faint">Discovered (not managed) — click for options</div>
       </div>
     );
   }
@@ -115,19 +115,19 @@ export default function Topology() {
     <div className="mx-auto max-w-7xl">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Topology</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Topology</h1>
+          <p className="mt-1 text-sm text-fg-dim">
             Auto-discovered from MNDP / LLDP / CDP neighbor tables — read-only, direct sightings only.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-fg-faint">
             {fetchedAt ? `Updated ${fmtAgo(new Date(fetchedAt).toISOString())}` : ''} · refreshes with poll data
           </span>
           <select
             value={String(siteFilter)}
             onChange={(e) => setSiteFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-ruby-500"
+            className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong"
           >
             <option value="all">All sites</option>
             {(topo?.sites ?? []).map((s) => (
@@ -138,17 +138,17 @@ export default function Topology() {
       </div>
 
       {error && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">{error}</div>
+        <div className="mt-6 rounded-2xl border border-danger-line bg-danger-bg p-6 text-sm text-danger-fg-strong">{error}</div>
       )}
 
       {topo && topo.nodes.length === 0 && (
-        <div className="mt-6 rounded-2xl border border-zinc-200 bg-white p-12 text-center shadow-sm">
-          <p className="text-sm text-zinc-500">
+        <div className="mt-6 rounded-2xl border border-border bg-surface p-12 text-center shadow-sm">
+          <p className="text-sm text-fg-dim">
             {siteFilter === 'all'
               ? 'No devices to map yet — add a MikroTik first.'
               : 'No devices in this site.'}
           </p>
-          <Link to="/devices" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-ruby-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ruby-500">
+          <Link to="/devices" className="mt-4 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover">
             <Plus className="h-4 w-4" /> Add a device
           </Link>
         </div>
@@ -157,54 +157,54 @@ export default function Topology() {
       {topo && topo.nodes.length > 0 && (
         <div className="mt-5">
           {warnings.length > 0 && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="mb-4 rounded-xl border border-warning-line bg-warning-bg px-4 py-3">
               <button
                 onClick={() => setNotesOpen(!notesOpen)}
-                className="flex w-full items-center gap-2 text-left text-sm font-semibold text-amber-800"
+                className="flex w-full items-center gap-2 text-left text-sm font-semibold text-warning-fg"
               >
                 <TriangleAlert className="h-4 w-4 shrink-0" />
                 Neighbor discovery is limited on {warnings.length} device{warnings.length === 1 ? '' : 's'} — the map may be missing links
-                <span className="ml-auto text-xs font-medium text-amber-600">{notesOpen ? 'hide' : 'details'}</span>
+                <span className="ml-auto text-xs font-medium text-warning">{notesOpen ? 'hide' : 'details'}</span>
               </button>
               {notesOpen && (
-                <ul className="mt-2 space-y-1.5 text-xs text-amber-800">
+                <ul className="mt-2 space-y-1.5 text-xs text-warning-fg">
                   {warnings.map((w) => (
-                    <li key={w.deviceId}>{w.message} <span className="text-amber-500">({w.neighborCount} neighbor{w.neighborCount === 1 ? '' : 's'} currently visible)</span></li>
+                    <li key={w.deviceId}>{w.message} <span className="text-warning">({w.neighborCount} neighbor{w.neighborCount === 1 ? '' : 's'} currently visible)</span></li>
                   ))}
                 </ul>
               )}
             </div>
           )}
 
-          <div className="relative rounded-2xl border border-zinc-200 bg-white shadow-sm">
+          <div className="relative rounded-2xl border border-border bg-surface shadow-sm">
             <ForceGraph nodes={graph.nodes} edges={graph.edges} onNodeClick={onNodeClick} tooltip={tooltip} />
             {/* legend */}
-            <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[11px] font-medium text-zinc-600">
+            <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded-lg border border-border bg-surface/95 px-3 py-2 text-[11px] font-medium text-fg-muted">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded-full border-2 border-emerald-500 bg-white" /> Managed
+                <span className="inline-block h-3 w-3 rounded-full border-2 border-success bg-surface" /> Managed
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded-full border border-dashed border-zinc-400 bg-zinc-50" /> Discovered
+                <span className="inline-block h-3 w-3 rounded-full border border-dashed border-border-strong bg-sunken" /> Discovered
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Up
+                <span className="inline-block h-2 w-2 rounded-full bg-success-strong" /> Up
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> Warning
+                <span className="inline-block h-2 w-2 rounded-full bg-warning" /> Warning
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-red-600" /> Down
+                <span className="inline-block h-2 w-2 rounded-full bg-danger" /> Down
               </span>
             </div>
             {/* count chip */}
-            <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-[11px] font-medium text-zinc-500">
+            <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-[11px] font-medium text-fg-dim">
               {managedCount} managed · {discoveredCount} discovered · {topo.edges.length} link{topo.edges.length === 1 ? '' : 's'}
             </div>
           </div>
 
           {topo.edges.length === 0 && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
+            <div className="mt-4 flex items-start gap-2 rounded-xl bg-sunken px-4 py-3 text-sm text-fg-muted">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-fg-faint" />
               No links discovered yet. Neighbors appear when MNDP/LLDP/CDP discovery is enabled on the
               devices' interfaces and something on those segments answers — RubyMIK only draws what the
               routers actually report, it never invents topology.
@@ -215,13 +215,13 @@ export default function Topology() {
 
       {/* discovered-node side panel */}
       {selected && (
-        <div className="fixed inset-y-0 right-0 z-40 w-96 overflow-y-auto border-l border-zinc-200 bg-white p-6 shadow-2xl">
+        <div className="fixed inset-y-0 right-0 z-40 w-96 overflow-y-auto border-l border-border bg-surface p-6 shadow-2xl">
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Discovered device</div>
-              <h2 className="mt-0.5 text-lg font-bold text-zinc-900">{selected.name}</h2>
+              <div className="text-xs font-semibold uppercase tracking-wide text-fg-faint">Discovered device</div>
+              <h2 className="mt-0.5 text-lg font-bold text-fg-strong">{selected.name}</h2>
             </div>
-            <button onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+            <button onClick={() => setSelected(null)} className="rounded-lg p-1.5 text-fg-faint hover:bg-app hover:text-fg-body">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -237,32 +237,32 @@ export default function Topology() {
               ['Discovered by', selected.discoveredBy?.toUpperCase()],
             ] as Array<[string, string | null | undefined]>).filter(([, v]) => v).map(([k, v]) => (
               <div key={k}>
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{k}</dt>
-                <dd className="mt-0.5 break-all font-medium text-zinc-800">{v}</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">{k}</dt>
+                <dd className="mt-0.5 break-all font-medium text-fg">{v}</dd>
               </div>
             ))}
             {selected.seenBy && selected.seenBy.length > 0 && (
               <div>
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Seen by</dt>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">Seen by</dt>
                 <dd className="mt-0.5 space-y-0.5">
                   {selected.seenBy.map((s, i) => (
-                    <div key={i} className="text-zinc-700">
-                      <RouterIcon className="mr-1 inline h-3.5 w-3.5 text-zinc-400" />
-                      {s.deviceName}{s.iface ? <span className="text-zinc-400"> on {s.iface}</span> : ''}
+                    <div key={i} className="text-fg-body">
+                      <RouterIcon className="mr-1 inline h-3.5 w-3.5 text-fg-faint" />
+                      {s.deviceName}{s.iface ? <span className="text-fg-faint"> on {s.iface}</span> : ''}
                     </div>
                   ))}
                 </dd>
               </div>
             )}
           </dl>
-          <div className="mt-6 border-t border-zinc-100 pt-4">
-            <p className="text-xs text-zinc-500">
+          <div className="mt-6 border-t border-border-subtle pt-4">
+            <p className="text-xs text-fg-dim">
               This device was seen in neighbor tables but isn't managed by RubyMIK. Add it with RouterOS
               credentials to monitor it (RouterOS 7.1+ with REST reachable).
             </p>
             <button
               onClick={() => { setAdding(selected); setSelected(null); }}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ruby-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ruby-500"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover"
             >
               <Plus className="h-4 w-4" /> Add this device
             </button>
