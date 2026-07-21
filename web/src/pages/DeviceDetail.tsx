@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Loader2,
+  Activity, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import TrafficChart from '../components/TrafficChart';
 import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
+import DnsNtpManager from '../components/DnsNtpManager';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -220,6 +221,12 @@ export default function DeviceDetail() {
       <Section title="Config backups" icon={Archive}
         subtitle="full text export, diffable · backups are read-safe · restore runs through the audited dead-man pipeline">
         <BackupManager deviceId={deviceId} />
+      </Section>
+
+      {/* ===== DNS & NTP (read-safe) + set (safe-apply, manageable) ===== */}
+      <Section title="DNS & NTP" icon={Globe}
+        subtitle="resolver, static hosts & time sync · reads are safe · changes run through snapshot → verify → auto-rollback → audit">
+        <DnsNtpManager deviceId={deviceId} />
       </Section>
 
       {/* ===== Wireless ===== */}

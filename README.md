@@ -53,6 +53,10 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   Backups are read-safe (a read-only snapshot on monitor-only devices; a
   canonical export on manageable ones). **Restore** re-applies a backup through
   the audited dead-man pipeline, with a device-mismatch guard.
+- **DNS & NTP configuration** — view and set the resolver (servers,
+  allow-remote-requests, cache), manage static DNS host entries, and enable the
+  NTP client with sync status. Every change runs the safe-apply pipeline and is
+  audited; monitor-only devices show DNS/NTP read-only.
 - **Monitoring is read-only by design** — the monitoring client only issues GET
   requests to RouterOS (rates are derived from byte counters precisely because
   the monitor commands are POST). A `group=read` user is all monitoring needs.
@@ -210,6 +214,26 @@ protections on top of the pipeline:
 > physical confirmation on the device. Where that isn't enabled, RubyMIK relies
 > on the mgmt-accept-first guard plus its controller-side timed verify/revert.
 
+### DNS & NTP configuration
+
+A gentle, settings-level config feature riding the same pipeline
+(`server/src/netconfig.ts`):
+
+- **DNS** — set the resolver's upstream servers, `allow-remote-requests`, and
+  cache size, and manage static host entries (`/ip/dns/static`). DNS servers are
+  validated as IPs (hostnames rejected); static entries require a valid hostname
+  and IPv4. Enabling `allow-remote-requests` turns the router into a resolver for
+  its clients — the UI flags that so it isn't toggled blindly.
+- **NTP** — enable the client and set servers (IP or hostname), with live sync
+  status. NTP servers legitimately take a few seconds to reach `synchronized`, so
+  `verify` only confirms the *settings* took; actual synchronization is surfaced
+  separately by polling the status, not gated on inside the apply.
+
+Singleton menus (`/ip/dns`, `/system/ntp/client`) are written with a REST
+`POST .../set`; static entries use the list verbs (PUT/PATCH/DELETE). As with
+every config feature, monitor-only devices are read-only and a write is rejected
+with `403` before the device is ever contacted.
+
 ## Polling at scale
 
 The poller is designed so a large fleet doesn't get hammered and one dead
@@ -245,8 +269,10 @@ need no native compilation.
 
 ## Roadmap
 
-- More config features on the safe-apply framework: firewall rules, VLANs,
-  interface config, backups — each reusing snapshot → verify → rollback → audit
+- More config features on the safe-apply framework: VLANs and interface config —
+  each reusing snapshot → verify → rollback → audit (firewall, backups, and
+  DNS/NTP already ship on it)
+- WireGuard / remote-access management (the keystone config feature)
 - Deeper time-series (retention beyond 6h, roll-ups) and historical dashboards
 - Email (SMTP) notification channel; per-site / per-device alert-rule overrides
   (the rules schema already carries the scope columns)

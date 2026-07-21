@@ -130,6 +130,31 @@ export interface RestoreOutcome {
   detail: string;
 }
 
+// --- DNS & NTP config (P8) ---
+
+export interface NetConfigView {
+  manageable: boolean;
+  dns: {
+    servers: string[];
+    dynamicServers: string[];
+    allowRemoteRequests: boolean;
+    cacheSize: number;
+    cacheUsed: number;
+    static: Array<{ id: string; name: string | null; address: string | null; type: string | null; comment: string | null; disabled: boolean }>;
+  };
+  ntp: NtpState;
+}
+
+export interface NtpState {
+  enabled: boolean;
+  servers: string[];
+  status: string;
+  synced: boolean;
+  freqDrift: string | null;
+  time: string | null;
+  timeZone: string | null;
+}
+
 export interface AuditEntry {
   id: number;
   deviceId: number | null;
