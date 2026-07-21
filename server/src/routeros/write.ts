@@ -4,6 +4,15 @@ import type { DeviceTarget } from './types.js';
 import { RouterOsError } from './rest.js';
 
 /**
+ * P21 backstop: a config-mutating verb (PUT/PATCH/DELETE) must run inside a
+ * pre/post snapshot bracket. The guard is registered by snapshothook at startup
+ * and is a no-op until then (and for POST, which carries the read-only /export
+ * capture + restore). Registered via a setter to avoid an import cycle.
+ */
+let preWriteGuard: ((method: WriteMethod, apiPath: string) => void) | null = null;
+export function setPreWriteGuard(fn: (method: WriteMethod, apiPath: string) => void): void { preWriteGuard = fn; }
+
+/**
  * ============================================================================
  *  THE WRITE PATH — the ONLY module in RubyMIK that issues a non-GET verb to
  *  a RouterOS device. All monitoring lives in rest.ts and is GET-only.
@@ -29,6 +38,7 @@ function writeRequest(
   apiPath: string,
   body: unknown,
 ): Promise<unknown> {
+  if (preWriteGuard) preWriteGuard(method, apiPath); // P21: no config write without a pre-snapshot
   return new Promise((resolve, reject) => {
     const lib = scheme === 'https' ? https : http;
     const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));

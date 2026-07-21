@@ -11,6 +11,7 @@ import {
   validateSsid, validatePassphrase, validateChannel,
   type WirelessContext, type WirelessInterface, type WirelessStack,
 } from '../wireless.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -47,7 +48,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
       const ctx = await makeCtx(row);
       const view = await readWireless(ctx);
       res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...view });
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // ---- write prep: manageable-gate + stack + target interface + lockout guard ----
@@ -63,7 +64,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
     let ctx: WirelessContext;
     let view;
     try { ctx = await makeCtx(row); view = await readWireless(ctx); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
     if (view.stack === 'none') { res.status(400).json({ error: 'This device has no wireless hardware.' }); return null; }
     const iface = view.interfaces.find((i) => i.id === req.params.ifaceId || i.name === req.params.ifaceId);
     if (!iface) { res.status(404).json({ error: 'Wireless interface not found.' }); return null; }
@@ -93,7 +94,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await applySsid(m.ctx, m.stack, sac(m.row, m.actor, 'wireless.ssid', m.iface.name), m.iface.id, { ssid, enabled });
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // ---- Security (WPA2/WPA3 passphrase) — passphrase never logged/audited ----
@@ -112,7 +113,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await applySecurity(m.ctx, m.stack, sac(m.row, m.actor, 'wireless.security', m.iface.name), m.iface.id, { authTypes, passphrase });
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // ---- Band / channel / width ----
@@ -130,7 +131,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await applyChannel(m.ctx, m.stack, sac(m.row, m.actor, 'wireless.channel', m.iface.name), m.iface.id, { band, frequency, width });
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

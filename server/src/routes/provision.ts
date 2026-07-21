@@ -11,6 +11,7 @@ import {
 import { liveApplyBaseline, type ProvCtx } from '../provisionapply.js';
 import { allocateTunnelIp, createPeer, type HubConfig, type PeerRow } from '../remoteaccess.js';
 import { log } from '../log.js';
+import { writeErr } from '../snapshothook.js';
 
 /**
  * New-router provisioning (P11). Orchestrates the pure generator (provision.ts),
@@ -98,7 +99,7 @@ export function provisionRoutes(db: DatabaseSync): Router {
         spec, { forceSeverAt, severSource });
       log.info(`Live-apply of "${spec.identity}" → ${outcome.result} (mgmt ${outcome.mgmtPreserved ? 'preserved' : 'LOST'})`);
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

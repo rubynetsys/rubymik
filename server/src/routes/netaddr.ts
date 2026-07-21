@@ -10,6 +10,7 @@ import {
   readInterfaces, addAddress, removeAddress, setInterface, changeMgmtIp, validateAddress,
   type AddrContext,
 } from '../netaddr.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -45,7 +46,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const view = await readInterfaces(await makeCtx(row));
       res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...view });
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   async function requireManageable(req: Request, res: Response): Promise<{ row: DeviceRow; ctx: AddrContext; actor: string } | null> {
@@ -56,7 +57,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
       return null;
     }
     try { return { row, ctx: await makeCtx(row), actor: actorOf(req) }; }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
   }
 
   // Add an address to an interface (additive — safe on any interface).
@@ -72,7 +73,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const o = await addAddress(m.ctx, sac(m.row, m.actor, 'addr.add', `${iface} ${cidr}`), iface, cidr);
       res.status(o.result === 'applied' ? 201 : 502).json(o);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // Remove an address — REFUSED if it is the (only) management address.
@@ -89,7 +90,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const o = await removeAddress(m.ctx, sac(m.row, m.actor, 'addr.remove', addr.address), req.params.addrId);
       res.status(o.result === 'applied' ? 200 : 502).json(o);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // Interface enable/disable/mtu/comment — REFUSE disabling the mgmt interface.
@@ -111,7 +112,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const o = await setInterface(m.ctx, sac(m.row, m.actor, 'iface.set', iface.name), req.params.ifaceId, patch);
       res.status(o.result === 'applied' ? 200 : 502).json(o);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // Change the MANAGEMENT IP — always add-before-remove.
@@ -123,7 +124,7 @@ export function netaddrRoutes(db: DatabaseSync, box: SecretBox): Router {
       const r = await changeMgmtIp(db, box, m.row, m.ctx.transport, sac(m.row, m.actor, 'addr.mgmt-ip', cidr), cidr);
       const code = r.result === 'applied' ? 200 : r.result === 'rejected' ? 400 : 502;
       res.status(code).json(r);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

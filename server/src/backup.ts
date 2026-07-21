@@ -52,11 +52,19 @@ async function identityOf(t: DeviceTarget, tr: WriteTransport): Promise<string |
  * Canonical export via `POST /rest/export {file}` (writes an .rsc, reusing one
  * filename), then read its contents. Needs an ftp-capable (write/mgmt) cred.
  */
-export async function exportCanonical(write: DeviceTarget, transport: WriteTransport): Promise<{ text: string; meta: BackupMeta }> {
-  await restCommand(write, transport, '/export', { file: EXPORT_FILE });
+export async function exportCanonical(
+  write: DeviceTarget, transport: WriteTransport,
+  opts?: { sensitive?: boolean; file?: string },
+): Promise<{ text: string; meta: BackupMeta }> {
+  const file = opts?.file ?? EXPORT_FILE;
+  const body: Record<string, unknown> = { file };
+  // show-sensitive yields a TRUE restore reference (keys/passphrases inline). The
+  // caller must treat the result as secret-bearing (encrypt at rest, never log).
+  if (opts?.sensitive) body['show-sensitive'] = 'yes';
+  await restCommand(write, transport, '/export', body);
   await new Promise((r) => setTimeout(r, 400));
   const files = await restGet(write, transport.scheme, transport.port, '/file') as Array<Record<string, unknown>>;
-  const f = files.find((x) => (x.name as string | undefined) === `${EXPORT_FILE}.rsc`);
+  const f = files.find((x) => (x.name as string | undefined) === `${file}.rsc`);
   const raw = (f?.contents as string | undefined) ?? '';
   if (!raw) throw new Error('Export produced no readable content.');
   const text = raw.replace(/\r\n/g, '\n'); // RouterOS exports CRLF — normalize to LF

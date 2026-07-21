@@ -292,6 +292,43 @@ const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN theme TEXT;
   ALTER TABLE users ADD COLUMN accent TEXT;
   `,
+  // 13: automatic config snapshots (P21). Every managed router gets an /export
+  // snapshot captured pre/post every write, plus manual + daily scheduled. Content
+  // is AES-256-GCM encrypted at rest (show-sensitive exports carry secrets), the
+  // same SecretBox used for device credentials. Dedup: a capture identical to the
+  // router's most recent one stores a duplicate_of pointer, not a second blob.
+  // This is CAPTURE + VIEW + DIFF only — there is deliberately NO restore path.
+  `
+  CREATE TABLE snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    router_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+    router_name TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    trigger TEXT NOT NULL,             -- pre_write | post_write | manual | scheduled
+    operation TEXT,                    -- e.g. "netl2.moveMgmtToBridge"
+    op_group TEXT,                     -- shared by a pre/post pair (nullable)
+    outcome TEXT,                      -- post_write: applied | rolled_back | failed | ...
+    format TEXT NOT NULL,              -- export (canonical, show-sensitive) | snapshot (read-only GET)
+    identity TEXT, model TEXT, serial TEXT, version TEXT,
+    size_bytes INTEGER NOT NULL,       -- plaintext bytes
+    sha256 TEXT NOT NULL,              -- of plaintext
+    content_encrypted TEXT,            -- gcm1: AES-256-GCM (iv+tag embedded); NULL when duplicate_of set
+    duplicate_of INTEGER REFERENCES snapshots(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_snapshots_router ON snapshots(router_id, captured_at);
+  CREATE INDEX idx_snapshots_opgroup ON snapshots(router_id, op_group);
+
+  CREATE TABLE snapshot_failures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    router_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+    trigger TEXT NOT NULL,
+    operation TEXT,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_snapshot_failures_router ON snapshot_failures(router_id, created_at);
+  `,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

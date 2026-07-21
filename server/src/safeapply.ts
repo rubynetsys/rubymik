@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { restGet } from './routeros/rest.js';
 import type { DeviceTarget } from './routeros/types.js';
 import type { WriteTransport } from './routeros/write.js';
+import { withWriteOp } from './snapshothook.js';
 import { log } from './log.js';
 
 /**
@@ -85,6 +86,13 @@ function audit(
 }
 
 export async function runSafeApply<B>(ctx: SafeApplyContext, steps: SafeApplySteps<B>): Promise<SafeApplyOutcome> {
+  // P21: bracket the whole operation with pre (fail-closed) + post snapshots. The
+  // pre-capture runs before any write; if it fails, this throws SnapshotRequiredError
+  // and steps.apply() is never reached.
+  return withWriteOp(ctx.deviceId, ctx.action, () => runSafeApplyInner(ctx, steps));
+}
+
+async function runSafeApplyInner<B>(ctx: SafeApplyContext, steps: SafeApplySteps<B>): Promise<SafeApplyOutcome> {
   const before = await steps.snapshot();
   const summary = steps.summary(before);
 

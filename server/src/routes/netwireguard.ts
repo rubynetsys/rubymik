@@ -12,6 +12,7 @@ import {
   validateInterfaceInput, validatePeerInput, genSiteToSite, isValidEndpoint, isValidAllowedAddresses,
   MgmtTunnelProtected, type WgContext, type WgEnd,
 } from '../netwireguard.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -47,7 +48,7 @@ export function netwireguardRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const view = await readWireguard(await makeCtx(row));
       res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...view });
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   async function requireManageable(req: Request, res: Response): Promise<{ row: DeviceRow; ctx: WgContext; actor: string } | null> {
@@ -58,7 +59,7 @@ export function netwireguardRoutes(db: DatabaseSync, box: SecretBox): Router {
       return null;
     }
     try { return { row, ctx: await makeCtx(row), actor: actorOf(req) }; }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
   }
 
   // Wrap an apply so MgmtTunnelProtected → 409 (the make-or-break protection).
@@ -68,7 +69,7 @@ export function netwireguardRoutes(db: DatabaseSync, box: SecretBox): Router {
       res.status(outcome.result === 'applied' ? okStatus : 502).json(outcome);
     } catch (err) {
       if (err instanceof MgmtTunnelProtected) { res.status(409).json({ error: err.message, mgmtTunnelProtected: true }); return; }
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   }
 

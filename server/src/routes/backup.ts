@@ -12,6 +12,7 @@ import { listBackups, getBackupRow, diffExports } from '../backup.js';
 import { restoreBackup, type RestoreContext } from '../restore.js';
 import type { BackupScheduler } from '../backupscheduler.js';
 import { log } from '../log.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -50,7 +51,7 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
         'applied', `Manual backup (${backup.rawBytes}B, RouterOS ${backup.version ?? '?'})`, null, { backupId: backup.id }, 'Config exported and stored.');
       res.status(201).json(backup);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -101,7 +102,7 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
     const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
+    catch (err) { writeErr(res, err); return; }
 
     // Device-mismatch guard: the backup must belong to THIS device.
     try {
@@ -124,7 +125,7 @@ export function backupRoutes(db: DatabaseSync, box: SecretBox, scheduler: Backup
         backup.text, forceRollback);
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 

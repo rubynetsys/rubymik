@@ -19,6 +19,8 @@ export interface Config {
   backupIntervalSec: number;
   /** How many backups to retain per device. */
   backupKeep: number;
+  /** Seconds between scheduled config-SNAPSHOT runs (P21; all devices, read-only). */
+  snapshotIntervalSec: number;
   /** Instance default theme (a user's own choice overrides it). */
   defaultTheme: string;
   defaultAccent: string | null;
@@ -66,9 +68,10 @@ export function loadConfig(): Config {
     : intEnv('RUBYMIK_WEBFIG_PORT', port + 1, 1, 65535);
   const backupIntervalSec = intEnv('RUBYMIK_BACKUP_INTERVAL', 86400, 60, 2592000);
   const backupKeep = intEnv('RUBYMIK_BACKUP_KEEP', 10, 1, 500);
+  const snapshotIntervalSec = intEnv('RUBYMIK_SNAPSHOT_INTERVAL', 86400, 60, 2592000);
 
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
 
-  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, defaultTheme, defaultAccent };
+  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent };
 }

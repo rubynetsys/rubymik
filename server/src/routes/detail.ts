@@ -8,6 +8,7 @@ import { restConnect, restGet, RouterOsError, type Scheme } from '../routeros/re
 import type { DeviceTarget } from '../routeros/types.js';
 import { readTarget } from '../transport.js';
 import { log } from '../log.js';
+import { writeErr } from '../snapshothook.js';
 
 /**
  * Per-device deep view. Everything here READS from RouterOS via restGet
@@ -210,7 +211,7 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     try {
       ({ scheme, port } = await transportFor(row, target));
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
       return;
     }
 

@@ -8,6 +8,9 @@ import { openDb } from './db.js';
 import { SecretBox } from './secretbox.js';
 import { Poller } from './poller.js';
 import { BackupScheduler } from './backupscheduler.js';
+import { installCaptureHook } from './snapshothook.js';
+import { SnapshotScheduler } from './snapshotscheduler.js';
+import { snapshotRoutes } from './routes/snapshots.js';
 import { AlertEngine } from './alerts.js';
 import { Notifier } from './notify.js';
 import { alertRoutes } from './routes/alerts.js';
@@ -37,10 +40,12 @@ setLogLevel(config.logLevel);
 
 const db = openDb(config.dataDir);
 const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
+installCaptureHook(db, box); // P21: bracket every config write with pre/post snapshots (fail-closed)
 const notifier = new Notifier(db);
 const alertEngine = new AlertEngine(db, notifier);
 const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine);
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);
+const snapshotScheduler = new SnapshotScheduler(db, box, config.snapshotIntervalSec * 1000);
 const wgHub = new WireguardHub(db, box);
 
 const app = express();
@@ -62,6 +67,7 @@ app.use('/api/devices', netroutesRoutes(db, box));
 app.use('/api/devices', netwireguardRoutes(db, box));
 app.use('/api/devices', netaddrRoutes(db, box));
 app.use('/api/devices', netl2Routes(db, box));
+app.use('/api/devices', snapshotRoutes(db, box, snapshotScheduler));
 app.use('/api/remote-access', remoteAccessRoutes(db, box, wgHub));
 app.use('/api/provision', provisionRoutes(db));
 app.use('/api/sites', siteRoutes(db));
@@ -72,6 +78,15 @@ app.use('/api/audit', auditRoutes(db));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
+});
+
+// P21 backstop: a fail-closed write refusal (SnapshotRequiredError) that reaches
+// here becomes 409 {snapshotRequired}. Write routes already surface this via
+// writeErr; this covers any handler that lets it propagate.
+app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const e = err as { snapshotRequired?: boolean; message?: string };
+  if (e && e.snapshotRequired) { if (!res.headersSent) res.status(409).json({ error: e.message, snapshotRequired: true }); return; }
+  next(err as Error);
 });
 
 // Serve the built dashboard. Docker image layout: /app/public (baked in);
@@ -98,6 +113,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   if (config.pollIntervalSec > 0) poller.start();
   else log.warn('Polling disabled (RUBYMIK_POLL_INTERVAL=0) — serving stored status/topology only');
   backupScheduler.start();
+  snapshotScheduler.start();
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });
 

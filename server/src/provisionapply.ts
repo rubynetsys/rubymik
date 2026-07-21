@@ -3,6 +3,7 @@ import { restAdd, restRemove, restCommand, type WriteTransport } from './routero
 import type { DeviceTarget } from './routeros/types.js';
 import { applyFirewall, type FirewallConfig } from './firewall.js';
 import { writeAudit, type SafeApplyContext } from './safeapply.js';
+import { withWriteOp } from './snapshothook.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { baselineFirewall, type BaselineSpec } from './provision.js';
 import { log } from './log.js';
@@ -66,7 +67,14 @@ async function mgmtSource(ctx: ProvCtx, fallback?: string): Promise<string | nul
   return fallback ?? null;
 }
 
-export async function liveApplyBaseline(
+export function liveApplyBaseline(
+  ctx: ProvCtx, db: DatabaseSync, sac: Sac, spec: BaselineSpec,
+  opts: { forceSeverAt?: string; severSource?: string } = {},
+): Promise<LiveApplyOutcome> {
+  // P21: bracket live baseline provisioning with pre/post snapshots.
+  return withWriteOp(sac.deviceId, 'provision.liveApplyBaseline', () => liveApplyBaselineInner(ctx, db, sac, spec, opts));
+}
+async function liveApplyBaselineInner(
   ctx: ProvCtx, db: DatabaseSync, sac: Sac, spec: BaselineSpec,
   opts: { forceSeverAt?: string; severSource?: string } = {},
 ): Promise<LiveApplyOutcome> {

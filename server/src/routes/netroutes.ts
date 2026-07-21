@@ -11,6 +11,7 @@ import {
   validateRouteInput, mgmtGuardError, mgmtCriticalPrefixes,
   type RoutesContext,
 } from '../netroutes.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -47,7 +48,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
       const ctx = await makeCtx(row);
       const view = await readRoutes(ctx);
       res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...view });
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   async function requireManageable(req: Request, res: Response): Promise<{ row: DeviceRow; ctx: RoutesContext; actor: string } | null> {
@@ -58,7 +59,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
       return null;
     }
     try { return { row, ctx: await makeCtx(row), actor: actorOf(req) }; }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
   }
 
   // ADD a static route.
@@ -85,7 +86,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await addRoute(m.ctx, sac(m.row, m.actor, 'route.add', `${dst} via ${gateway}`), { dst, gateway, distance, comment });
       res.status(outcome.result === 'applied' ? 201 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // EDIT a static route (gateway/distance/comment). Static-only + extra care for
@@ -113,7 +114,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await editRoute(m.ctx, sac(m.row, m.actor, 'route.edit', route.dst), req.params.routeId, patch);
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // REMOVE a static route (static-only; extra care for non-RUBYMIK routes).
@@ -130,7 +131,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await removeRoute(m.ctx, sac(m.row, m.actor, 'route.remove', route.dst), req.params.routeId);
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

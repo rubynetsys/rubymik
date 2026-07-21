@@ -13,6 +13,7 @@ import {
 } from '../dhcp.js';
 import { auditRejected } from '../safeapply.js';
 import { log } from '../log.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number;
@@ -53,7 +54,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       transport = await transportFor(row, read);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
       return;
     }
     const ctx: DhcpContext = { read, write: read, transport };
@@ -67,7 +68,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
         dynamic,
       });
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -85,7 +86,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       transport = await transportFor(row, read);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
       return null;
     }
     const ctx = dhcpContext(row, read, transport);
@@ -126,7 +127,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
         server, { mac, address, comment }, forceRollback);
       res.status(outcome.result === 'applied' ? 201 : 200).json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -149,7 +150,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
         req.params.leaseId, patch, forceRollback);
       res.json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -163,7 +164,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
         req.params.leaseId, forceRollback);
       res.json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -196,7 +197,7 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
         server, { mac, address, comment: lease['host-name'] ?? null });
       res.status(outcome.result === 'applied' ? 201 : 200).json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 

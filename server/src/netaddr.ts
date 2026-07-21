@@ -5,6 +5,7 @@ import { restAdd, restRemove, restSet, type WriteTransport } from './routeros/wr
 import type { DeviceTarget } from './routeros/types.js';
 import { readTarget, writeTarget, resolveEndpoint, type AddressableRow } from './transport.js';
 import { runSafeApply, writeAudit, type SafeApplyContext, type SafeApplyOutcome } from './safeapply.js';
+import { withWriteOp } from './snapshothook.js';
 import { ipToInt, parseCidr, isValidCidr } from './netroutes.js';
 import type { SecretBox } from './secretbox.js';
 import { log } from './log.js';
@@ -135,7 +136,14 @@ export async function setInterface(ctx: AddrContext, sac: Sac, ifaceId: string, 
 
 export interface MgmtIpResult { result: 'applied' | 'failed' | 'rejected'; detail: string; auditId: number; newHost?: string; sequence: string[] }
 
-export async function changeMgmtIp(
+export function changeMgmtIp(
+  db: DatabaseSync, box: SecretBox, row: AddressableRow & { id: number; name: string }, transport: WriteTransport,
+  sac: Sac, newCidr: string,
+): Promise<MgmtIpResult> {
+  // P21: bracket this bespoke add-before-remove mgmt-IP flow with pre/post snapshots.
+  return withWriteOp(row.id, 'netaddr.changeMgmtIp', () => changeMgmtIpInner(db, box, row, transport, sac, newCidr));
+}
+async function changeMgmtIpInner(
   db: DatabaseSync, box: SecretBox, row: AddressableRow & { id: number; name: string }, transport: WriteTransport,
   sac: Sac, newCidr: string,
 ): Promise<MgmtIpResult> {

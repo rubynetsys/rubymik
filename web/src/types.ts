@@ -200,6 +200,19 @@ export interface DiffResult {
   lines: Array<{ t: ' ' | '+' | '-'; s: string }>;
 }
 
+// --- automatic config snapshots (P21) — capture + view + diff (no restore) ---
+export type SnapshotTrigger = 'pre_write' | 'post_write' | 'manual' | 'scheduled';
+export interface SnapshotMeta {
+  id: number; routerId: number | null; routerName: string; capturedAt: string;
+  trigger: SnapshotTrigger; operation: string | null; opGroup: string | null; outcome: string | null;
+  format: 'export' | 'snapshot'; identity: string | null; model: string | null; serial: string | null; version: string | null;
+  sizeBytes: number; sha256: string; isDuplicate: boolean;
+}
+export interface SnapshotFailure { id: number; trigger: string; operation: string | null; reason: string; createdAt: string }
+export interface SnapshotsView { snapshots: SnapshotMeta[]; lastFailure: SnapshotFailure | null }
+export interface SnapshotDiff { a: SnapshotMeta; b: SnapshotMeta; diff: { added: number; removed: number; lines: Array<{ t: ' ' | '+' | '-'; s: string }> } }
+export interface SnapshotContent { meta: SnapshotMeta; content: string }
+
 export interface RestoreOutcome {
   result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
   auditId: number;

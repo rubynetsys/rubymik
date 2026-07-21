@@ -5,6 +5,7 @@ import { restAdd, restRemove, restSet, type WriteTransport } from './routeros/wr
 import type { DeviceTarget } from './routeros/types.js';
 import { readTarget, writeTarget, resolveEndpoint, type AddressableRow } from './transport.js';
 import { runSafeApply, writeAudit, type SafeApplyContext, type SafeApplyOutcome } from './safeapply.js';
+import { withWriteOp } from './snapshothook.js';
 import type { SecretBox } from './secretbox.js';
 import { log } from './log.js';
 
@@ -225,7 +226,14 @@ export interface L2MgmtResult { result: 'applied' | 'failed' | 'rejected'; detai
  *  new bridge (+ move a port), add a new mgmt address B on it, VERIFY the SAME
  *  router still answers at B, then remove the old address/bridge. If B doesn't
  *  verify, tear the new path down and keep the old — no partition. */
-export async function moveMgmtToBridge(
+export function moveMgmtToBridge(
+  db: DatabaseSync, box: SecretBox, row: AddressableRow & { id: number; name: string }, transport: WriteTransport,
+  sac: Sac, opts: { newBridge: string; port: string; newCidr: string },
+): Promise<L2MgmtResult> {
+  // P21: bracket this bespoke add-before-remove-at-L2 flow with pre/post snapshots.
+  return withWriteOp(row.id, 'netl2.moveMgmtToBridge', () => moveMgmtToBridgeInner(db, box, row, transport, sac, opts));
+}
+async function moveMgmtToBridgeInner(
   db: DatabaseSync, box: SecretBox, row: AddressableRow & { id: number; name: string }, transport: WriteTransport,
   sac: Sac, opts: { newBridge: string; port: string; newCidr: string },
 ): Promise<L2MgmtResult> {

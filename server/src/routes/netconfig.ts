@@ -11,6 +11,7 @@ import {
   validateDnsServers, validateNtpServers, validateStaticEntry, isValidIpv4,
   type NetConfigContext,
 } from '../netconfig.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -39,7 +40,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
+    catch (err) { writeErr(res, err); return; }
     const ctx: NetConfigContext = { read, write: read, transport };
     try {
       res.json({
@@ -48,7 +49,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
         ntp: await readNtp(ctx),
       });
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -60,7 +61,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const transport = await transportFor(row, read);
       res.json(await readNtp({ read, write: read, transport }));
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   async function requireManageable(req: Request, res: Response): Promise<{ row: DeviceRow; ctx: NetConfigContext; actor: string } | null> {
@@ -73,7 +74,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
     const write = writeTarget(box, row);
     return { row, ctx: { read, write, transport }, actor: actorOf(req) };
   }
@@ -94,7 +95,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await applyDns(m.ctx, sac(m.row, m.actor, 'dns.set', servers.join(',')), { servers, allowRemoteRequests, cacheSize });
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // Set NTP.
@@ -112,7 +113,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await applyNtp(m.ctx, sac(m.row, m.actor, 'ntp.set', servers.join(',')), { enabled, servers });
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   // Static DNS entries.
@@ -130,7 +131,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await addStatic(m.ctx, sac(m.row, m.actor, 'dns.static.add', `${name} → ${address}`), name, address, comment);
       res.status(outcome.result === 'applied' ? 201 : 502).json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   router.patch('/:id/dns/static/:entryId', async (req, res) => {
@@ -143,7 +144,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await editStatic(m.ctx, sac(m.row, m.actor, 'dns.static.edit', req.params.entryId), req.params.entryId, patch);
       res.json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   router.delete('/:id/dns/static/:entryId', async (req, res) => {
@@ -151,7 +152,7 @@ export function netconfigRoutes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const outcome = await removeStatic(m.ctx, sac(m.row, m.actor, 'dns.static.remove', req.params.entryId), req.params.entryId);
       res.json(outcome);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

@@ -131,6 +131,20 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   Backups are read-safe (a read-only snapshot on monitor-only devices; a
   canonical export on manageable ones). **Restore** re-applies a backup through
   the audited dead-man pipeline, with a device-mismatch guard.
+- **Automatic config snapshots** — a point-in-time `/export` is captured **before
+  and after every config write** (fail-closed: if the pre-snapshot can't be taken,
+  the write is refused — no snapshot, no write), plus a manual "Snapshot now" and a
+  daily scheduled capture that also catches out-of-band changes made directly in
+  WebFig. Every write tier RubyMIK already shipped is retroactively insured: the
+  next bad change becomes a **diff** and a restore reference, not a serial-console
+  session. Snapshots are **AES-256-GCM encrypted at rest** (show-sensitive exports
+  carry secrets, so they're never stored in the clear or logged), deduplicated
+  (an unchanged capture is a pointer, not a second blob), and retained 100/router
+  (never pruning the pre/post pairs of the 10 most recent writes). Capture is
+  **read-only** on the router, so it runs on monitor-only devices too (they get a
+  read-only GET reconstruction instead of a privileged export). View, diff and
+  download `.rsc` — **capture only; there is deliberately no restore-from-snapshot
+  path** (that's its own dangerous phase).
 - **DNS & NTP configuration** — view and set the resolver (servers,
   allow-remote-requests, cache), manage static DNS host entries, and enable the
   NTP client with sync status. Every change runs the safe-apply pipeline and is
@@ -211,6 +225,7 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_POLL_CONCURRENCY` | `4` | Max devices polled in parallel (1–16) |
 | `RUBYMIK_BACKUP_INTERVAL` | `86400` | Seconds between scheduled config backups (60–2592000) |
 | `RUBYMIK_BACKUP_KEEP` | `10` | Config backups retained per device (1–500) |
+| `RUBYMIK_SNAPSHOT_INTERVAL` | `86400` | Seconds between scheduled config snapshots (60–2592000; a router snapshotted within 20h is skipped) |
 
 Device credentials are stored **AES-256-GCM encrypted** in SQLite — never plaintext.
 

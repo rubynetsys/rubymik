@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AppWindow, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
+  Activity, AppWindow, Archive, ArrowLeft, Camera, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Waypoints, Wifi,
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import TrafficChart from '../components/TrafficChart';
 import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
+import SnapshotManager from '../components/SnapshotManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
@@ -276,10 +277,16 @@ export default function DeviceDetail() {
 
       {/* ===== Backups tab ===== */}
       {tab === 'backups' && (
+      <>
       <Section title="Config backups" icon={Archive}
         subtitle="full text export, diffable · backups are read-safe · restore runs through the audited dead-man pipeline">
         <BackupManager deviceId={deviceId} />
       </Section>
+      <Section title="Config snapshots" icon={Camera}
+        subtitle="auto-captured pre/post every write + manual + daily · /export show-sensitive, AES-256-GCM encrypted at rest · capture is read-only (all devices) · view / diff / download only — no restore">
+        <SnapshotManager deviceId={deviceId} />
+      </Section>
+      </>
       )}
 
       {/* ===== DNS & NTP tab ===== */}

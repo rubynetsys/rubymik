@@ -13,6 +13,7 @@ import {
   validateCustomRule, type FirewallContext, type CustomRule, type Preset, type FirewallConfig,
 } from '../firewall.js';
 import { log } from '../log.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -69,7 +70,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
     const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return; }
+    catch (err) { writeErr(res, err); return; }
     const ctx: FirewallContext = { read, write: read, transport };
     try {
       const managed = await readManagedRules(ctx);
@@ -91,7 +92,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
         managedRules: managed.map((r) => ({ id: r['.id'], chain: r.chain, action: r.action, comment: r.comment, ...r })),
       });
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -101,7 +102,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
     const read = readTarget(box, row);
     let transport: WriteTransport;
     try { transport = await transportFor(row, read); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
     const ctx = fwContext(row, read, transport);
     if (!ctx) { res.status(403).json({ error: 'This device is monitor-only. Add a write credential to manage its firewall.' }); return null; }
     const actor = (req as Request & { user: SessionUser }).user.username;
@@ -148,7 +149,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
       if (outcome.result === 'applied') saveConfig(m.row.id, parsed.preset, parsed.cfg, parsed.custom);
       res.status(outcome.result === 'applied' ? 200 : 502).json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -164,7 +165,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
       }
       res.json(outcome);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 
@@ -184,7 +185,7 @@ export function firewallRoutes(db: DatabaseSync, box: SecretBox): Router {
       const result = await lockoutTest(m.ctx, sac(m.row, m.actor, 'firewall.lockout-test', mgmtSources.join(',')), mgmtSources, LOCKOUT_TIMEOUT_SEC);
       res.json(result);
     } catch (err) {
-      res.status(502).json({ error: (err as Error).message });
+      writeErr(res, err);
     }
   });
 

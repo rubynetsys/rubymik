@@ -10,6 +10,7 @@ import {
   readL2, createBridge, addPort, createVlan, removeL2, setBridge, moveMgmtToBridge,
   validateBridge, validateVlan, vlanFilteringKeepsMgmt, type L2Context,
 } from '../netl2.js';
+import { writeErr } from '../snapshothook.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -48,7 +49,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
     try { res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...(await readL2(await makeCtx(row))) }); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   async function requireManageable(req: Request, res: Response) {
@@ -56,7 +57,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return null; }
     if (!row.write_username_enc || !row.write_password_enc) { res.status(403).json({ error: 'This device is monitor-only. Add a write credential to configure L2.' }); return null; }
     try { return { row, ctx: await makeCtx(row), actor: actorOf(req) }; }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); return null; }
+    catch (err) { writeErr(res, err); return null; }
   }
 
   // ---- bridges ----
@@ -68,7 +69,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     const errs = validateBridge(name, [...view.bridges.map((x) => x.name), ...view.vlans.map((x) => x.name)]);
     if (errs.length) { auditRejected(sac(m.row, m.actor, 'l2.bridge.add', name), `Add bridge ${name}`, `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
     try { send(res, 201, await createBridge(m.ctx, sac(m.row, m.actor, 'l2.bridge.add', name), name, b.vlanFiltering === true)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   router.patch('/:id/l2/bridges/:bridgeId', async (req, res) => {
@@ -87,7 +88,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
       return void l2Refuse(res, m.row, m.actor, 'l2.bridge.set', br.name, `Enabling vlan-filtering on the management bridge "${br.name}" would cut management: the management port isn't carried by a bridge-VLAN entry (untagged for its PVID, or tagged for the mgmt VLAN). Configure the management VLAN in the bridge-VLAN table first. Refused — this is the classic MikroTik L2 self-lock.`);
     }
     try { send(res, 200, await setBridge(m.ctx, sac(m.row, m.actor, 'l2.bridge.set', br.name), req.params.bridgeId, patch)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   router.delete('/:id/l2/bridges/:bridgeId', async (req, res) => {
@@ -97,7 +98,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     if (!br) { res.status(404).json({ error: 'Bridge not found.' }); return; }
     if (br.isMgmt) return void l2Refuse(res, m.row, m.actor, 'l2.bridge.remove', br.name, `"${br.name}" carries the management IP — deleting it would strand management with no recovery. Refused (use "Move management onto a new bridge" for a safe add-before-remove restructure).`);
     try { send(res, 200, await removeL2(m.ctx, sac(m.row, m.actor, 'l2.bridge.remove', br.name), '/interface/bridge', req.params.bridgeId, `bridge "${br.name}"`)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   // ---- bridge ports ----
@@ -115,7 +116,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
       return void l2Refuse(res, m.row, m.actor, 'l2.port.add', iface, `"${iface}" carries the management path. Moving it into a bridge would strand the management IP. Refused (use "Move management onto a new bridge" for a safe restructure).`);
     }
     try { send(res, 201, await addPort(m.ctx, sac(m.row, m.actor, 'l2.port.add', `${iface}→${bridge}`), bridge, iface, pvid)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   router.delete('/:id/l2/ports/:portId', async (req, res) => {
@@ -126,7 +127,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     const pIface = port.interface ?? '?';
     if (port.isMgmtPort) return void l2Refuse(res, m.row, m.actor, 'l2.port.remove', pIface, `Removing "${pIface}" from the management bridge would strand management. Refused.`);
     try { send(res, 200, await removeL2(m.ctx, sac(m.row, m.actor, 'l2.port.remove', pIface), '/interface/bridge/port', req.params.portId, `port ${pIface}`)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   // ---- VLAN interfaces ----
@@ -140,7 +141,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     const errs = validateVlan(name, vlanId, iface, [...view.bridges.map((x) => x.name), ...view.vlans.map((x) => x.name)]);
     if (errs.length) { auditRejected(sac(m.row, m.actor, 'l2.vlan.add', name), `Add VLAN ${name}`, `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
     try { send(res, 201, await createVlan(m.ctx, sac(m.row, m.actor, 'l2.vlan.add', name), name, vlanId, iface)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   router.delete('/:id/l2/vlans/:vlanId', async (req, res) => {
@@ -150,7 +151,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     if (!v) { res.status(404).json({ error: 'VLAN not found.' }); return; }
     if (v.isMgmt) return void l2Refuse(res, m.row, m.actor, 'l2.vlan.remove', v.name, `"${v.name}" is the VLAN the management IP lives on — deleting it would sever management. Refused.`);
     try { send(res, 200, await removeL2(m.ctx, sac(m.row, m.actor, 'l2.vlan.remove', v.name), '/interface/vlan', req.params.vlanId, `VLAN "${v.name}"`)); }
-    catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    catch (err) { writeErr(res, err); }
   });
 
   // ---- ADD-BEFORE-REMOVE at L2: move mgmt onto a new bridge ----
@@ -164,7 +165,7 @@ export function netl2Routes(db: DatabaseSync, box: SecretBox): Router {
     try {
       const r = await moveMgmtToBridge(db, box, m.row, m.ctx.transport, sac(m.row, m.actor, 'l2.move-mgmt', newBridge), { newBridge, port, newCidr });
       res.status(r.result === 'applied' ? 200 : r.result === 'rejected' ? 400 : 502).json(r);
-    } catch (err) { res.status(502).json({ error: (err as Error).message }); }
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;
