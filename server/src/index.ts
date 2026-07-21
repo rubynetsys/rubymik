@@ -79,7 +79,8 @@ if (fs.existsSync(indexHtml)) {
 
 const server = app.listen(config.port, '0.0.0.0', () => {
   log.info(`RubyMIK listening on http://0.0.0.0:${config.port} (data: ${config.dataDir}, log: ${config.logLevel})`);
-  poller.start();
+  if (config.pollIntervalSec > 0) poller.start();
+  else log.warn('Polling disabled (RUBYMIK_POLL_INTERVAL=0) — serving stored status/topology only');
   backupScheduler.start();
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });

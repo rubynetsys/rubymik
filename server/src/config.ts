@@ -50,7 +50,11 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_ENCRYPTION_KEY must be 64 hex characters (32 bytes). Generate one with: openssl rand -hex 32');
   }
 
-  const pollIntervalSec = intEnv('RUBYMIK_POLL_INTERVAL', 30, 5, 3600);
+  // 0 = polling disabled (serve stored status/topology only — useful for a
+  // frozen/demo/read-only instance); otherwise 5..3600s.
+  const pollIntervalSec = process.env.RUBYMIK_POLL_INTERVAL === '0'
+    ? 0
+    : intEnv('RUBYMIK_POLL_INTERVAL', 30, 5, 3600);
   const pollConcurrency = intEnv('RUBYMIK_POLL_CONCURRENCY', 4, 1, 16);
   const backupIntervalSec = intEnv('RUBYMIK_BACKUP_INTERVAL', 86400, 60, 2592000);
   const backupKeep = intEnv('RUBYMIK_BACKUP_KEEP', 10, 1, 500);

@@ -20,7 +20,15 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   (`/ip/neighbor`), drawn with a clean force layout: managed devices show live
   health status and click through to their device view; discovered-but-unmanaged
   neighbors render distinct (dashed) with an "Add this device" shortcut.
-  Site-filterable, pan/zoom, updates on the poll cadence.
+  Site-filterable, pan/zoom, updates on the poll cadence. **Scales to hundreds
+  of devices across many sites**: a canvas renderer with level-of-detail —
+  zoomed out, each site collapses to one status-dot cluster (device count +
+  worst-health colour) so you read the whole fleet's shape at a glance; zoom in
+  and sites expand to their real hierarchy (uplink → core → access → edge) with
+  labels appearing progressively. Filter to problems-only or a device kind,
+  search-to-jump, and focus a node to light its subtree and dim the rest — the
+  reductions that keep a 500-device map readable. (Layout is a pure, swappable
+  module; the renderer is canvas for scale.)
 - **Device deep view** — click any device: live interfaces with RX/TX rates,
   per-interface traffic graphs (1h/6h), DHCP leases, ARP, routes, wireless
   registrations, switch ports, health/temperature, recent log — the
@@ -131,7 +139,7 @@ Everything has a working default — configuration is optional. See [.env.exampl
 | `RUBYMIK_DATA_DIR` | `/data` (Docker) / `./data` | SQLite DB + generated secrets |
 | `RUBYMIK_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `RUBYMIK_ENCRYPTION_KEY` | auto-generated | 64-hex-char AES-256 key for credentials at rest |
-| `RUBYMIK_POLL_INTERVAL` | `30` | Seconds between health poll cycles (5–3600) |
+| `RUBYMIK_POLL_INTERVAL` | `30` | Seconds between health poll cycles (5–3600, or `0` to disable polling and serve stored data only) |
 | `RUBYMIK_POLL_CONCURRENCY` | `4` | Max devices polled in parallel (1–16) |
 | `RUBYMIK_BACKUP_INTERVAL` | `86400` | Seconds between scheduled config backups (60–2592000) |
 | `RUBYMIK_BACKUP_KEEP` | `10` | Config backups retained per device (1–500) |
@@ -442,6 +450,21 @@ npm run dev:web      # Vite dev server on :5173, proxies /api → :8080
 Multi-arch images (amd64 / arm64 / armv7) build with `docker buildx` — see
 [Dockerfile](Dockerfile). All dependencies are pure JavaScript, so cross-builds
 need no native compilation.
+
+**Synthetic fleet (topology scale/demo testing).** To see the topology map at
+hundreds of devices without hundreds of routers, a generator populates a
+**fresh, throwaway** data dir with fabricated sites/devices/neighbours. It is
+test-only and guarded three ways — it requires `RUBYMIK_SYNTH_OK=1`, refuses to
+run against a DB that already has devices, and is never imported by the running
+server ([server/src/devtools/](server/src/devtools/)). It fabricates no RouterOS
+traffic; run the throwaway instance with `RUBYMIK_POLL_INTERVAL=0`:
+
+```bash
+# against an EMPTY /data volume only — never a real instance
+docker run --rm -v scratch:/data -e RUBYMIK_SYNTH_OK=1 -e RUBYMIK_DATA_DIR=/data \
+  rubymik/rubymik node dist/devtools/gen-synth.js 500 28   # 500 devices, 28 sites
+docker run -d -v scratch:/data -e RUBYMIK_POLL_INTERVAL=0 -p 8081:8080 rubymik/rubymik
+```
 
 ## Roadmap
 
