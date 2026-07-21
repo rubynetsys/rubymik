@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AppWindow, Archive, ArrowLeft, Camera, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
+  Activity, AppWindow, Archive, ArrowLeft, ArrowLeftRight, Camera, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Waypoints, Wifi,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import SnapshotManager from '../components/SnapshotManager';
+import NatManager from '../components/NatManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
@@ -35,6 +36,7 @@ const TABS = [
   { id: 'network', label: 'Network', icon: RouteIcon },
   { id: 'dhcp', label: 'DHCP', icon: Activity },
   { id: 'firewall', label: 'Firewall', icon: Shield },
+  { id: 'nat', label: 'NAT', icon: ArrowLeftRight },
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
   { id: 'wireless', label: 'Wireless', icon: Wifi },
   { id: 'vpn', label: 'VPN', icon: KeyRound },
@@ -272,6 +274,14 @@ export default function DeviceDetail() {
       <Section title="Firewall" icon={Shield}
         subtitle="preset-driven, mgmt-accept always first · writes go through snapshot → verify → auto-rollback → audit">
         <FirewallManager deviceId={deviceId} />
+      </Section>
+      )}
+
+      {/* ===== NAT tab ===== */}
+      {tab === 'nat' && (
+      <Section title="NAT" icon={ArrowLeftRight}
+        subtitle="src-nat / dst-nat rules · order-sensitive · a rule that would steal the management socket is refused; everything else rides the dead-man + is snapshotted pre/post">
+        <NatManager deviceId={deviceId} />
       </Section>
       )}
 

@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly body?: unknown) {
     super(message);
     this.name = 'ApiError';
   }
@@ -16,6 +16,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(
       (body as { error?: string } | null)?.error ?? `Request failed (HTTP ${res.status})`,
       res.status,
+      body,
     );
   }
   return body as T;

@@ -200,6 +200,19 @@ export interface DiffResult {
   lines: Array<{ t: ' ' | '+' | '-'; s: string }>;
 }
 
+// --- native NAT rules (P22) ---
+export interface NatRule {
+  id: string; order: number; chain: string; action: string;
+  inInterface: string | null; outInterface: string | null; inInterfaceList: string | null; outInterfaceList: string | null;
+  srcAddress: string | null; dstAddress: string | null; srcAddressList: string | null; dstAddressList: string | null;
+  protocol: string | null; srcPort: string | null; dstPort: string | null; toAddresses: string | null; toPorts: string | null;
+  comment: string | null; disabled: boolean; dynamic: boolean; invalid: boolean;
+  bytes: number | null; packets: number | null; managed: boolean;
+}
+export interface NatMgmtInfo { mgmtIp: string; mgmtInterface: string | null; mgmtPorts: string[]; mgmtPort: number; mgmtScheme: string }
+export interface NatView { manageable: boolean; rules: NatRule[]; mgmt: NatMgmtInfo }
+export interface NatMoveResult { result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed'; auditId: number; detail: string }
+
 // --- automatic config snapshots (P21) — capture + view + diff (no restore) ---
 export type SnapshotTrigger = 'pre_write' | 'post_write' | 'manual' | 'scheduled';
 export interface SnapshotMeta {

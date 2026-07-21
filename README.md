@@ -126,6 +126,18 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   custom rules, with a **management-accept rule always emitted first** so a
   preset can't lock RubyMIK out, plus a dead-man that auto-reverts if the
   management path is lost after a change. Monitor-only devices show it read-only.
+- **Native NAT rules** — create / edit / delete / reorder / enable src-nat and
+  dst-nat rules (masquerade, src-nat, dst-nat, redirect, netmap) with a live rule
+  builder and per-rule packet/byte counters. The read view shows **every** NAT rule
+  including ones made outside RubyMIK (flagged *unmanaged* — editing one requires an
+  explicit **take-ownership** step). NAT is IP-layer-recoverable, so every write
+  rides the existing **dead-man** (verify-reachable-then-commit, auto-rollback of
+  just the NAT delta) and is snapshotted pre/post — *plus* a **NAT management
+  guard** that refuses, up front, the shapes that would cut management before the
+  dead-man could see it: a dst-nat/redirect that captures RubyMIK's management port,
+  an all-port redirect on the management interface, and a masquerade/src-nat that
+  provably rewrites the management return path. Ambiguous cases aren't refused —
+  they fall through to the dead-man. Monitor-only devices show NAT read-only.
 - **Config backup & restore** — scheduled fleet-wide config backups + one-click
   manual backup, stored compressed with a "what changed" **diff** between any two.
   Backups are read-safe (a read-only snapshot on monitor-only devices; a
