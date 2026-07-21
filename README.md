@@ -35,9 +35,18 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   RouterOS-native depth generic SNMP tools can't cleanly show. Sections
   capability-detect per device and say "not applicable" honestly instead of
   faking panels. Organised into **tabs** (Overview · Interfaces · Network ·
-  DHCP · Firewall · DNS & NTP · Backups · Logs · Router Admin) with the active
-  tab in the URL (`#firewall`) so it survives refresh and deep-links; heavy tabs
-  fetch only when opened, while Overview keeps live-polling.
+  DHCP · Firewall · DNS & NTP · Wireless · Backups · Logs · Router Admin) with the
+  active tab in the URL (`#firewall`) so it survives refresh and deep-links; heavy
+  tabs fetch only when opened, while Overview keeps live-polling.
+- **Native wireless config** — view and configure Wi-Fi (SSID · enable/disable ·
+  WPA2/WPA3 security · band/channel) on a manageable device, riding the same
+  snapshot → verify → auto-rollback → audit safe-apply pipeline. RouterOS has two
+  wireless stacks — modern `wifiwave2` (`/interface/wifi`, 7.13+) and legacy
+  `/interface/wireless` — and RubyMIK **detects which the device runs and targets
+  the right one** (a device with no radio says "no wireless" honestly). Passphrases
+  are secrets: never shown in the UI, never logged, never written to the audit
+  trail (it records "security changed", not the value). A wireless interface that
+  carries the device's own management connection is flagged before you change it.
 - **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
   UI *through* RubyMIK, over whichever transport the device uses — including a
   behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a

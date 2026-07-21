@@ -51,6 +51,23 @@ export interface DhcpManagement {
   dynamic: DhcpLease[];
 }
 
+// --- Wireless (P16) ---
+export type WirelessStack = 'wifi' | 'wireless' | 'none';
+export interface WirelessIface {
+  id: string; name: string; ssid: string | null; mode: string | null;
+  disabled: boolean; running: boolean;
+  band: string | null; frequency: string | null; width: string | null;
+  authTypes: string[]; hasPassphrase: boolean; securityProfile: string | null;
+  carriesManagement: boolean;
+}
+export interface WirelessView {
+  manageable: boolean;
+  stack: WirelessStack;
+  capsmanManaged: boolean;
+  interfaces: WirelessIface[];
+  clients: Array<Record<string, string | null>>;
+}
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {

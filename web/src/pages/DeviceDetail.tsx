@@ -17,6 +17,7 @@ import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import DnsNtpManager from '../components/DnsNtpManager';
+import WirelessManager from '../components/WirelessManager';
 import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'dhcp', label: 'DHCP', icon: Activity },
   { id: 'firewall', label: 'Firewall', icon: Shield },
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
+  { id: 'wireless', label: 'Wireless', icon: Wifi },
   { id: 'backups', label: 'Backups', icon: Archive },
   { id: 'logs', label: 'Logs', icon: ScrollText },
   { id: 'admin', label: 'Router Admin', icon: AppWindow },
@@ -274,6 +276,14 @@ export default function DeviceDetail() {
       <Section title="DNS & NTP" icon={Globe}
         subtitle="resolver, static hosts & time sync · reads are safe · changes run through snapshot → verify → auto-rollback → audit">
         <DnsNtpManager deviceId={deviceId} />
+      </Section>
+      )}
+
+      {/* ===== Wireless tab (capability-gated, stack-aware) ===== */}
+      {tab === 'wireless' && (
+      <Section title="Wireless" icon={Wifi}
+        subtitle="SSID · security · band/channel · stack auto-detected (modern wifi vs legacy) · changes run through snapshot → verify → auto-rollback → audit; passphrases are never shown or logged">
+        <WirelessManager deviceId={deviceId} />
       </Section>
       )}
 
