@@ -2,17 +2,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, RotateCcw, ScrollText, ShieldX } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 import { fmtAgo, type AuditEntry, type Site } from '../types';
 
 const REFRESH_MS = 15_000;
 
-const RESULT: Record<AuditEntry['result'], { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+type ResultMeta = { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> };
+const RESULT: Record<string, ResultMeta> = {
   applied: { label: 'Applied', cls: 'bg-success-bg text-success-fg', Icon: CheckCircle2 },
   rolled_back: { label: 'Rolled back', cls: 'bg-warning-bg text-warning-fg', Icon: RotateCcw },
   rollback_failed: { label: 'Rollback failed', cls: 'bg-danger-bg text-danger-fg', Icon: AlertTriangle },
   failed: { label: 'Failed', cls: 'bg-danger-bg text-danger-fg', Icon: AlertTriangle },
   rejected: { label: 'Rejected', cls: 'bg-app text-fg-muted', Icon: ShieldX },
+  ok: { label: 'OK', cls: 'bg-info-bg text-info-fg', Icon: CheckCircle2 }, // non-write events, e.g. webfig.open
 };
+// Any server value not in the map renders with a neutral badge — never crash the page.
+const resultMeta = (r: string): ResultMeta => RESULT[r] ?? { label: r || '—', cls: 'bg-app text-fg-muted', Icon: ScrollText };
 
 export default function Audit() {
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
@@ -44,14 +49,13 @@ export default function Audit() {
             Every configuration write — who, what, before → after, and the outcome. Read-only history.
           </p>
         </div>
-        <select
+        <Select
           value={String(siteFilter)}
-          onChange={(e) => setSiteFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-          className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong"
-        >
-          <option value="all">All sites</option>
-          {sites.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-        </select>
+          onChange={(v) => setSiteFilter(v === 'all' ? 'all' : Number(v))}
+          ariaLabel="Filter by site"
+          className="w-44"
+          options={[{ value: 'all', label: 'All sites' }, ...sites.map((s) => ({ value: String(s.id), label: s.name }))]}
+        />
       </div>
 
       <div className="mt-6">
@@ -72,7 +76,7 @@ export default function Audit() {
         ) : (
           <div className="space-y-2.5">
             {entries.map((e) => {
-              const r = RESULT[e.result];
+              const r = resultMeta(e.result);
               return (
                 <div key={e.id} className="rounded-xl border border-border bg-surface p-4 shadow-sm">
                   <div className="flex flex-wrap items-center gap-2.5">

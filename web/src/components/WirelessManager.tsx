@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Lock, Radio, RotateCcw, ShieldAlert, Signal, Wifi, WifiOff, X } from 'lucide-react';
 import { api } from '../api';
+import Select from './Select';
 import type { ApplyOutcome, WirelessIface, WirelessView } from '../types';
 
 const inputCls = 'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong';
@@ -185,17 +186,13 @@ function IfaceCard({ iface, ro, deviceId, onOutcome, reload }: { iface: Wireless
           {/* Band / channel */}
           <div className="flex flex-wrap items-end gap-2">
             <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Band</span>
-              <select className={inputCls} value={band} onChange={(e) => setBand(e.target.value)}>
-                <option value="">(unchanged)</option>
-                {BANDS[stack].map((b) => <option key={b} value={b}>{b}</option>)}
-              </select></label>
+              <Select className={inputCls} value={band} onChange={setBand} ariaLabel="Band"
+                options={[{ value: '', label: '(unchanged)' }, ...BANDS[stack].map((b) => ({ value: b, label: b }))]} /></label>
             <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Frequency (MHz)</span>
               <input className={`${inputCls} w-28`} value={freq} onChange={(e) => setFreq(e.target.value)} placeholder="auto" /></label>
             <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Width</span>
-              <select className={inputCls} value={width} onChange={(e) => setWidth(e.target.value)}>
-                <option value="">(unchanged)</option>
-                {WIDTHS.map((w) => <option key={w} value={w}>{w}</option>)}
-              </select></label>
+              <Select className={inputCls} value={width} onChange={setWidth} ariaLabel="Width"
+                options={[{ value: '', label: '(unchanged)' }, ...WIDTHS.map((w) => ({ value: w, label: w }))]} /></label>
             <button disabled={busy !== null} onClick={() => void put('channel', 'channel', { band: band || undefined, frequency: freq || null, width: width || undefined }, 'Set Wi-Fi channel')}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50">
               <RotateCcw className="h-3.5 w-3.5" /> Save channel</button>

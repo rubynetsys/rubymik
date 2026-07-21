@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Info, Maximize2, Plus, Router as RouterIcon, Search, TriangleAlert, X } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 import { fmtAgo, type Site, type TopoNode, type TopologyPayload } from '../types';
 import { computeLayout, layoutStats, type LayoutNode, type LayoutSite } from '../topology/layout';
 import TopoCanvas, { type TopoCanvasHandle } from '../components/TopoCanvas';
@@ -208,11 +209,8 @@ export default function Topology() {
               )}
             </div>
 
-            <select value={String(siteFilter)} onChange={(e) => { setSiteFilter(e.target.value === 'all' ? 'all' : Number(e.target.value)); setFocusedKey(null); }}
-              className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong">
-              <option value="all">All sites</option>
-              {(topo.sites ?? []).map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-            </select>
+            <Select value={String(siteFilter)} onChange={(v) => { setSiteFilter(v === 'all' ? 'all' : Number(v)); setFocusedKey(null); }} ariaLabel="Filter by site" className="w-40"
+              options={[{ value: 'all', label: 'All sites' }, ...(topo.sites ?? []).map((s) => ({ value: String(s.id), label: s.name }))]} />
 
             <div className="flex overflow-hidden rounded-lg border border-border-strong text-xs font-semibold">
               {(['all', 'problems'] as StatusFilter[]).map((f) => (

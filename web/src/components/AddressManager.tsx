@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Lock, Plus, Radio, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api } from '../api';
+import Select from './Select';
 import type { AddrView, ApplyOutcome, IfaceEntry, MgmtIpResult } from '../types';
 
 const inputCls = 'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong';
@@ -132,7 +133,7 @@ function AddAddrForm({ deviceId, interfaces, onDone, onCancel, onOutcome }: { de
       {err && <div className="mb-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
       <div className="flex flex-wrap items-end gap-2">
         <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Interface</span>
-          <select className={inputCls} value={iface} onChange={(e) => setIface(e.target.value)}>{interfaces.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}</select></label>
+          <Select className={inputCls} value={iface} onChange={setIface} ariaLabel="Interface" options={interfaces.map((f) => ({ value: f.name, label: f.name }))} /></label>
         <label className="flex-1"><span className="mb-1 block text-xs font-semibold text-fg-dim">Address (CIDR)</span>
           <input className={inputCls} value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="10.20.0.1/24" /></label>
         <button disabled={busy || !cidr || !iface} onClick={() => void submit()} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Add</button>

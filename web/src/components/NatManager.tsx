@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, ChevronDown, ChevronUp, KeyRound, Loader2, Pencil, Plus, Power, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, ApiError } from '../api';
+import Select from './Select';
 import type { NatRule, NatView } from '../types';
 
 function matchers(r: NatRule): string {
@@ -186,16 +187,12 @@ function RuleBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id:
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="text-xs font-semibold text-fg-dim">Chain
-            <select value={d.chain} onChange={(e) => setD((c) => ({ ...c, chain: e.target.value, action: ACTIONS[e.target.value]![0]! }))}
-              className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body">
-              <option value="dstnat">dstnat</option><option value="srcnat">srcnat</option>
-            </select>
+            <Select value={d.chain} onChange={(v) => setD((c) => ({ ...c, chain: v, action: ACTIONS[v]![0]! }))} className="mt-1 w-full" ariaLabel="Chain"
+              options={[{ value: 'dstnat', label: 'dstnat' }, { value: 'srcnat', label: 'srcnat' }]} />
           </label>
           <label className="text-xs font-semibold text-fg-dim">Action
-            <select value={d.action} onChange={(e) => set('action', e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body">
-              {ACTIONS[d.chain]!.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
+            <Select value={d.action} onChange={(v) => set('action', v)} className="mt-1 w-full" ariaLabel="Action"
+              options={ACTIONS[d.chain]!.map((a) => ({ value: a, label: a }))} />
           </label>
           {F.map((k) => (
             <label key={k} className={`text-xs font-semibold text-fg-dim ${k === 'comment' ? 'col-span-2' : ''}`}>{LABEL[k]}

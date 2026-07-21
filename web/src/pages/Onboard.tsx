@@ -5,6 +5,7 @@ import {
   Copy, Link2, ArrowRight, ArrowLeft, Server, Lock, Eye, Archive, Clock, Building2, X,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 import type { RemoteAccessView, Site } from '../types';
 
 /**
@@ -394,10 +395,8 @@ function SiteStep({ sites, siteId, setSiteId, newSiteName, setNewSiteName }: { s
       <StepTitle icon={Building2} title="Assign a site" sub="Group this router by location or client. Optional — you can leave it unassigned." />
       <label className="block">
         <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-dim">Existing site</span>
-        <select className={inputCls} value={siteId} onChange={(e) => { setSiteId(e.target.value === '' ? '' : Number(e.target.value)); if (e.target.value) setNewSiteName(''); }}>
-          <option value="">— Unassigned —</option>
-          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}{s.clientName ? ` (${s.clientName})` : ''}</option>)}
-        </select>
+        <Select className={inputCls} value={String(siteId)} onChange={(v) => { setSiteId(v === '' ? '' : Number(v)); if (v) setNewSiteName(''); }} ariaLabel="Existing site"
+          options={[{ value: '', label: '— Unassigned —' }, ...sites.map((s) => ({ value: String(s.id), label: `${s.name}${s.clientName ? ` (${s.clientName})` : ''}` }))]} />
       </label>
       <div className="text-center text-xs font-semibold uppercase tracking-wide text-fg-faint">or</div>
       <label className="block">

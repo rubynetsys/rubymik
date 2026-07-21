@@ -4,6 +4,7 @@ import {
   BellRing, CheckCircle2, CircleCheck, History, Send, Settings2, ShieldAlert, TriangleAlert,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 import {
   fmtAgo, fmtDuration,
   type Alert, type AlertRule, type AlertSeverity, type NotificationSettings, type Site,
@@ -54,14 +55,13 @@ export default function Alerts() {
             Evaluated on every poll cycle with debounce + hysteresis — no flapping, no spam.
           </p>
         </div>
-        <select
+        <Select
           value={String(siteFilter)}
-          onChange={(e) => setSiteFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-          className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong"
-        >
-          <option value="all">All sites</option>
-          {sites.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-        </select>
+          onChange={(v) => setSiteFilter(v === 'all' ? 'all' : Number(v))}
+          ariaLabel="Filter by site"
+          className="w-44"
+          options={[{ value: 'all', label: 'All sites' }, ...sites.map((s) => ({ value: String(s.id), label: s.name }))]}
+        />
       </div>
 
       <div className="mt-5 flex gap-1 border-b border-border">

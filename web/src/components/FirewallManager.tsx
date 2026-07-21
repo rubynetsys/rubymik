@@ -3,6 +3,7 @@ import {
   AlertTriangle, CheckCircle2, Loader2, Lock, Plus, RotateCcw, ShieldAlert, ShieldCheck, Trash2, X, Zap,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from './Select';
 import type { ApplyOutcome, FirewallCustomRule, FirewallPreset, FirewallView, LockoutTestResult } from '../types';
 
 const PRESETS: Array<{ key: FirewallPreset; label: string; desc: string }> = [
@@ -127,16 +128,12 @@ export default function FirewallManager({ deviceId }: { deviceId: number }) {
           {preset !== 'off' && (
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <Field label="WAN / untrusted interface">
-                <select value={wan} onChange={(e) => setWan(e.target.value)} className={inputCls}>
-                  <option value="">— select —</option>
-                  {view.interfaces.map((i) => <option key={i.name} value={i.name}>{i.name} ({i.type})</option>)}
-                </select>
+                <Select value={wan} onChange={setWan} className={inputCls} ariaLabel="WAN / untrusted interface" placeholder="— select —"
+                  options={[{ value: '', label: '— select —' }, ...view.interfaces.map((i) => ({ value: i.name, label: `${i.name} (${i.type})` }))]} />
               </Field>
               <Field label="Trusted interface (optional)">
-                <select value={trusted} onChange={(e) => setTrusted(e.target.value)} className={inputCls}>
-                  <option value="">— none —</option>
-                  {view.interfaces.map((i) => <option key={i.name} value={i.name}>{i.name} ({i.type})</option>)}
-                </select>
+                <Select value={trusted} onChange={setTrusted} className={inputCls} ariaLabel="Trusted interface" placeholder="— none —"
+                  options={[{ value: '', label: '— none —' }, ...view.interfaces.map((i) => ({ value: i.name, label: `${i.name} (${i.type})` }))]} />
               </Field>
               <Field label="Management sources (comma-sep)">
                 <input value={mgmt} onChange={(e) => setMgmt(e.target.value)} className={inputCls}
@@ -255,9 +252,9 @@ function CustomRuleModal({ onClose, onAdd }: { onClose: () => void; onAdd: (r: F
         </div>
         <p className="mt-1 text-xs text-fg-dim">Validated before apply; always placed below the management-accept guard.</p>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <Field label="Chain"><select value={chain} onChange={(e) => setChain(e.target.value as 'input' | 'forward')} className={inputCls}><option value="input">input</option><option value="forward">forward</option></select></Field>
-          <Field label="Action"><select value={action} onChange={(e) => setAction(e.target.value as 'accept' | 'drop' | 'reject')} className={inputCls}><option>accept</option><option>drop</option><option>reject</option></select></Field>
-          <Field label="Protocol"><select value={protocol} onChange={(e) => setProtocol(e.target.value)} className={inputCls}><option value="">any</option><option>tcp</option><option>udp</option><option>icmp</option></select></Field>
+          <Field label="Chain"><Select value={chain} onChange={(v) => setChain(v as 'input' | 'forward')} className={inputCls} ariaLabel="Chain" options={[{ value: 'input', label: 'input' }, { value: 'forward', label: 'forward' }]} /></Field>
+          <Field label="Action"><Select value={action} onChange={(v) => setAction(v as 'accept' | 'drop' | 'reject')} className={inputCls} ariaLabel="Action" options={[{ value: 'accept', label: 'accept' }, { value: 'drop', label: 'drop' }, { value: 'reject', label: 'reject' }]} /></Field>
+          <Field label="Protocol"><Select value={protocol} onChange={setProtocol} className={inputCls} ariaLabel="Protocol" options={[{ value: '', label: 'any' }, { value: 'tcp', label: 'tcp' }, { value: 'udp', label: 'udp' }, { value: 'icmp', label: 'icmp' }]} /></Field>
           <Field label="Dest port"><input value={dstPort} onChange={(e) => setDstPort(e.target.value)} className={inputCls} placeholder="80,443" /></Field>
           <div className="col-span-2"><Field label="Source address (optional)"><input value={srcAddress} onChange={(e) => setSrcAddress(e.target.value)} className={inputCls} placeholder="10.0.0.0/24" /></Field></div>
           <div className="col-span-2"><Field label="Comment"><input value={comment} onChange={(e) => setComment(e.target.value)} className={inputCls} placeholder="allow web" /></Field></div>

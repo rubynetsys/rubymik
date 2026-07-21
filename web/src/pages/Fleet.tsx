@@ -5,6 +5,7 @@ import {
   Router as RouterIcon, Search, Server,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 import {
   fmtAgo, fmtBytes,
   type FleetDevice, type FleetPayload, type FleetSite, type HealthStatus,
@@ -175,20 +176,17 @@ export default function Fleet() {
             className="w-64 rounded-lg border border-border-strong bg-surface py-2 pl-8 pr-3 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20"
           />
         </div>
-        <select
+        <Select
           value={String(siteFilter)}
-          onChange={(e) => {
-            const v = e.target.value;
-            setSiteFilter(v === 'all' ? 'all' : v === 'unassigned' ? 'unassigned' : Number(v));
-          }}
-          className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong"
-        >
-          <option value="all">All sites</option>
-          {fleet.sites.filter((s) => s.id !== null).map((s) => (
-            <option key={s.id} value={String(s.id)}>{s.name}</option>
-          ))}
-          {fleet.sites.some((s) => s.id === null) && <option value="unassigned">Unassigned</option>}
-        </select>
+          onChange={(v) => setSiteFilter(v === 'all' ? 'all' : v === 'unassigned' ? 'unassigned' : Number(v))}
+          ariaLabel="Filter by site"
+          className="w-44"
+          options={[
+            { value: 'all', label: 'All sites' },
+            ...fleet.sites.filter((s) => s.id !== null).map((s) => ({ value: String(s.id), label: s.name })),
+            ...(fleet.sites.some((s) => s.id === null) ? [{ value: 'unassigned', label: 'Unassigned' }] : []),
+          ]}
+        />
         {filtersActive && (
           <button
             onClick={() => { setStatusFilter('all'); setSiteFilter('all'); setSearch(''); }}

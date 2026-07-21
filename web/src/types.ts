@@ -332,7 +332,9 @@ export interface AuditEntry {
   summary: string;
   before: unknown;
   after: unknown;
-  result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed' | 'rejected';
+  // Server-defined: the safe-apply outcomes plus non-write events like 'ok'
+  // (webfig.open). Keep this a string so a new value never crashes the Audit page.
+  result: string;
   detail: string | null;
   createdAt: string;
 }

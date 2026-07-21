@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { fmtBytes, type Device, type RouterSystemInfo, type Site, type TestResult } from '../types';
+import Select from '../components/Select';
 
 export default function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -335,11 +336,8 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               <span className={labelCls}>Site</span>
-              <select className={inputCls} value={siteSel} onChange={(e) => setSiteSel(e.target.value)}>
-                <option value="">No site (unassigned)</option>
-                {sites.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
-                <option value={NEW_SITE}>＋ New site…</option>
-              </select>
+              <Select className={inputCls} value={siteSel} onChange={setSiteSel} ariaLabel="Site"
+                options={[{ value: '', label: 'No site (unassigned)' }, ...sites.map((s) => ({ value: String(s.id), label: s.name })), { value: NEW_SITE, label: '＋ New site…' }]} />
             </label>
             {siteSel === NEW_SITE ? (
               <label className="block">
@@ -394,11 +392,8 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
             <div className="grid grid-cols-2 gap-4 rounded-xl bg-sunken p-4">
               <label className="block">
                 <span className={labelCls}>Connection</span>
-                <select className={inputCls} value={conn} onChange={(e) => setConn(e.target.value as typeof conn)}>
-                  <option value="auto">Auto (try HTTPS, then HTTP)</option>
-                  <option value="https">HTTPS only</option>
-                  <option value="http">HTTP only</option>
-                </select>
+                <Select className={inputCls} value={conn} onChange={(v) => setConn(v as typeof conn)} ariaLabel="Connection"
+                  options={[{ value: 'auto', label: 'Auto (try HTTPS, then HTTP)' }, { value: 'https', label: 'HTTPS only' }, { value: 'http', label: 'HTTP only' }]} />
               </label>
               <label className="block">
                 <span className={labelCls}>Port</span>

@@ -4,6 +4,7 @@ import {
   ShieldCheck, Network, RadioTower, Server, Cpu, X,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from '../components/Select';
 
 /**
  * New-router provisioning wizard (P11). Builds a complete baseline for a blank
@@ -115,7 +116,7 @@ function Basics({ spec, set, model, pickModel }: any) {
       <Title icon={Cpu} title="Router basics" sub="Name it, pick the model (for its port list), and say whether it's local or at a remote site." />
       <Field label="Router identity (name)"><input className={input} value={spec.identity} onChange={(e) => set({ identity: e.target.value })} placeholder="cpt-branch-gw" autoFocus /></Field>
       <Field label="Model (defines the interface list)">
-        <select className={input} value={model} onChange={(e) => pickModel(e.target.value)}>{Object.keys(MODELS).map((m) => <option key={m}>{m}</option>)}</select>
+        <Select className={input} value={model} onChange={pickModel} ariaLabel="Model" options={Object.keys(MODELS).map((m) => ({ value: m, label: m }))} />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <button onClick={() => set({ remote: false })} className={`rounded-xl border p-4 text-left ${!spec.remote ? 'border-accent-border bg-accent-subtle/40' : 'border-border'}`}>
@@ -148,11 +149,8 @@ function InterfacesWan({ spec, set, setSpec }: any) {
       </div>
       <div className="rounded-xl border border-border p-4">
         <Field label="WAN uplink type">
-          <select className={input} value={spec.wan.type} onChange={(e) => set({ wan: { type: e.target.value } })}>
-            <option value="dhcp">DHCP client (get an address automatically)</option>
-            <option value="static">Static IP</option>
-            <option value="pppoe">PPPoE</option>
-          </select>
+          <Select className={input} value={spec.wan.type} onChange={(v) => set({ wan: { type: v } })} ariaLabel="WAN uplink type"
+            options={[{ value: 'dhcp', label: 'DHCP client (get an address automatically)' }, { value: 'static', label: 'Static IP' }, { value: 'pppoe', label: 'PPPoE' }]} />
         </Field>
         {spec.wan.type === 'static' && (
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -181,9 +179,8 @@ function LanFirewall({ spec, set }: any) {
         <Field label="Router LAN IP"><input className={input} value={spec.lan.routerIp} onChange={(e) => set({ lan: { ...spec.lan, routerIp: e.target.value } })} /></Field>
         <Field label="Prefix (/n)"><input className={input} value={spec.lan.prefix} onChange={(e) => set({ lan: { ...spec.lan, prefix: Number(e.target.value) || 0 } })} inputMode="numeric" /></Field>
         <Field label="Firewall">
-          <select className={input} value={spec.firewall} onChange={(e) => set({ firewall: e.target.value })}>
-            <option value="off">Off</option><option value="basic">Basic</option><option value="standard">Standard</option>
-          </select>
+          <Select className={input} value={spec.firewall} onChange={(v) => set({ firewall: v })} ariaLabel="Firewall"
+            options={[{ value: 'off', label: 'Off' }, { value: 'basic', label: 'Basic' }, { value: 'standard', label: 'Standard' }]} />
         </Field>
       </div>
       <div className="rounded-xl border border-border p-4">

@@ -3,6 +3,7 @@ import {
   AlertTriangle, CheckCircle2, Loader2, Lock, Pencil, Pin, Plus, RotateCcw, ShieldCheck, Trash2, X,
 } from 'lucide-react';
 import { api } from '../api';
+import Select from './Select';
 import type { ApplyOutcome, DhcpManagement, DhcpLease } from '../types';
 
 /**
@@ -236,9 +237,8 @@ function ReservationModal({ deviceId, servers, lease, onClose, onDone }: {
           {!editing && (
             <label className="block">
               <span className={labelCls}>DHCP server</span>
-              <select className={inputCls} value={server} onChange={(e) => setServer(e.target.value)}>
-                {servers.map((s) => <option key={s.name} value={s.name}>{s.name} ({s.interface})</option>)}
-              </select>
+              <Select className={inputCls} value={server} onChange={setServer} ariaLabel="DHCP server"
+                options={servers.map((s) => ({ value: s.name, label: `${s.name} (${s.interface})` }))} />
             </label>
           )}
           <label className="block">
