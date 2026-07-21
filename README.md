@@ -153,6 +153,21 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   foreign queues are flagged unmanaged (take-ownership to edit). The queue *tree*
   (marks + mangle) is deliberately out of scope. Monitor-only devices show QoS
   read-only.
+- **Native PPPoE client** — create / edit / delete / enable `/interface/pppoe-client`
+  for fibre/DSL WANs, with a live **session status** read (running / connecting /
+  terminated-on-bad-auth, local & remote address, uptime, MTU). Credentials are
+  **write-only**: accepted on create/edit, but never returned to the browser (you
+  see *whether* a password is set, never the value), never logged, and redacted from
+  the audit trail. Because PPPoE reconfigures a WAN-facing interface, a
+  **PPPoE management guard** refuses the provable cuts — a client on the management
+  port, or deleting/disabling/re-parenting the client the management path currently
+  rides — and a router RubyMIK reaches *through* its WAN gets an **add-before-remove
+  "Replace WAN"**: the new PPPoE session is brought up and verified as the same
+  router before the old path is given up, so there's never an unreachable moment
+  (if the new session doesn't authenticate, it's torn down and the old WAN kept). A
+  client with `add-default-route` surfaces an advisory to check the Routes and NAT
+  tabs — RubyMIK never auto-edits NAT. Foreign clients are flagged unmanaged
+  (take-ownership to edit); monitor-only devices show PPPoE read-only.
 - **Config backup & restore** — scheduled fleet-wide config backups + one-click
   manual backup, stored compressed with a "what changed" **diff** between any two.
   Backups are read-safe (a read-only snapshot on monitor-only devices; a

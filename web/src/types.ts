@@ -200,6 +200,18 @@ export interface DiffResult {
   lines: Array<{ t: ' ' | '+' | '-'; s: string }>;
 }
 
+// --- native PPPoE client (P24) ---
+export interface PppoeClient {
+  id: string; name: string; interface: string | null; user: string | null; hasPassword: boolean;
+  serviceName: string | null; acName: string | null;
+  addDefaultRoute: boolean; defaultRouteDistance: string | null; usePeerDns: boolean; allow: string | null;
+  disabled: boolean; dynamic: boolean; invalid: boolean; comment: string | null; managed: boolean;
+  running: boolean; status: string; uptime: string | null; localAddress: string | null; remoteAddress: string | null; actualMtu: string | null; lastError: string | null;
+  isMgmtPath: boolean;
+}
+export interface PppoeMgmtInfo { mgmtIp: string; mgmtInterface: string | null; mgmtPorts: string[]; mgmtPort: number; mgmtScheme: string }
+export interface PppoeView { manageable: boolean; clients: PppoeClient[]; mgmt: PppoeMgmtInfo }
+
 // --- native QoS simple queues (P23) ---
 export interface SimpleQueue {
   id: string; order: number; name: string; target: string | null;

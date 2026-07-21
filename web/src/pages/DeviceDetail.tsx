@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Activity, AppWindow, Archive, ArrowLeft, ArrowLeftRight, Camera, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
-  ScrollText, Shield, Thermometer, Waypoints, Wifi,
+  Plug, ScrollText, Shield, Thermometer, Waypoints, Wifi,
 } from 'lucide-react';
 import { api } from '../api';
 import {
@@ -19,6 +19,7 @@ import BackupManager from '../components/BackupManager';
 import SnapshotManager from '../components/SnapshotManager';
 import NatManager from '../components/NatManager';
 import QosManager from '../components/QosManager';
+import PppoeManager from '../components/PppoeManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
@@ -39,6 +40,7 @@ const TABS = [
   { id: 'firewall', label: 'Firewall', icon: Shield },
   { id: 'nat', label: 'NAT', icon: ArrowLeftRight },
   { id: 'qos', label: 'QoS', icon: Gauge },
+  { id: 'pppoe', label: 'PPPoE', icon: Plug },
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
   { id: 'wireless', label: 'Wireless', icon: Wifi },
   { id: 'vpn', label: 'VPN', icon: KeyRound },
@@ -292,6 +294,14 @@ export default function DeviceDetail() {
       <Section title="QoS — simple queues" icon={Gauge}
         subtitle="per-target rate limits · a queue that would strangle the management flow is refused; broader shaping rides a dead-man that checks latency (not just reachability) + is snapshotted pre/post">
         <QosManager deviceId={deviceId} />
+      </Section>
+      )}
+
+      {/* ===== PPPoE tab ===== */}
+      {tab === 'pppoe' && (
+      <Section title="PPPoE client" icon={Plug}
+        subtitle="WAN dial-up sessions · credentials write-only (never shown/logged) · a client on the mgmt port is refused; a mgmt-path WAN swap uses add-before-remove · snapshotted pre/post">
+        <PppoeManager deviceId={deviceId} />
       </Section>
       )}
 
