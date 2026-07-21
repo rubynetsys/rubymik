@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  Activity, AppWindow, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, LayoutGrid, Loader2,
+  Activity, AppWindow, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
   ScrollText, Shield, Thermometer, Wifi,
 } from 'lucide-react';
@@ -19,6 +19,7 @@ import BackupManager from '../components/BackupManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
+import WireguardManager from '../components/WireguardManager';
 import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -33,6 +34,7 @@ const TABS = [
   { id: 'firewall', label: 'Firewall', icon: Shield },
   { id: 'dns', label: 'DNS & NTP', icon: Globe },
   { id: 'wireless', label: 'Wireless', icon: Wifi },
+  { id: 'vpn', label: 'VPN', icon: KeyRound },
   { id: 'backups', label: 'Backups', icon: Archive },
   { id: 'logs', label: 'Logs', icon: ScrollText },
   { id: 'admin', label: 'Router Admin', icon: AppWindow },
@@ -285,6 +287,14 @@ export default function DeviceDetail() {
       <Section title="Wireless" icon={Wifi}
         subtitle="SSID · security · band/channel · stack auto-detected (modern wifi vs legacy) · changes run through snapshot → verify → auto-rollback → audit; passphrases are never shown or logged">
         <WirelessManager deviceId={deviceId} />
+      </Section>
+      )}
+
+      {/* ===== VPN tab (WireGuard — user VPNs; the P9 mgmt tunnel is protected) ===== */}
+      {tab === 'vpn' && (
+      <Section title="WireGuard VPN" icon={KeyRound}
+        subtitle="site-to-site & client tunnels · the router generates its own private key (RubyMIK never holds it) · the management tunnel is protected · VPN routing rides the P17 mgmt-path guard + dead-man">
+        <WireguardManager deviceId={deviceId} />
       </Section>
       )}
 

@@ -58,6 +58,16 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   by verify-reachability-then-commit-or-revert. RubyMIK-added routes are
   `RUBYMIK:`-tagged (idempotent, removable); dynamic/connected/protocol routes are
   read-only.
+- **Native WireGuard VPN config** — configure the user's own WireGuard tunnels
+  (site-to-site router↔router, or client), separate from RubyMIK's management
+  tunnel: create interfaces (the router generates its **own** private key — RubyMIK
+  never holds it), add/remove peers, assign tunnel addresses, and a site-to-site
+  helper that emits the matched config for the far end. Optionally route traffic
+  through a VPN, which **reuses the P17 route safe-apply + management-path guard +
+  dead-man** (a default-through-VPN that would sever management is refused / auto-
+  reverted). The P9 **management tunnel is protected** — a user-VPN change that
+  would modify or reroute it is refused. Private/preshared keys are never shown,
+  logged, or written to the audit.
 - **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
   UI *through* RubyMIK, over whichever transport the device uses — including a
   behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a

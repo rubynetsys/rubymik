@@ -82,6 +82,24 @@ export interface RoutesView {
   mgmtNet: string;   // 'direct' | 'tunnel'
 }
 
+// --- WireGuard VPN (P18) ---
+export type WgRole = 'mgmt' | 'user-managed' | 'user';
+export interface WgPeerView {
+  id: string; publicKey: string | null; endpoint: string | null; allowedAddress: string | null;
+  keepalive: string | null; hasPresharedKey: boolean; lastHandshake: string | null; rx: string | null; tx: string | null;
+}
+export interface WgInterfaceView {
+  id: string; name: string; role: WgRole; comment: string | null;
+  publicKey: string | null; listenPort: string | null; running: boolean; disabled: boolean;
+  addresses: string[]; peers: WgPeerView[];
+}
+export interface WireguardView {
+  manageable: boolean; supported: boolean; interfaces: WgInterfaceView[];
+}
+export interface SiteToSiteResult {
+  localPeer: Record<string, string>; remotePeer: Record<string, string>; remoteScript: string;
+}
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {
