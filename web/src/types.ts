@@ -100,6 +100,23 @@ export interface SiteToSiteResult {
   localPeer: Record<string, string>; remotePeer: Record<string, string>; remoteScript: string;
 }
 
+// --- Interface / address config (P19) ---
+export interface AddrEntry {
+  id: string; address: string | null; network: string | null; interface: string | null;
+  dynamic: boolean; disabled: boolean; comment: string | null; managed: boolean; isMgmt: boolean;
+}
+export interface IfaceEntry {
+  id: string; name: string; type: string | null; disabled: boolean; running: boolean;
+  mtu: string | null; comment: string | null; isMgmtInterface: boolean; addresses: AddrEntry[];
+}
+export interface AddrView {
+  manageable: boolean; interfaces: IfaceEntry[];
+  mgmtHost: string; mgmtNet: string; mgmtAddress: string | null; mgmtInterface: string | null;
+}
+export interface MgmtIpResult {
+  result: 'applied' | 'failed' | 'rejected'; detail: string; auditId: number; newHost?: string; sequence: string[];
+}
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {

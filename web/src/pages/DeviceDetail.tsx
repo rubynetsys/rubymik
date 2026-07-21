@@ -20,6 +20,7 @@ import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
 import WireguardManager from '../components/WireguardManager';
+import AddressManager from '../components/AddressManager';
 import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -211,6 +212,11 @@ export default function DeviceDetail() {
 
       {/* ===== Interfaces tab ===== */}
       {tab === 'interfaces' && (
+      <>
+      <Section title="IP addresses" icon={RouteIcon}
+        subtitle="per-interface addresses · the management address/interface are protected · changing the mgmt IP is done safely via add-before-remove (never an unreachable moment)">
+        <AddressManager deviceId={deviceId} />
+      </Section>
       <Section title="Interfaces" icon={Network}
         subtitle={live ? `${live.interfaces.filter((i) => i.running).length} of ${live.interfaces.length} running · rates derived from counters (read-only)` : undefined}>
         {!live ? (
@@ -243,6 +249,7 @@ export default function DeviceDetail() {
           </div>
         )}
       </Section>
+      </>
       )}
 
       {/* ===== DHCP tab ===== */}

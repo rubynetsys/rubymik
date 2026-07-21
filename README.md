@@ -68,6 +68,17 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   reverted). The P9 **management tunnel is protected** — a user-VPN change that
   would modify or reroute it is refused. Private/preshared keys are never shown,
   logged, or written to the audit.
+- **Native interface / IP-address config** — view per-interface addresses (the
+  management address flagged, static vs DHCP), add/remove addresses on non-mgmt
+  interfaces, and change the management IP **safely**. Changing the address RubyMIK
+  reaches a router on is a *total partition* — you can't revert what you can't
+  reach — so the standard dead-man is insufficient and P19 uses **add-before-remove**
+  instead: add the new address → verify RubyMIK can reach the *same* router there
+  → only then remove the old one (and update RubyMIK's stored endpoint). If the new
+  address doesn't verify, it's removed and the old one kept — the router is never
+  left unreachable. Disabling the management interface, or hard-removing the only
+  management address, is **refused** (instant unrecoverable partition). Tunnel
+  devices get the same add-before-remove on their overlay address.
 - **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
   UI *through* RubyMIK, over whichever transport the device uses — including a
   behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a
