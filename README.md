@@ -79,6 +79,23 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   left unreachable. Disabling the management interface, or hard-removing the only
   management address, is **refused** (instant unrecoverable partition). Tunnel
   devices get the same add-before-remove on their overlay address.
+- **Native L2 config — bridges & VLANs** — view and configure bridges, bridge
+  ports, VLAN interfaces and the bridge-VLAN table. This is the most brick-prone
+  tier: an L2 change can sever management *below* the IP layer, where P19's IP-level
+  protections don't reach. So RubyMIK traces the **full L2 management path** (mgmt IP
+  → its interface → the bridge/VLAN it lives on → the member port) and an **L2
+  management-path guard** refuses, up front, any op that would break a link in that
+  chain: disabling/deleting the mgmt bridge or VLAN, stranding the mgmt port, and —
+  the classic RouterOS self-lock — **enabling vlan-filtering on the mgmt bridge
+  without the mgmt VLAN carried on the mgmt port**. Restructuring the path itself
+  (moving management onto a new bridge) uses **add-before-remove at L2**: build the
+  new bridge + port + address, verify the *same* router still answers there, and
+  only then remove the old — if the new path doesn't verify it's torn down and the
+  old kept, so the router is never left unreachable. Non-mgmt bridges/ports/VLANs
+  ride the normal snapshot → verify → auto-rollback → audit pipeline; RubyMIK-created
+  objects are `RUBYMIK-L2:`-tagged (idempotent, removable); vlan-id and names are
+  validated (1–4094, no duplicates). Tunnel devices get the same guards on the
+  overlay.
 - **Router Admin (WebFig proxy)** — open the router's own built-in WebFig admin
   UI *through* RubyMIK, over whichever transport the device uses — including a
   behind-NAT router reachable only over the WireGuard tunnel. Auth-gated (only a

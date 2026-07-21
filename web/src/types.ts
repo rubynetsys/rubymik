@@ -117,6 +117,15 @@ export interface MgmtIpResult {
   result: 'applied' | 'failed' | 'rejected'; detail: string; auditId: number; newHost?: string; sequence: string[];
 }
 
+// --- L2: bridges + VLANs (P20) ---
+export interface L2PortView { id: string; interface: string | null; pvid: string | null; isMgmtPort: boolean }
+export interface L2BridgeView { id: string; name: string; vlanFiltering: boolean; pvid: string | null; disabled: boolean; comment: string | null; managed: boolean; isMgmt: boolean; ports: L2PortView[] }
+export interface L2VlanView { id: string; name: string; vlanId: string | null; interface: string | null; disabled: boolean; comment: string | null; managed: boolean; isMgmt: boolean }
+export interface L2BridgeVlan { id: string; bridge: string | null; vlanIds: string | null; tagged: string | null; untagged: string | null }
+export interface L2PathView { mgmtIp: string; mgmtInterface: string | null; mgmtInterfaceType: string; mgmtBridge: string | null; mgmtVlan: string | null; mgmtVlanId: string | null; mgmtPorts: string[]; mgmtNet: string }
+export interface L2View { manageable: boolean; bridges: L2BridgeView[]; vlans: L2VlanView[]; bridgeVlans: L2BridgeVlan[]; path: L2PathView }
+export interface L2MoveResult { result: 'applied' | 'failed' | 'rejected'; detail: string; auditId: number; newHost?: string; sequence: string[] }
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {

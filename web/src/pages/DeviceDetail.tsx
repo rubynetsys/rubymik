@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Activity, AppWindow, Archive, ArrowLeft, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
-  ScrollText, Shield, Thermometer, Wifi,
+  ScrollText, Shield, Thermometer, Waypoints, Wifi,
 } from 'lucide-react';
 import { api } from '../api';
 import {
@@ -21,6 +21,7 @@ import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
 import WireguardManager from '../components/WireguardManager';
 import AddressManager from '../components/AddressManager';
+import L2Manager from '../components/L2Manager';
 import WebfigPanel from '../components/WebfigPanel';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -361,6 +362,12 @@ export default function DeviceDetail() {
           />
         )}
       />
+
+      {/* ===== Bridges & VLANs (L2 config) ===== */}
+      <Section title="Bridges & VLANs" icon={Waypoints}
+        subtitle="L2 config · the full mgmt path (port→bridge→VLAN→mgmt-IP) is traced & protected · the classic vlan-filtering lock is refused · mgmt-path restructures use add-before-remove at L2">
+        <L2Manager deviceId={deviceId} />
+      </Section>
 
       {/* ===== Routes (read + static-route config via safe-apply) ===== */}
       <Section title="Routes" icon={RouteIcon}
