@@ -28,6 +28,7 @@ import WireguardManager from '../components/WireguardManager';
 import AddressManager from '../components/AddressManager';
 import L2Manager from '../components/L2Manager';
 import WebfigPanel from '../components/WebfigPanel';
+import RebootPanel from '../components/RebootPanel';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -272,7 +273,11 @@ export default function DeviceDetail() {
   const d = detail; // non-null past the guard above; keeps narrowing inside bodyFor's closure
   const dev = d.device;
   const rb = d.routerboard.ok ? d.routerboard.data : null;
-  const status = liveError ? 'down' : (dev.status === 'down' ? 'down' : dev.status === null ? 'pending' : 'up');
+  // A reboot is a deliberate outage: show 'rebooting' even though the live poll
+  // is failing (liveError), so the header never flashes a false "down".
+  const status = dev.status === 'rebooting'
+    ? 'rebooting'
+    : liveError ? 'down' : (dev.status === 'down' ? 'down' : dev.status === null ? 'pending' : 'up');
   const temp = live?.health.find((h) => h.name?.includes('temperature'));
   const activeGroup = GROUPS.find((g) => g.id === group) ?? GROUPS[0];
   // Live-populated interface names for the dropdowns in Nat/Pppoe/L2 (P26.3).
@@ -515,7 +520,12 @@ export default function DeviceDetail() {
         );
 
       case 'admin':
-        return <WebfigPanel deviceId={deviceId} />;
+        return (
+          <>
+            <RebootPanel deviceId={deviceId} deviceName={dev.name} manageable={dev.manageable} />
+            <WebfigPanel deviceId={deviceId} />
+          </>
+        );
     }
   }
 

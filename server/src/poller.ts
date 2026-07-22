@@ -5,6 +5,7 @@ import type { RouterSystemInfo } from './routeros/types.js';
 import type { SecretBox } from './secretbox.js';
 import { readTarget } from './transport.js';
 import type { AlertEngine, IfaceState } from './alerts.js';
+import { handleRebootFailure, handleRebootReturn } from './reboot.js';
 import { log } from './log.js';
 
 /**
@@ -191,10 +192,16 @@ export class Poller {
       info.cpuLoad, info.cpuCount, info.totalMemory, info.freeMemory, info.totalHdd, info.freeHdd, temp, now);
     this.db.prepare('INSERT INTO device_metrics (device_id, ts, up, cpu_load, mem_used_pct) VALUES (?, ?, 1, ?, ?)')
       .run(deviceId, now, info.cpuLoad, memUsedPct);
+    // If this device was mid-reboot, this successful poll is its return: verify
+    // the serial matches + uptime reset, audit the outcome, and clear the flag.
+    handleRebootReturn(this.db, deviceId, info.serialNumber, info.uptime);
   }
 
   /** Marks the device down but keeps its last-known info fields intact. */
   private recordFailure(deviceId: number, error: string): void {
+    // Expected-outage reboot: absorb the failure as 'rebooting' (no down-alert)
+    // while inside the window; once the window expires we fall through to 'down'.
+    if (handleRebootFailure(this.db, deviceId, Date.now())) return;
     const now = new Date().toISOString();
     this.db.prepare(`
       INSERT INTO device_status (device_id, state, consecutive_failures, last_attempt_at, last_error, updated_at)

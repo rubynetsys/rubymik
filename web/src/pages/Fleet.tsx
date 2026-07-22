@@ -297,6 +297,7 @@ function DeviceCard({ device: d }: { device: FleetDevice }) {
   const edge =
     d.status === 'down' ? 'border-l-red-600'
     : d.status === 'warning' ? 'border-l-amber-500'
+    : d.status === 'rebooting' ? 'border-l-sky-500'
     : d.status === 'pending' ? 'border-l-zinc-300'
     : 'border-l-emerald-500';
   return (

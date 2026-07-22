@@ -9,7 +9,7 @@ import type { Alert, AuditEntry, FleetPayload, FleetSite, HealthStatus } from '.
 import Sparkline from '../components/Sparkline';
 
 const REFRESH_MS = 10_000;
-const RANK: Record<HealthStatus, number> = { down: 3, warning: 2, pending: 1, up: 0 };
+const RANK: Record<HealthStatus, number> = { down: 3, warning: 2, rebooting: 2, pending: 1, up: 0 };
 
 export default function Dashboard() {
   const [fleet, setFleet] = useState<FleetPayload | null>(null);
@@ -161,7 +161,8 @@ function Pill({ tone, children }: { tone: 'good' | 'warn' | 'bad' | 'neutral'; c
 }
 
 function dotFor(status: HealthStatus): string {
-  return status === 'up' ? 'bg-success-strong' : status === 'warning' ? 'bg-warning' : status === 'down' ? 'bg-danger' : 'bg-border-strong';
+  return status === 'up' ? 'bg-success-strong' : status === 'warning' ? 'bg-warning'
+    : status === 'down' ? 'bg-danger' : status === 'rebooting' ? 'bg-info-fg animate-pulse' : 'bg-border-strong';
 }
 
 function Empty({ text }: { text: string }) {

@@ -103,5 +103,5 @@ function BigTile({ label, value, color, pulse }: { label: string; value: number;
   );
 }
 
-function rank(s: HealthStatus): number { return s === 'down' ? 3 : s === 'warning' ? 2 : s === 'pending' ? 1 : 0; }
-function colorFor(s: HealthStatus): string { return s === 'up' ? '#34d399' : s === 'warning' ? '#fbbf24' : s === 'down' ? '#f87171' : '#64748b'; }
+function rank(s: HealthStatus): number { return s === 'down' ? 3 : s === 'warning' ? 2 : s === 'rebooting' ? 2 : s === 'pending' ? 1 : 0; }
+function colorFor(s: HealthStatus): string { return s === 'up' ? '#34d399' : s === 'warning' ? '#fbbf24' : s === 'down' ? '#f87171' : s === 'rebooting' ? '#60a5fa' : '#64748b'; }

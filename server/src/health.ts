@@ -9,7 +9,7 @@
 export const CPU_WARN_PCT = 85;
 export const MEM_WARN_PCT = 90;
 
-export type Health = 'up' | 'warning' | 'down' | 'pending';
+export type Health = 'up' | 'warning' | 'down' | 'pending' | 'rebooting';
 
 export interface HealthInput {
   state: string | null;
@@ -21,6 +21,8 @@ export interface HealthInput {
 
 export function computeHealth(row: HealthInput): { status: Health; reasons: string[] } {
   if (row.state === null) return { status: 'pending', reasons: ['Not polled yet'] };
+  // P29: an intentional reboot outage — never a down-alert, never off stale metrics.
+  if (row.state === 'rebooting') return { status: 'rebooting', reasons: ['Rebooting…'] };
   if (row.state === 'down') {
     return { status: 'down', reasons: [row.last_error ?? 'Unreachable'] };
   }

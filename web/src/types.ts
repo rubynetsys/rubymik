@@ -368,7 +368,7 @@ export interface TestResult {
   info: RouterSystemInfo;
 }
 
-export type HealthStatus = 'up' | 'warning' | 'down' | 'pending';
+export type HealthStatus = 'up' | 'warning' | 'down' | 'pending' | 'rebooting';
 
 export interface HealthCounts {
   total: number;
@@ -507,7 +507,7 @@ export interface DeviceDetailPayload {
   device: {
     id: number; name: string; host: string; port: number; scheme: string;
     siteId: number | null; siteName: string | null; notes: string | null;
-    status: string | null; lastSeenAt: string | null; lastError: string | null;
+    status: string | null; manageable: boolean; lastSeenAt: string | null; lastError: string | null;
     identity: string | null; boardName: string | null; model: string | null; version: string | null;
   };
   routerboard: DetailSection<{ model: string | null; serial: string | null; firmware: string | null }>;

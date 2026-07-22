@@ -5,7 +5,10 @@ import type { SecretBox } from '../secretbox.js';
 import type { Poller } from '../poller.js';
 import { allSites, scopeFilter } from '../scope.js';
 import { connectDevice, type DeviceTarget } from '../routeros/index.js';
-import { readTarget, resolveEndpoint } from '../transport.js';
+import { readTarget, resolveEndpoint, writeTarget, transportFor } from '../transport.js';
+import { restCommand } from '../routeros/write.js';
+import { captureForDevice } from '../snapshots.js';
+import { beginReboot, abortReboot, parseUptimeSec } from '../reboot.js';
 import { writeAudit } from '../safeapply.js';
 import { log } from '../log.js';
 
@@ -229,6 +232,76 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       return;
     }
     res.json({ ok: true });
+  });
+
+  // --- POST /:id/reboot — reboot the router behind an expected-outage dead-man.
+  // Monitor-only → 403. Requires a typed-name confirm. Pre-snapshot fail-closed.
+  // There is NO rollback for a reboot; the snapshot is a record, not a revert.
+  const REBOOT_WINDOW_SEC = 300;
+  router.post('/:id/reboot', async (req, res) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    if (!row.write_username_enc || !row.write_password_enc) {
+      res.status(403).json({ error: 'This device is monitor-only. Add a write credential to reboot it.' });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const confirm = typeof body.confirm === 'string' ? body.confirm.trim() : '';
+    if (confirm !== row.name) {
+      res.status(400).json({ error: `Type the device name exactly ("${row.name}") to confirm the reboot.` });
+      return;
+    }
+    const windowSec = Math.min(Math.max(Number(body.windowSec) || REBOOT_WINDOW_SEC, 60), 1800);
+    const actor = (req as unknown as { user: SessionUser }).user.username;
+
+    // 1) Baseline (serial + uptime) + reachability — a reboot of an already-down box is meaningless.
+    const readT = readTarget(box, row);
+    let baseline: { serial: string | null; uptimeSec: number | null; at: string };
+    try {
+      const r = await connectDevice('rest', readT);
+      baseline = { serial: r.info.serialNumber, uptimeSec: parseUptimeSec(r.info.uptime), at: new Date().toISOString() };
+    } catch (err) {
+      res.status(502).json({ error: `Cannot reach the device to reboot it: ${(err as Error).message}` });
+      return;
+    }
+
+    // 2) Pre-reboot snapshot, fail-closed (a record of the config before the reboot).
+    try {
+      await captureForDevice(db, box, id, { trigger: 'pre_write', operation: 'system.reboot' });
+    } catch (err) {
+      res.status(409).json({ error: `Refusing to reboot without a pre-reboot snapshot: ${(err as Error).message}`, snapshotRequired: true });
+      return;
+    }
+
+    // 3) Arm the dead-man BEFORE issuing, so a poll landing during the outage sees 'rebooting'.
+    const until = new Date(Date.now() + windowSec * 1000).toISOString();
+    beginReboot(db, id, baseline, until);
+
+    // 4) Issue the reboot. A reboot legitimately drops the connection mid-response;
+    //    only a clear auth/permission error means it did NOT run — then we disarm.
+    try {
+      const write = writeTarget(box, row);
+      const transport = await transportFor(row, readT);
+      await restCommand(write, transport, '/system/reboot', {});
+    } catch (err) {
+      const msg = (err as Error).message.toLowerCase();
+      if (/\b(401|403)\b|forbidden|permission|not permitted|no permission|login/.test(msg)) {
+        abortReboot(db, id);
+        res.status(502).json({ error: `Reboot refused by the router: ${(err as Error).message}` });
+        return;
+      }
+      // connection reset / timeout → the box is going down as expected
+    }
+
+    writeAudit(
+      { db, actor, deviceId: id, deviceName: row.name, action: 'system.reboot', targetLabel: 'reboot' },
+      'applied', `Reboot issued (return window ${windowSec}s)`, null, { until, baseline },
+      'Reboot command sent. Expected-outage dead-man armed — the device shows "rebooting" (no down-alert) until it returns (serial + uptime verified) or the window expires.',
+    );
+    // Do NOT nudge a poll here: the box may still be reachable for a moment, and a
+    // success before it actually goes down would prematurely clear the dead-man.
+    res.status(202).json({ rebooting: true, until, windowSec });
   });
 
   // Live connection test for an UNSAVED device (form values from the add dialog).

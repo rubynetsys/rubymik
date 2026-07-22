@@ -333,6 +333,12 @@ const MIGRATIONS: string[] = [
   // P27: optional per-device category override (router | switch | ap | other).
   // NULL means "derive from the polled model" (done in the frontend catalogue).
   `ALTER TABLE devices ADD COLUMN category TEXT`,
+
+  // P29: expected-outage reboot dead-man. reboot_expected_until = ISO deadline the
+  // device must return by; while set, a failed poll shows 'rebooting' (no down-alert)
+  // instead of 'down'. reboot_baseline = JSON {serial, uptimeSec, at} for return-verify.
+  `ALTER TABLE device_status ADD COLUMN reboot_expected_until TEXT;
+   ALTER TABLE device_status ADD COLUMN reboot_baseline TEXT`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

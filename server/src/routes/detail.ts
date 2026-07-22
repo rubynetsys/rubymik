@@ -37,6 +37,8 @@ interface DeviceRow {
   notes: string | null;
   username_enc: string;
   password_enc: string;
+  write_username_enc: string | null;
+  write_password_enc: string | null;
   site_name: string | null;
 }
 
@@ -365,6 +367,7 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
         siteName: row.site_name,
         notes: row.notes,
         status: status?.state ?? null,
+        manageable: !!(row.write_username_enc && row.write_password_enc),
         lastSeenAt: status?.last_seen_at ?? null,
         lastError: status?.last_error ?? null,
         identity: status?.identity ?? null,

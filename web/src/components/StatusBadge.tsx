@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, CircleX, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleX, RefreshCw, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { HealthStatus } from '../types';
 
 /**
@@ -15,6 +15,7 @@ export const STATUS_META: Record<HealthStatus, {
   warning: { label: 'Warning', Icon: TriangleAlert, chip: 'bg-warning-bg text-warning-fg', dot: 'bg-warning' },
   down: { label: 'Down', Icon: CircleX, chip: 'bg-danger-bg text-danger-fg', dot: 'bg-danger' },
   pending: { label: 'Pending', Icon: CircleDashed, chip: 'bg-app text-fg-dim', dot: 'bg-fg-faint' },
+  rebooting: { label: 'Rebooting', Icon: RefreshCw, chip: 'bg-info-bg text-info-fg', dot: 'bg-info-fg' },
 };
 
 export default function StatusBadge({ status }: { status: HealthStatus }) {
