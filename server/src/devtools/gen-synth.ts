@@ -14,7 +14,7 @@ import { generateSyntheticFleet } from './synthfleet.js';
  * Usage (inside a throwaway container / scratch data dir ONLY):
  *   RUBYMIK_SYNTH_OK=1 RUBYMIK_DATA_DIR=/data node dist/devtools/gen-synth.js <devices> <sites> [--force]
  */
-function main(): void {
+async function main(): Promise<void> {
   if (process.env.RUBYMIK_SYNTH_OK !== '1') {
     console.error('Refusing to run: set RUBYMIK_SYNTH_OK=1 to confirm this is a throwaway test/demo data dir.');
     process.exit(2);
@@ -33,7 +33,7 @@ function main(): void {
   const admin = db.prepare('SELECT id FROM users WHERE username = ?').get('admin') as { id: number } | undefined;
   if (!admin) {
     db.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)')
-      .run('admin', hashPassword('synthetic-demo'), new Date().toISOString());
+      .run('admin', await hashPassword('synthetic-demo'), new Date().toISOString());
   }
 
   const t0 = Date.now();

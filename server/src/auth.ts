@@ -1,21 +1,26 @@
 import crypto from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Request, Response, NextFunction } from 'express';
+import { argon2id, argon2Verify } from 'hash-wasm';
 
 const SESSION_COOKIE = 'rubymik_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
-const KEY_LEN = 64;
+// P30: argon2id (OWASP minimum: 19 MiB, t=2, p=1) via hash-wasm — pure WASM, so it
+// keeps the "no native deps / multi-arch" build invariant that ruled out native argon2.
+const ARGON = { parallelism: 1, iterations: 2, memorySize: 19456, hashLength: 32 } as const;
 
-// --- Password hashing (Node built-in scrypt — no native deps) ---
+// --- Password hashing (argon2id for new hashes; legacy scrypt still verified) ---
 
-export function hashPassword(password: string): string {
+export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(password, salt, KEY_LEN, SCRYPT_PARAMS);
-  return `scrypt:${SCRYPT_PARAMS.N}:${SCRYPT_PARAMS.r}:${SCRYPT_PARAMS.p}:${salt.toString('base64')}:${hash.toString('base64')}`;
+  return argon2id({ password, salt, ...ARGON, outputType: 'encoded' });
 }
 
-export function verifyPassword(password: string, stored: string): boolean {
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  if (stored.startsWith('$argon2')) {
+    try { return await argon2Verify({ password, hash: stored }); } catch { return false; }
+  }
+  // Legacy scrypt hashes (the first admin, created before P30) still verify.
   const parts = stored.split(':');
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false;
   const [, nStr, rStr, pStr, saltB64, hashB64] = parts;
@@ -24,14 +29,36 @@ export function verifyPassword(password: string, stored: string): boolean {
   const actual = crypto.scryptSync(password, salt, expected.length, {
     N: Number(nStr), r: Number(rStr), p: Number(pStr),
   });
-  return crypto.timingSafeEqual(actual, expected);
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
+
+// --- Roles ---
+
+export type Role = 'admin' | 'editor' | 'viewer';
+export const ROLE_RANK: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 };
 
 // --- Sessions (stored in SQLite, opaque random id in an HttpOnly cookie) ---
 
 export interface SessionUser {
   id: number;
   username: string;
+  role: Role;
+  disabled: boolean;
+}
+
+/** Drop every session for a user (on disable, role change, or password change). */
+export function destroyUserSessions(db: DatabaseSync, userId: number, exceptSessionId?: string): void {
+  if (exceptSessionId) db.prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?').run(userId, exceptSessionId);
+  else db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+}
+
+/** Audit an auth/user-management event (no device). Never records secrets. */
+export function writeAuthAudit(db: DatabaseSync, actor: unknown, action: string, detail: string): void {
+  const result = action.includes('fail') ? 'rejected' : 'applied';
+  db.prepare(`
+    INSERT INTO config_audit (device_id, device_name, actor, action, target, summary, before_json, after_json, result, detail, created_at)
+    VALUES (NULL, '(auth)', ?, ?, 'auth', ?, NULL, NULL, ?, ?, ?)
+  `).run(String(actor ?? 'unknown').slice(0, 64), action, action, result, detail, new Date().toISOString());
 }
 
 export function createSession(db: DatabaseSync, userId: number): string {
@@ -66,11 +93,13 @@ export function getSessionUser(db: DatabaseSync, req: Request): SessionUser | un
   const sid = getSessionId(req);
   if (!sid) return undefined;
   const row = db.prepare(`
-    SELECT u.id AS id, u.username AS username
+    SELECT u.id AS id, u.username AS username, u.role AS role, u.disabled AS disabled
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.id = ? AND s.expires_at > ?
-  `).get(sid, new Date().toISOString()) as SessionUser | undefined;
-  return row;
+  `).get(sid, new Date().toISOString()) as { id: number; username: string; role: string; disabled: number } | undefined;
+  if (!row) return undefined;
+  const role: Role = row.role === 'editor' || row.role === 'viewer' ? row.role : 'admin';
+  return { id: row.id, username: row.username, role, disabled: row.disabled === 1 };
 }
 
 export function setSessionCookie(res: Response, sessionId: string): void {
@@ -91,7 +120,54 @@ export function requireAuth(db: DatabaseSync) {
       res.status(401).json({ error: 'Not authenticated' });
       return;
     }
+    if (user.disabled) {
+      res.status(403).json({ error: 'This account has been disabled.' });
+      return;
+    }
     (req as Request & { user: SessionUser }).user = user;
+    next();
+  };
+}
+
+/** Require at least `min` role on an already-authenticated request. */
+export function requireRole(min: Role) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = (req as Request & { user?: SessionUser }).user;
+    if (!user) { res.status(401).json({ error: 'Not authenticated' }); return; }
+    if (ROLE_RANK[user.role] < ROLE_RANK[min]) {
+      res.status(403).json({ error: `This action requires the ${min} role or higher.` });
+      return;
+    }
+    next();
+  };
+}
+
+/**
+ * P30 global role gate (mounted once on /api, AFTER the self-service auth routes).
+ * Server-side is the source of truth; the UI only hides controls cosmetically.
+ *   - unauthenticated → pass through (the per-router requireAuth returns 401)
+ *   - disabled account → 403
+ *   - /api/users, /api/settings → admin only
+ *   - GET (reads) → any authenticated role
+ *   - non-GET (writes) → editor or admin (viewer is read-only → 403)
+ */
+export function roleEnforcer(db: DatabaseSync) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = getSessionUser(db, req);
+    if (!user) { next(); return; }
+    if (user.disabled) { res.status(403).json({ error: 'This account has been disabled.' }); return; }
+    (req as Request & { user: SessionUser }).user = user;
+    const url = (req.originalUrl.split('?')[0]) || '';
+    if (/^\/api\/(users|settings)(\/|$)/.test(url)) {
+      if (user.role !== 'admin') { res.status(403).json({ error: 'This area is for administrators only.' }); return; }
+      next();
+      return;
+    }
+    if (req.method === 'GET') { next(); return; }
+    if (ROLE_RANK[user.role] < ROLE_RANK.editor) {
+      res.status(403).json({ error: 'Your account is read-only — you do not have permission to make changes.' });
+      return;
+    }
     next();
   };
 }

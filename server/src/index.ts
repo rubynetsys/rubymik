@@ -15,6 +15,8 @@ import { AlertEngine } from './alerts.js';
 import { Notifier } from './notify.js';
 import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
+import { userRoutes } from './routes/users.js';
+import { roleEnforcer } from './auth.js';
 import { deviceRoutes } from './routes/devices.js';
 import { detailRoutes } from './routes/detail.js';
 import { dhcpRoutes, auditRoutes } from './routes/dhcp.js';
@@ -58,6 +60,11 @@ app.disable('x-powered-by');
 app.use('/api', express.json());
 
 app.use('/api', authRoutes(db, { theme: config.defaultTheme, accent: config.defaultAccent }));
+// P30: server-side role gate. Runs AFTER the self-service auth routes above (login,
+// logout, /me, own theme/password/2FA) so those stay reachable by any role, and
+// BEFORE every protected router below. Viewers are read-only; /api/users is admin-only.
+app.use('/api', roleEnforcer(db));
+app.use('/api/users', userRoutes(db));
 app.use('/api/devices', webfigSessionRoutes(db, box, config.webfigPort));
 app.use('/api/devices', deviceRoutes(db, box, poller));
 app.use('/api/devices', detailRoutes(db, box, poller));

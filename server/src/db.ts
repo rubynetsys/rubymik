@@ -339,6 +339,21 @@ const MIGRATIONS: string[] = [
   // instead of 'down'. reboot_baseline = JSON {serial, uptimeSec, at} for return-verify.
   `ALTER TABLE device_status ADD COLUMN reboot_expected_until TEXT;
    ALTER TABLE device_status ADD COLUMN reboot_baseline TEXT`,
+
+  // P30: users, roles, optional 2FA. The existing single account becomes the first
+  // admin (role defaults to 'admin'). totp_secret/totp_enabled hold per-user TOTP;
+  // recovery_codes are one-time, hashed at rest, single-use (used_at set on use).
+  `ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';
+   ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE users ADD COLUMN totp_secret TEXT;
+   ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
+   CREATE TABLE recovery_codes (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     code_hash TEXT NOT NULL,
+     used_at TEXT
+   );
+   CREATE INDEX idx_recovery_codes_user ON recovery_codes(user_id)`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {
