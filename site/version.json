@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.0.0",
+  "latest": "1.0.1",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "RubyMIK 1.0.0 \u2014 the first public release. Self-hosted MikroTik monitoring & configuration."
+  "notes": "RubyMIK 1.0.1 — device catalogue fix (RB5009 family = 8 Ethernet + SFP+) and expansion. Self-hosted MikroTik monitoring & configuration."
 }

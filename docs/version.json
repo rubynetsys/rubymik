@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest. Rubynet hosts this at the DEFAULT_UPDATE_URL (rubymik.com/version.json). Instances fetch it (GET only, nothing sent) to show an update banner. Keep it a plain static file. Fields: latest (required, the newest published version), minimum_supported (versions below this get a stronger 'update soon' banner), changelog_url, breaking (versions that introduced breaking changes \u2014 the banner warns when the update crosses one), notes (optional short human note).",
-  "latest": "1.0.0",
+  "latest": "1.0.1",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.0.0 \u2014 first public release: monitoring + full RouterOS config (DHCP, firewall/NAT, routes, VLANs/bridges, wireless, WireGuard/VPN, PPPoE, QoS), snapshots, and the topology map."
+  "notes": "1.0.1 \u2014 device catalogue: fixed the RB5009 family port count (8 Ethernet + SFP+) and expanded the model list to the current MikroTik line."
 }

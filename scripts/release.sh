@@ -56,8 +56,8 @@ fi
 if ! $SKIP_TESTS; then
   echo "-- test gate: server suite --"
   ( cd server && { npm ci --no-audit --no-fund >/dev/null 2>&1 || npm install >/dev/null; }; npm test )
-  echo "-- test gate: web typecheck + build --"
-  ( cd web && { npm ci --no-audit --no-fund >/dev/null 2>&1 || npm install >/dev/null; }; npm run build )
+  echo "-- test gate: web unit tests + typecheck + build --"
+  ( cd web && { npm ci --no-audit --no-fund >/dev/null 2>&1 || npm install >/dev/null; }; npm test && npm run build )
 else
   echo "-- test gate SKIPPED (--skip-tests) --"
 fi

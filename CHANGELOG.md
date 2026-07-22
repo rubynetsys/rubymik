@@ -10,6 +10,23 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-07-22 (schema 22)
+
+### Fixed
+- **Device catalogue — RB5009 port count.** The RB5009 family (RB5009UG+S+IN,
+  RB5009UPr+S+IN) was listed with 7 Ethernet ports; every variant has **8** (ether1 =
+  2.5G, ether2-8 = 1G) plus one SFP+. A unit test now pins the RB5009* port lists.
+- Corrected the high-speed cage types: **CCR2004** now includes its 2× 25G **SFP28**;
+  **CCR2216** and **CRS518** are modelled as SFP28 (25G) / QSFP28 (100G), not SFP+/QSFP+;
+  **hAP ac³/ax³** no longer carry a phantom SFP port.
+
+### Changed
+- **Model catalogue expanded** to the current MikroTik line (verified against
+  mikrotik.com): 81 models across routers (hEX, RB9xx/RB951, RB2011/3011/4011/5009, L009,
+  the CCR line), switches (CRS/CSS/netPower incl. CRS504/510/518), and wireless
+  (hAP/cAP/wAP, LTE/Chateau, point-to-point CPE). New `sfp28`/`qsfp28` port types.
+  "Other / not listed" remains the fallback.
+
 ## [1.0.0] — 2026-07-22 (schema 22)
 
 The first **public** release — RubyMIK goes open-source (MIT), with a public landing
