@@ -563,21 +563,21 @@ export default function DeviceDetail() {
         )}
       </div>
 
-      {/* ===== Grouped device sub-nav (two rows, no horizontal scroll) ===== */}
-      <GroupNav group={group} openSecs={openSecs} onGroup={selectGroup} onSub={openSection} />
-
-      {/* ===== Active group's sections (collapsible; bodies mount when open) ===== */}
-      <div className="space-y-4">
-        {activeGroup.subs.map((sub) => {
-          const isOpen = openSecs.has(sub.id);
-          return (
-            <CollapsibleSection key={sub.id} id={sub.id} title={sub.label} icon={sub.icon}
-              help={SECTION_HELP[sub.id]} tech={SECTION_TECH[sub.id]}
-              open={isOpen} onToggle={() => toggleSection(sub.id)}>
-              {isOpen ? bodyFor(sub.id) : null}
-            </CollapsibleSection>
-          );
-        })}
+      {/* ===== Left sub-rail nav (Option B) + the active group's sections ===== */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <SideRail group={group} openSecs={openSecs} onGroup={selectGroup} onSub={openSection} />
+        <div className="min-w-0 flex-1 space-y-4">
+          {activeGroup.subs.map((sub) => {
+            const isOpen = openSecs.has(sub.id);
+            return (
+              <CollapsibleSection key={sub.id} id={sub.id} title={sub.label} icon={sub.icon}
+                help={SECTION_HELP[sub.id]} tech={SECTION_TECH[sub.id]}
+                open={isOpen} onToggle={() => toggleSection(sub.id)}>
+                {isOpen ? bodyFor(sub.id) : null}
+              </CollapsibleSection>
+            );
+          })}
+        </div>
       </div>
     </Shell>
   );
@@ -585,45 +585,51 @@ export default function DeviceDetail() {
 
 /* ================= navigation ================= */
 
-/** Two-row grouped nav: row 1 = groups (always fit, no h-scroll), row 2 = the
- *  active group's sections as quick-jump chips (open + scroll to the section). */
-function GroupNav({ group, openSecs, onGroup, onSub }: {
+/** Left sub-rail (Option B): a vertical settings-style tree — every group with its
+ *  sections beneath it. Selecting a group jumps to it; selecting a section opens +
+ *  scrolls to it. Sticks alongside the content on desktop; stacks above on narrow. */
+function SideRail({ group, openSecs, onGroup, onSub }: {
   group: GroupId; openSecs: Set<SectionId>;
   onGroup: (g: GroupId) => void; onSub: (s: SectionId) => void;
 }) {
-  const active = GROUPS.find((g) => g.id === group) ?? GROUPS[0];
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-surface p-1">
-        {GROUPS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => onGroup(id)}
-            aria-current={group === id ? 'page' : undefined}
-            className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-              group === id ? 'bg-accent text-inverse shadow-sm' : 'text-fg-dim hover:bg-app hover:text-fg'
-            }`}
-          >
-            <Icon className="h-4 w-4 shrink-0" /> {label}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {active.subs.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => onSub(id)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              openSecs.has(id)
-                ? 'border-accent-border bg-accent-subtle text-accent-text'
-                : 'border-border-strong text-fg-dim hover:border-accent-border hover:text-accent-text'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <nav aria-label="Device sections"
+      className="rounded-2xl border border-border bg-surface p-2 lg:sticky lg:top-4 lg:w-56 lg:shrink-0 lg:self-start">
+      {GROUPS.map((g) => {
+        const Icon = g.icon;
+        const isCurrentGroup = g.id === group;
+        return (
+          <div key={g.id} className="mb-1.5 last:mb-0">
+            <button
+              onClick={() => onGroup(g.id)}
+              aria-current={isCurrentGroup ? 'true' : undefined}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide transition ${
+                isCurrentGroup ? 'text-accent-text' : 'text-fg-faint hover:text-fg-dim'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" /> {g.label}
+            </button>
+            <div className="mt-0.5 space-y-0.5">
+              {g.subs.map((sub) => {
+                const active = isCurrentGroup && openSecs.has(sub.id);
+                return (
+                  <button
+                    key={sub.id}
+                    onClick={() => onSub(sub.id)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`block w-full rounded-lg py-1.5 pl-8 pr-2.5 text-left text-sm transition ${
+                      active ? 'bg-accent font-semibold text-inverse' : 'text-fg-dim hover:bg-app hover:text-fg'
+                    }`}
+                  >
+                    {sub.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
