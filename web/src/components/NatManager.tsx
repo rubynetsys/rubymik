@@ -36,7 +36,7 @@ function fmtCount(v: number | null): string {
 type Draft = Partial<Record<keyof NatRule, string>> & { chain: string; action: string };
 const emptyDraft = (chain: string): Draft => ({ chain, action: chain === 'srcnat' ? 'masquerade' : 'dst-nat' });
 
-export default function NatManager({ deviceId }: { deviceId: number }) {
+export default function NatManager({ deviceId, interfaces = [] }: { deviceId: number; interfaces?: string[] }) {
   const [view, setView] = useState<NatView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardMsg, setGuardMsg] = useState<string | null>(null);
@@ -156,7 +156,7 @@ export default function NatManager({ deviceId }: { deviceId: number }) {
         );
       })}
 
-      {editing && <RuleBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'}
+      {editing && <RuleBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'} interfaces={interfaces}
         onClose={() => setEditing(null)} onSubmit={(d) => editing.id ? edit(editing.id, d) : create(d)} />}
     </div>
   );
@@ -172,12 +172,22 @@ function IconBtn({ children, title, onClick, disabled, busy, danger }: { childre
 }
 
 const F = ['inInterface', 'outInterface', 'srcAddress', 'dstAddress', 'protocol', 'srcPort', 'dstPort', 'toAddresses', 'toPorts', 'comment'] as const;
-const LABEL: Record<string, string> = { inInterface: 'in-interface', outInterface: 'out-interface', srcAddress: 'src-address', dstAddress: 'dst-address', protocol: 'protocol (tcp/udp)', srcPort: 'src-port', dstPort: 'dst-port', toAddresses: 'to-addresses', toPorts: 'to-ports', comment: 'comment' };
+const LABEL: Record<string, string> = { inInterface: 'in-interface', outInterface: 'out-interface', srcAddress: 'src-address', dstAddress: 'dst-address', protocol: 'protocol', srcPort: 'src-port', dstPort: 'dst-port', toAddresses: 'to-addresses', toPorts: 'to-ports', comment: 'comment' };
 const ACTIONS: Record<string, string[]> = { srcnat: ['masquerade', 'src-nat', 'netmap', 'accept'], dstnat: ['dst-nat', 'redirect', 'netmap', 'accept'] };
+const PROTOCOLS = ['tcp', 'udp', 'icmp', 'gre', 'esp', 'ah', 'sctp', 'udp-lite'];
 
-function RuleBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; onClose: () => void; onSubmit: (d: Draft) => void }) {
+/** Build a Select option list, keeping the current value even if it isn't in the
+ *  known set (so editing an existing rule never silently drops its value). */
+function optsWithCurrent(known: string[], current: string, anyLabel: string) {
+  const opts = [{ value: '', label: anyLabel }, ...known.map((n) => ({ value: n, label: n }))];
+  if (current && !known.includes(current)) opts.push({ value: current, label: `${current} (not listed)` });
+  return opts;
+}
+
+function RuleBuilder({ draft, id, busy, interfaces, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; interfaces: string[]; onClose: () => void; onSubmit: (d: Draft) => void }) {
   const [d, setD] = useState<Draft>(draft);
   const set = (k: string, v: string) => setD((c) => ({ ...c, [k]: v }));
+  const cur = (k: string) => (d as Record<string, string>)[k] ?? '';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-auto rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
@@ -194,12 +204,31 @@ function RuleBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id:
             <Select value={d.action} onChange={(v) => set('action', v)} className="mt-1 w-full" ariaLabel="Action"
               options={ACTIONS[d.chain]!.map((a) => ({ value: a, label: a }))} />
           </label>
-          {F.map((k) => (
-            <label key={k} className={`text-xs font-semibold text-fg-dim ${k === 'comment' ? 'col-span-2' : ''}`}>{LABEL[k]}
-              <input value={(d as Record<string, string>)[k] ?? ''} onChange={(e) => set(k, e.target.value)} placeholder=""
-                className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body" />
-            </label>
-          ))}
+          {F.map((k) => {
+            const cls = `text-xs font-semibold text-fg-dim ${k === 'comment' ? 'col-span-2' : ''}`;
+            if (k === 'inInterface' || k === 'outInterface') {
+              return (
+                <label key={k} className={cls}>{LABEL[k]}
+                  <Select value={cur(k)} onChange={(v) => set(k, v)} className="mt-1 w-full" ariaLabel={LABEL[k]}
+                    placeholder="any" options={optsWithCurrent(interfaces, cur(k), 'any')} />
+                </label>
+              );
+            }
+            if (k === 'protocol') {
+              return (
+                <label key={k} className={cls}>{LABEL[k]}
+                  <Select value={cur(k)} onChange={(v) => set(k, v)} className="mt-1 w-full" ariaLabel="protocol"
+                    placeholder="any" options={optsWithCurrent(PROTOCOLS, cur(k), 'any')} />
+                </label>
+              );
+            }
+            return (
+              <label key={k} className={cls}>{LABEL[k]}
+                <input value={cur(k)} onChange={(e) => set(k, e.target.value)} placeholder=""
+                  className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body" />
+              </label>
+            );
+          })}
         </div>
         <div className="mt-5 flex justify-end gap-3">
           <button onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>

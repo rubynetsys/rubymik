@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Gauge, KeyRound, Loader2, Pencil, Plus, Power, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, ApiError } from '../api';
+import Select from './Select';
 import type { SimpleQueue, QosView } from '../types';
 
 function rate(r: SimpleQueue): string {
@@ -119,7 +120,9 @@ export default function QosManager({ deviceId }: { deviceId: number }) {
 
       <p className="mt-3 text-xs text-fg-faint">The <b>queue tree</b> (marks + mangle) is intentionally out of scope here — it's a different complexity class and isn't editable from RubyMIK yet.</p>
 
-      {editing && <QueueBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'} onClose={() => setEditing(null)} onSubmit={(d) => save(d, editing.id)} />}
+      {editing && <QueueBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'}
+        parents={view.queues.map((q) => q.name).filter((n): n is string => !!n)}
+        onClose={() => setEditing(null)} onSubmit={(d) => save(d, editing.id)} />}
     </div>
   );
 }
@@ -146,8 +149,17 @@ const FIELDS: Array<{ k: string; label: string; ph: string; wide?: boolean }> = 
   { k: 'priority', label: 'priority (1–8)', ph: '8' }, { k: 'parent', label: 'parent', ph: '' },
   { k: 'queueType', label: 'queue type (default profiles)', ph: 'default' }, { k: 'comment', label: 'comment', ph: '', wide: true },
 ];
+// RouterOS default queue-type profiles (a knowable set; the router also allows custom
+// profiles, so the current value is preserved even when it isn't one of these).
+const QUEUE_TYPES = ['default', 'default-small', 'ethernet-default', 'wireless-default', 'synchronous-default', 'hotspot-default', 'pcq-upload-default', 'pcq-download-default', 'only-hardware-queue', 'multi-queue-ethernet-default'];
+const PRIORITIES = ['1', '2', '3', '4', '5', '6', '7', '8'];
+function selOpts(known: string[], current: string, blankLabel: string) {
+  const opts = [{ value: '', label: blankLabel }, ...known.map((n) => ({ value: n, label: n }))];
+  if (current && !known.includes(current)) opts.push({ value: current, label: `${current} (not listed)` });
+  return opts;
+}
 
-function QueueBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; onClose: () => void; onSubmit: (d: Draft) => void }) {
+function QueueBuilder({ draft, id, busy, parents, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; parents: string[]; onClose: () => void; onSubmit: (d: Draft) => void }) {
   const [d, setD] = useState<Draft>(draft);
   const set = (k: string, v: string) => setD((c) => ({ ...c, [k]: v }));
   return (
@@ -158,12 +170,26 @@ function QueueBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id
           <button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app"><X className="h-5 w-5" /></button>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          {FIELDS.map((f) => (
-            <label key={f.k} className={`text-xs font-semibold text-fg-dim ${f.wide ? 'col-span-2' : ''}`}>{f.label}
-              <input value={d[f.k] ?? ''} onChange={(e) => set(f.k, e.target.value)} placeholder={f.ph}
-                className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body" />
-            </label>
-          ))}
+          {FIELDS.map((f) => {
+            const cls = `text-xs font-semibold text-fg-dim ${f.wide ? 'col-span-2' : ''}`;
+            const v = d[f.k] ?? '';
+            if (f.k === 'priority' || f.k === 'parent' || f.k === 'queueType') {
+              const known = f.k === 'priority' ? PRIORITIES : f.k === 'parent' ? parents : QUEUE_TYPES;
+              const blank = f.k === 'parent' ? '(none — top level)' : f.k === 'priority' ? '(default 8)' : '(default)';
+              return (
+                <label key={f.k} className={cls}>{f.label}
+                  <Select value={v} onChange={(val) => set(f.k, val)} className="mt-1 w-full" ariaLabel={f.label}
+                    placeholder={blank} options={selOpts(known, v, blank)} />
+                </label>
+              );
+            }
+            return (
+              <label key={f.k} className={cls}>{f.label}
+                <input value={v} onChange={(e) => set(f.k, e.target.value)} placeholder={f.ph}
+                  className="mt-1 w-full rounded-lg border border-border-strong bg-app px-2.5 py-2 text-sm text-fg-body" />
+              </label>
+            );
+          })}
         </div>
         <div className="mt-5 flex justify-end gap-3">
           <button onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>

@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Lock, Network, Plus, ShieldAlert, ShieldCheck, Waypoints, X } from 'lucide-react';
 import { api } from '../api';
+import Select from './Select';
 import type { ApplyOutcome, L2BridgeView, L2MoveResult, L2View } from '../types';
 
 const inputCls = 'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong';
 type SetOutcome = (o: { title: string; result: string; detail: string; sequence?: string[] }) => void;
 
-export default function L2Manager({ deviceId }: { deviceId: number }) {
+/** Select option list, keeping the current value even if it isn't in the known set. */
+function ifaceOpts(known: string[], current: string, blankLabel: string) {
+  const opts = [{ value: '', label: blankLabel }, ...known.map((n) => ({ value: n, label: n }))];
+  if (current && !known.includes(current)) opts.push({ value: current, label: `${current} (not listed)` });
+  return opts;
+}
+
+export default function L2Manager({ deviceId, interfaces = [] }: { deviceId: number; interfaces?: string[] }) {
   const [view, setView] = useState<L2View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ title: string; result: string; detail: string; sequence?: string[] } | null>(null);
@@ -24,6 +32,8 @@ export default function L2Manager({ deviceId }: { deviceId: number }) {
   if (!view) return <div className="h-24 animate-pulse rounded-lg bg-app" />;
   const ro = !view.manageable;
   const p = view.path;
+  const bridgeNames = view.bridges.map((b) => b.name);
+  const portOptions = interfaces.filter((n) => !bridgeNames.includes(n)); // physical/vlan ports, not bridges
 
   async function remove(resource: string, id: string, label: string) {
     if (!confirm(`Remove ${label}?`)) return;
@@ -48,7 +58,7 @@ export default function L2Manager({ deviceId }: { deviceId: number }) {
       <div>
         <h3 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fg-dim"><Waypoints className="h-3.5 w-3.5" /> Bridges</h3>
         {view.bridges.length === 0 && <div className="rounded-lg bg-sunken px-3 py-2 text-sm text-fg-muted">No bridges.</div>}
-        {view.bridges.map((br) => <BridgeCard key={br.id} br={br} ro={ro} deviceId={deviceId} onRemove={remove} onOutcome={setOutcome} reload={load} interfaces={view} />)}
+        {view.bridges.map((br) => <BridgeCard key={br.id} br={br} ro={ro} deviceId={deviceId} onRemove={remove} onOutcome={setOutcome} reload={load} portOptions={portOptions.filter((n) => !br.ports.some((pt) => pt.interface === n))} />)}
         {!ro && (addBridge
           ? <AddBridgeForm deviceId={deviceId} onDone={() => { setAddBridge(false); void load(); }} onCancel={() => setAddBridge(false)} onOutcome={setOutcome} />
           : <button onClick={() => setAddBridge(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover"><Plus className="h-4 w-4" /> Create bridge</button>)}
@@ -68,12 +78,12 @@ export default function L2Manager({ deviceId }: { deviceId: number }) {
           </div>
         ))}
         {!ro && (addVlan
-          ? <AddVlanForm deviceId={deviceId} onDone={() => { setAddVlan(false); void load(); }} onCancel={() => setAddVlan(false)} onOutcome={setOutcome} />
+          ? <AddVlanForm deviceId={deviceId} interfaces={interfaces} onDone={() => { setAddVlan(false); void load(); }} onCancel={() => setAddVlan(false)} onOutcome={setOutcome} />
           : <button onClick={() => setAddVlan(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:border-accent-border hover:text-accent-text"><Plus className="h-4 w-4" /> Create VLAN interface</button>)}
       </div>
 
       {!ro && <button onClick={() => setMoving(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-warning-line px-3.5 py-2 text-sm font-semibold text-warning-fg hover:bg-warning-bg"><ShieldAlert className="h-4 w-4" /> Move management onto a new bridge…</button>}
-      {moving && <MoveMgmtModal deviceId={deviceId} onClose={() => setMoving(false)} onDone={(o) => { setMoving(false); setOutcome(o); void load(); }} />}
+      {moving && <MoveMgmtModal deviceId={deviceId} interfaces={portOptions} onClose={() => setMoving(false)} onDone={(o) => { setMoving(false); setOutcome(o); void load(); }} />}
 
       {outcome && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOutcome(null)}>
@@ -91,7 +101,7 @@ export default function L2Manager({ deviceId }: { deviceId: number }) {
   );
 }
 
-function BridgeCard({ br, ro, deviceId, onRemove, onOutcome, reload }: { br: L2BridgeView; ro: boolean; deviceId: number; onRemove: (r: string, id: string, l: string) => void; onOutcome: SetOutcome; reload: () => Promise<void>; interfaces: L2View }) {
+function BridgeCard({ br, ro, deviceId, onRemove, onOutcome, reload, portOptions }: { br: L2BridgeView; ro: boolean; deviceId: number; onRemove: (r: string, id: string, l: string) => void; onOutcome: SetOutcome; reload: () => Promise<void>; portOptions: string[] }) {
   async function toggleVf() {
     try { const o = await api.patch<ApplyOutcome>(`/api/devices/${deviceId}/l2/bridges/${encodeURIComponent(br.id)}`, { vlanFiltering: !br.vlanFiltering }); onOutcome({ title: `${br.vlanFiltering ? 'Disable' : 'Enable'} vlan-filtering on ${br.name}`, result: o.result, detail: o.detail }); await reload(); }
     catch (e) { onOutcome({ title: `vlan-filtering on ${br.name}`, result: 'refused', detail: (e as Error).message }); }
@@ -122,16 +132,17 @@ function BridgeCard({ br, ro, deviceId, onRemove, onOutcome, reload }: { br: L2B
           </div>
         ))}
       </div>
-      {!ro && <AddPortInline deviceId={deviceId} bridge={br.name} onOutcome={onOutcome} reload={reload} />}
+      {!ro && <AddPortInline deviceId={deviceId} bridge={br.name} portOptions={portOptions} onOutcome={onOutcome} reload={reload} />}
     </section>
   );
 }
 
-function AddPortInline({ deviceId, bridge, onOutcome, reload }: { deviceId: number; bridge: string; onOutcome: SetOutcome; reload: () => Promise<void> }) {
+function AddPortInline({ deviceId, bridge, portOptions, onOutcome, reload }: { deviceId: number; bridge: string; portOptions: string[]; onOutcome: SetOutcome; reload: () => Promise<void> }) {
   const [iface, setIface] = useState('');
   return (
     <div className="mt-2 flex items-center gap-2">
-      <input className={`${inputCls} w-40`} value={iface} onChange={(e) => setIface(e.target.value)} placeholder="add port e.g. ether4" />
+      <Select value={iface} onChange={setIface} className="w-44" ariaLabel={`add port to ${bridge}`}
+        placeholder="add a port…" options={ifaceOpts(portOptions, iface, 'add a port…')} />
       <button disabled={!iface} onClick={async () => { try { const o = await api.post<ApplyOutcome>(`/api/devices/${deviceId}/l2/ports`, { bridge, interface: iface }); onOutcome({ title: `Add port ${iface}`, result: o.result, detail: o.detail }); setIface(''); await reload(); } catch (e) { onOutcome({ title: `Add port ${iface}`, result: 'refused', detail: (e as Error).message }); } }} className="rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Add port</button>
     </div>
   );
@@ -152,7 +163,7 @@ function AddBridgeForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: nu
   );
 }
 
-function AddVlanForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: number; onDone: () => void; onCancel: () => void; onOutcome: SetOutcome }) {
+function AddVlanForm({ deviceId, interfaces, onDone, onCancel, onOutcome }: { deviceId: number; interfaces: string[]; onDone: () => void; onCancel: () => void; onOutcome: SetOutcome }) {
   const [name, setName] = useState('vlan100'); const [vid, setVid] = useState('100'); const [iface, setIface] = useState(''); const [err, setErr] = useState<string | null>(null);
   return (
     <div className="mt-2 rounded-xl border border-border bg-sunken p-3">
@@ -160,7 +171,7 @@ function AddVlanForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: numb
       <div className="flex flex-wrap items-end gap-2">
         <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Name</span><input className={`${inputCls} w-36`} value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label><span className="mb-1 block text-xs font-semibold text-fg-dim">VLAN id</span><input className={`${inputCls} w-24`} value={vid} onChange={(e) => setVid(e.target.value)} /></label>
-        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">On interface</span><input className={`${inputCls} w-40`} value={iface} onChange={(e) => setIface(e.target.value)} placeholder="ether4 or a bridge" /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">On interface</span><Select value={iface} onChange={setIface} className="w-44" ariaLabel="on interface" placeholder="ether4 or a bridge" options={ifaceOpts(interfaces, iface, 'ether4 or a bridge')} /></label>
         <button disabled={!iface} onClick={async () => { setErr(null); try { const o = await api.post<ApplyOutcome>(`/api/devices/${deviceId}/l2/vlans`, { name, vlanId: Number(vid), interface: iface }); onOutcome({ title: `Create VLAN ${name}`, result: o.result, detail: o.detail }); onDone(); } catch (e) { setErr((e as Error).message); } }} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Create</button>
         <button onClick={onCancel} className="rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app">Cancel</button>
       </div>
@@ -168,7 +179,7 @@ function AddVlanForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: numb
   );
 }
 
-function MoveMgmtModal({ deviceId, onClose, onDone }: { deviceId: number; onClose: () => void; onDone: (o: { title: string; result: string; detail: string; sequence?: string[] }) => void }) {
+function MoveMgmtModal({ deviceId, interfaces, onClose, onDone }: { deviceId: number; interfaces: string[]; onClose: () => void; onDone: (o: { title: string; result: string; detail: string; sequence?: string[] }) => void }) {
   const [f, setF] = useState({ newBridge: 'br-mgmt-new', port: '', newCidr: '' });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   const up = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
@@ -182,7 +193,7 @@ function MoveMgmtModal({ deviceId, onClose, onDone }: { deviceId: number; onClos
         {err && <div className="mt-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <input className={inputCls} value={f.newBridge} onChange={(e) => up('newBridge', e.target.value)} placeholder="new bridge name" />
-          <input className={inputCls} value={f.port} onChange={(e) => up('port', e.target.value)} placeholder="port to move (ether…)" />
+          <Select value={f.port} onChange={(v) => up('port', v)} ariaLabel="port to move" placeholder="port to move (ether…)" options={ifaceOpts(interfaces, f.port, 'port to move (ether…)')} />
           <input className={inputCls} value={f.newCidr} onChange={(e) => up('newCidr', e.target.value)} placeholder="new mgmt CIDR" />
         </div>
         <div className="mt-4 flex gap-2">

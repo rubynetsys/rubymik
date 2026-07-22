@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, KeyRound, Loader2, Pencil, Plus, Plug, Power, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, ApiError } from '../api';
+import Select from './Select';
 import type { PppoeClient, PppoeView } from '../types';
+
+const AUTH_PROTOCOLS = ['pap', 'chap', 'mschap1', 'mschap2'];
 
 const STATUS: Record<string, { label: string; cls: string; dot: string }> = {
   running: { label: 'running', cls: 'bg-success-bg text-success-fg', dot: 'bg-success-fg' },
@@ -20,7 +23,7 @@ interface Draft {
 }
 type StrKey = 'name' | 'interface' | 'user' | 'password' | 'serviceName' | 'defaultRouteDistance' | 'allow' | 'comment';
 
-export default function PppoeManager({ deviceId }: { deviceId: number }) {
+export default function PppoeManager({ deviceId, interfaces = [] }: { deviceId: number; interfaces?: string[] }) {
   const [view, setView] = useState<PppoeView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardMsg, setGuardMsg] = useState<string | null>(null);
@@ -118,7 +121,7 @@ export default function PppoeManager({ deviceId }: { deviceId: number }) {
         </div>
       )}
 
-      {editing && <PppoeBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'} onClose={() => setEditing(null)} onSubmit={(d) => save(d, editing.id)} />}
+      {editing && <PppoeBuilder draft={editing.draft} id={editing.id} busy={busy === 'save'} interfaces={interfaces} onClose={() => setEditing(null)} onSubmit={(d) => save(d, editing.id)} />}
     </div>
   );
 }
@@ -133,10 +136,19 @@ function IconBtn({ children, title, onClick, busy, danger }: { children: React.R
   return <button title={title} onClick={onClick} disabled={busy} className={`rounded-md p-1.5 text-fg-faint transition disabled:opacity-30 ${danger ? 'hover:bg-danger-bg hover:text-danger-fg' : 'hover:bg-app hover:text-fg-body'}`}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : children}</button>;
 }
 
-function PppoeBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; onClose: () => void; onSubmit: (d: Draft) => void }) {
+function PppoeBuilder({ draft, id, busy, interfaces, onClose, onSubmit }: { draft: Draft; id: string | null; busy: boolean; interfaces: string[]; onClose: () => void; onSubmit: (d: Draft) => void }) {
   const [d, setD] = useState<Draft>(draft);
   const set = (k: StrKey, v: string) => setD((c) => ({ ...c, [k]: v }));
   const setB = (k: 'addDefaultRoute' | 'usePeerDns', v: boolean) => setD((c) => ({ ...c, [k]: v }));
+  // "allow" is a comma-separated set of auth protocols — edited as checkboxes.
+  const allowSet = new Set((d.allow ?? '').split(',').map((s) => s.trim()).filter(Boolean));
+  const toggleAuth = (p: string) => {
+    const next = new Set(allowSet);
+    if (next.has(p)) next.delete(p); else next.add(p);
+    set('allow', AUTH_PROTOCOLS.filter((a) => next.has(a)).join(','));
+  };
+  const ifaceOpts = [{ value: '', label: 'select a port…' }, ...interfaces.map((n) => ({ value: n, label: n }))];
+  if (d.interface && !interfaces.includes(d.interface)) ifaceOpts.push({ value: d.interface, label: `${d.interface} (not listed)` });
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
       <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-auto rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
@@ -146,12 +158,25 @@ function PppoeBuilder({ draft, id, busy, onClose, onSubmit }: { draft: Draft; id
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Inp label="name" v={d.name} onChange={(v) => set('name', v)} ph="pppoe-wan" />
-          <Inp label="parent interface" v={d.interface ?? ''} onChange={(v) => set('interface', v)} ph="ether5" />
+          <label className="text-xs font-semibold text-fg-dim">parent interface
+            <Select value={d.interface ?? ''} onChange={(v) => set('interface', v)} className="mt-1 w-full"
+              ariaLabel="parent interface" placeholder="select a port…" options={ifaceOpts} />
+            <span className="mt-1 block font-normal text-fg-faint">The physical port your ISP's fibre/DSL line plugs into.</span>
+          </label>
           <Inp label="user" v={d.user ?? ''} onChange={(v) => set('user', v)} ph="p24test" />
           <Inp label="password" v={d.password ?? ''} onChange={(v) => set('password', v)} ph={id ? 'leave blank to keep' : '••••••'} type="password" />
           <Inp label="service-name (opt)" v={d.serviceName ?? ''} onChange={(v) => set('serviceName', v)} ph="" />
           <Inp label="default-route-distance" v={d.defaultRouteDistance ?? ''} onChange={(v) => set('defaultRouteDistance', v)} ph="1" />
-          <Inp label="allow (auth)" v={d.allow ?? ''} onChange={(v) => set('allow', v)} ph="pap,chap,mschap1,mschap2" wide />
+          <div className="col-span-2 text-xs font-semibold text-fg-dim">allow (auth)
+            <span className="mt-1 block font-normal text-fg-faint">Which login methods the ISP accepts — leave all ticked unless told otherwise.</span>
+            <div className="mt-1.5 flex flex-wrap gap-3 text-sm font-normal text-fg-body">
+              {AUTH_PROTOCOLS.map((p) => (
+                <label key={p} className="inline-flex items-center gap-1.5">
+                  <input type="checkbox" checked={allowSet.has(p)} onChange={() => toggleAuth(p)} className="h-4 w-4 accent-accent" /> {p}
+                </label>
+              ))}
+            </div>
+          </div>
           <Inp label="comment" v={d.comment ?? ''} onChange={(v) => set('comment', v)} ph="" wide />
         </div>
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-fg-body">
