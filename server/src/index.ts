@@ -10,6 +10,7 @@ import { runSelfBackup, writeSelfBackupLog } from './selfbackup.js';
 import { appUpdateRoutes } from './routes/appupdate.js';
 import { startUpdateChecks } from './appupdate.js';
 import { APP_VERSION } from './version.js';
+import { securityHeaders, inlineScriptHashes } from './security.js';
 import { SecretBox } from './secretbox.js';
 import { Poller } from './poller.js';
 import { BackupScheduler } from './backupscheduler.js';
@@ -100,6 +101,22 @@ const selfBackupScheduler = new SelfBackupScheduler(db, backupKey, config.dataDi
 
 const app = express();
 app.disable('x-powered-by');
+// P39: behind a TLS-terminating reverse proxy, honour X-Forwarded-* so req.secure
+// (→ Secure cookie) and req.ip (→ rate-limit key) are correct. Off by default
+// (direct LAN HTTP). See RUBYMIK_TRUST_PROXY and the reverse-proxy section in the docs.
+if (config.trustProxy !== false) app.set('trust proxy', config.trustProxy);
+
+// The built dashboard's location (Docker: /app/public; repo: web/dist). Resolved
+// early so the CSP can hash the exact inline script that index.html actually serves.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = [path.resolve(here, '..', 'public'), path.resolve(here, '..', '..', 'web', 'dist')]
+  .find((dir) => fs.existsSync(path.join(dir, 'index.html')))
+  ?? path.resolve(here, '..', 'public');
+const indexHtml = path.join(publicDir, 'index.html');
+
+// P39: security headers (CSP + hardening) on every response, before any route.
+app.use(securityHeaders({ scriptHashes: inlineScriptHashes(indexHtml), webfigPort: config.webfigPort }));
+
 // JSON body parsing is scoped to the API only — the WebFig proxy paths
 // (/webfig, /jsproxy) must receive the RAW request stream to pipe upstream.
 app.use('/api', express.json());
@@ -152,15 +169,8 @@ app.use((err: unknown, _req: express.Request, res: express.Response, next: expre
   next(err as Error);
 });
 
-// Serve the built dashboard. Docker image layout: /app/public (baked in);
-// repo layout (`npm run build && npm start`): web/dist.
+// Serve the built dashboard (publicDir/indexHtml resolved above for the CSP).
 // In development the Vite dev server handles the UI and proxies /api here.
-const here = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = [path.resolve(here, '..', 'public'), path.resolve(here, '..', '..', 'web', 'dist')]
-  .find((dir) => fs.existsSync(path.join(dir, 'index.html')))
-  ?? path.resolve(here, '..', 'public');
-const indexHtml = path.join(publicDir, 'index.html');
-
 if (fs.existsSync(indexHtml)) {
   app.use(express.static(publicDir));
   app.use((req, res, next) => {

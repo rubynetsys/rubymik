@@ -34,6 +34,10 @@ export interface Config {
   /** P38: override the version.json URL the update check fetches (else the built-in
    *  default). The DB config row can also override it per-instance. */
   updateUrl: string | undefined;
+  /** P39: Express `trust proxy` setting. Enable when running behind a TLS-terminating
+   *  reverse proxy so X-Forwarded-Proto/For are honoured (Secure cookie, real client
+   *  IP for rate-limiting). false | true | <hops> | a subnet/keyword string. */
+  trustProxy: boolean | number | string;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -101,5 +105,17 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_UPDATE_URL must be an http(s) URL.');
   }
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl };
+  const trustProxy = parseTrustProxy(process.env.RUBYMIK_TRUST_PROXY);
+
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl, trustProxy };
+}
+
+/** RUBYMIK_TRUST_PROXY: unset/false/0 → off; true/1 → trust the immediate proxy;
+ *  a number → that many hops; anything else (e.g. "loopback", "10.0.0.0/8") is
+ *  passed to Express verbatim. */
+function parseTrustProxy(raw: string | undefined): boolean | number | string {
+  if (raw === undefined || raw === '' || /^(false|0|off|no)$/i.test(raw)) return false;
+  if (/^(true|1|on|yes)$/i.test(raw)) return true;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  return raw.trim();
 }

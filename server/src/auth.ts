@@ -102,15 +102,19 @@ export function getSessionUser(db: DatabaseSync, req: Request): SessionUser | un
   return { id: row.id, username: row.username, role, disabled: row.disabled === 1 };
 }
 
-export function setSessionCookie(res: Response, sessionId: string): void {
-  // Not `Secure` by default: RubyMIK's default deployment is plain HTTP on a
-  // LAN (http://localhost:8080, http://raspberrypi.local:8080).
+export function setSessionCookie(req: Request, res: Response, sessionId: string): void {
+  // `Secure` is added automatically when the request arrived over HTTPS — which,
+  // behind a TLS-terminating reverse proxy, means X-Forwarded-Proto=https AND
+  // `trust proxy` is enabled (see RUBYMIK_TRUST_PROXY). On a plain-HTTP LAN
+  // (http://localhost:8080) it is omitted so the cookie still works.
+  const secure = req.secure ? '; Secure' : '';
   res.setHeader('Set-Cookie',
-    `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_MS / 1000}`);
+    `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_MS / 1000}${secure}`);
 }
 
-export function clearSessionCookie(res: Response): void {
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
+export function clearSessionCookie(req: Request, res: Response): void {
+  const secure = req.secure ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure}`);
 }
 
 export function requireAuth(db: DatabaseSync) {

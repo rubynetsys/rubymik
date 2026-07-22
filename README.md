@@ -1,15 +1,20 @@
 # RubyMIK
 
-**Modern, self-hosted monitoring for MikroTik RouterOS — think "The Dude", reimagined.**
+**Modern, self-hosted monitoring _and configuration_ for MikroTik RouterOS — think "The Dude", reimagined.**
 
-RubyMIK is an open-source dashboard for monitoring (and soon, configuring) your MikroTik
+RubyMIK is an open-source dashboard that both **monitors and configures** your MikroTik
 devices. It runs anywhere Docker runs — a Linux server, a Raspberry Pi, a Mac — talks to
-your routers directly over the LAN via the RouterOS REST API, and needs **no external
-database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
+your routers directly over the LAN via the RouterOS REST API (or over a built-in WireGuard
+tunnel to behind-NAT sites), and needs **no external database, no cloud account, no
+third-party service**. `docker compose up -d`, add a router, done.
 
-> ⚠️ **Early days:** RubyMIK currently does device management, background health
-> polling, and a multi-site fleet overview. Traffic graphs, deeper time-series and
-> alerting are landing next.
+> **Maturity.** RubyMIK is pre-1.0 (current: 0.9.x) but broad and battle-tested on
+> real hardware: fleet monitoring, alerting, traffic graphs, full guarded
+> configuration (firewall, NAT, QoS, DHCP, routes, addresses, L2, PPPoE, VPN,
+> wireless), config snapshots **and section-scoped restore**, WireGuard remote
+> access, roles + 2FA, and an encrypted self-backup — all packaged as a Docker
+> image with a migration-safe upgrade path. See the [roadmap](#roadmap) for what is
+> still deliberately gated (e.g. live fleet-wide RouterOS upgrades).
 
 **What you get today**
 
@@ -218,7 +223,15 @@ database, no cloud account, no tunnels**. Clone it, run it, add a router. Done.
   per-component logic. Per-user choice, an install default, and CVD-safe status
   colours in every theme. See [Theming](#theming).
 
-_Screenshots coming soon._
+## Screenshots
+
+| Fleet dashboard | Topology map | Device deep-view |
+|---|---|---|
+| ![RubyMIK dashboard — fleet health, sites, recent activity](docs/img/dashboard.png) | ![RubyMIK topology map](docs/img/topology.png) | ![RubyMIK device detail](docs/img/device-detail.png) |
+
+_The dashboard at a glance (status counts, per-site roll-ups, live activity), the
+auto-discovered topology map, and a device's deep view. Modern Dark theme shown;
+five other themes ship in the box._
 
 ## 5-minute quickstart
 
@@ -616,3 +629,15 @@ docker run -d -v scratch:/data -e RUBYMIK_POLL_INTERVAL=0 -p 8081:8080 rubymik/r
 ## License
 
 [MIT](LICENSE) © Rubynet (Pty) Ltd — RubyMIK is a RubyNet open-source project.
+
+---
+
+### Trademarks & affiliation
+
+RubyMIK is an independent, third-party project. It is **not affiliated with,
+authorized, sponsored, endorsed by, or in any way officially connected to
+SIA Mikrotīkls** (the maker of MikroTik and RouterOS). "MikroTik", "RouterOS",
+"WinBox", "The Dude", and related marks are trademarks of SIA Mikrotīkls and are
+used here only nominatively, to describe the hardware and software RubyMIK
+interoperates with. All other trademarks are the property of their respective
+owners.

@@ -31,6 +31,9 @@ services:
       RUBYMIK_SELFBACKUP_KEEP: ${RUBYMIK_SELFBACKUP_KEEP:-28}
       # P38 update check — optional URL override (or turn it off in the app).
       RUBYMIK_UPDATE_URL: ${RUBYMIK_UPDATE_URL:-}
+      # P39 — set when behind a TLS-terminating reverse proxy (see README-DEPLOY §4b).
+      # Never expose the port below raw to the internet.
+      RUBYMIK_TRUST_PROXY: ${RUBYMIK_TRUST_PROXY:-}
     volumes:
       - rubymik-data:/data
       # A SECOND, separate volume as the off-host copy stand-in (a mounted path).

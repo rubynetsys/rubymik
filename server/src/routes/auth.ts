@@ -10,6 +10,7 @@ import {
 } from '../totp.js';
 import { APP_VERSION } from '../version.js';
 import { TARGET_SCHEMA } from '../db.js';
+import { LoginLimiter, clientIp } from '../security.js';
 import { log } from '../log.js';
 
 interface UserRow {
@@ -36,6 +37,9 @@ const ACCENTS = ['ruby', 'blue', 'red', 'green', 'purple', 'amber', 'teal'];
 
 export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: string | null }): Router {
   const router = Router();
+  // P39: brute-force lockout — 5 failures per (IP, username) inside 15 min → locked
+  // for 15 min. In-memory (single-process app). Cleared on a successful login.
+  const limiter = new LoginLimiter();
 
   // Liveness + a little diagnostic context. Public (the Docker HEALTHCHECK and any
   // uptime monitor hit it before login). If the server is listening, migrations have
@@ -68,19 +72,35 @@ export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: 
     db.prepare("INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)")
       .run(name, await hashPassword(password as string), new Date().toISOString());
     const user = db.prepare('SELECT id, username, password_hash FROM users WHERE username = ?').get(name) as unknown as UserRow;
-    setSessionCookie(res, createSession(db, user.id));
+    setSessionCookie(req, res, createSession(db, user.id));
     log.info(`Admin account "${name}" created (first-run setup)`);
     res.status(201).json({ username: user.username });
   });
 
   router.post('/login', async (req, res) => {
     const { username, password, code } = (req.body ?? {}) as Record<string, unknown>;
-    const user = typeof username === 'string'
-      ? db.prepare('SELECT id, username, password_hash, disabled, totp_enabled, totp_secret FROM users WHERE username = ?').get(username.trim()) as unknown as UserRow | undefined
+    const ip = clientIp(req);
+    const uname = typeof username === 'string' ? username.trim() : '';
+
+    // P39: refuse before we even check the password when this (IP, account) is
+    // locked out — with an audit trail and a Retry-After so honest clients back off.
+    const gate = limiter.check(ip, uname);
+    if (gate.locked) {
+      writeAuthAudit(db, uname || '(none)', 'auth.login.locked', `Locked out from ${ip} — ${gate.retryAfterSec}s remaining.`);
+      res.setHeader('Retry-After', String(gate.retryAfterSec));
+      res.status(429).json({ error: `Too many failed attempts. Try again in ${Math.ceil(gate.retryAfterSec / 60)} minute(s).` });
+      return;
+    }
+
+    const user = uname
+      ? db.prepare('SELECT id, username, password_hash, disabled, totp_enabled, totp_secret FROM users WHERE username = ?').get(uname) as unknown as UserRow | undefined
       : undefined;
-    if (!user || typeof password !== 'string' || !(await verifyPassword(password, user.password_hash))) {
+    const passOk = !!user && typeof password === 'string' && await verifyPassword(password, user.password_hash);
+    if (!user || !passOk) {
+      const v = limiter.fail(ip, uname);
       await sleep(500); // blunt brute-force damper
-      writeAuthAudit(db, username, 'auth.login.fail', 'Invalid username or password.');
+      writeAuthAudit(db, uname, 'auth.login.fail', `Invalid username or password from ${ip}.`);
+      if (v.justLocked) writeAuthAudit(db, uname || '(none)', 'auth.login.locked', `Account locked after repeated failures from ${ip}.`);
       res.status(401).json({ error: 'Invalid username or password.' });
       return;
     }
@@ -95,13 +115,16 @@ export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: 
       if (!c) { res.status(401).json({ error: 'A 2FA code is required.', needsCode: true }); return; }
       const ok = verifyTotp(user.totp_secret ?? '', c) || consumeRecoveryCode(db, user.id, c);
       if (!ok) {
+        const v = limiter.fail(ip, uname);
         await sleep(500);
-        writeAuthAudit(db, user.username, 'auth.2fa.fail', 'Invalid 2FA code.');
+        writeAuthAudit(db, user.username, 'auth.2fa.fail', `Invalid 2FA code from ${ip}.`);
+        if (v.justLocked) writeAuthAudit(db, user.username, 'auth.login.locked', `Account locked after repeated 2FA failures from ${ip}.`);
         res.status(401).json({ error: 'That 2FA code is not valid.', needsCode: true });
         return;
       }
     }
-    setSessionCookie(res, createSession(db, user.id));
+    limiter.succeed(ip, uname);
+    setSessionCookie(req, res, createSession(db, user.id));
     writeAuthAudit(db, user.username, 'auth.login.ok', '2FA: ' + (user.totp_enabled ? 'yes' : 'no'));
     res.json({ username: user.username });
   });
@@ -109,7 +132,7 @@ export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: 
   router.post('/logout', (req, res) => {
     const sid = getSessionId(req);
     if (sid) destroySession(db, sid);
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     res.json({ ok: true });
   });
 

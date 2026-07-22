@@ -129,6 +129,7 @@ automatically) or in the `environment:` block.
 | `RUBYMIK_SELFBACKUP_INTERVAL` | `21600` | Seconds between DB self-backups (6h). |
 | `RUBYMIK_SELFBACKUP_KEEP` | `28` | DB self-backups kept locally (7 days @ 6h). |
 | `RUBYMIK_UPDATE_URL` | built-in | Override the daily update-check URL (or point at a mirror). Turn the check off in-app. |
+| `RUBYMIK_TRUST_PROXY` | `false` | Enable when behind a TLS-terminating reverse proxy so `X-Forwarded-Proto`/`For` are honoured (`Secure` cookie, real client IP for rate-limiting). `true` \| a hop count \| a subnet/keyword (see §4b). |
 | `RUBYMIK_DEFAULT_THEME` | `ruby-light` | Instance default theme (a user's own choice overrides it). |
 | `RUBYMIK_DEFAULT_ACCENT` | *(unset)* | Instance default accent colour. |
 
@@ -136,6 +137,63 @@ The `/data` volume holds the SQLite DB, generated key file (if any), config
 backups, snapshots, and DB self-backups. **`/data` is the only volume you must
 persist and back up.** (`/offhost` is an optional second mount used as an off-host
 copy target for DB self-backups.)
+
+---
+
+## 4b. HTTPS & putting RubyMIK behind a reverse proxy
+
+> ⚠️ **Do not expose RubyMIK's `:8080` (or `:8081`) directly to the internet.** It
+> speaks plain HTTP and is meant for a trusted LAN or a private overlay. If RubyMIK
+> must be reachable remotely, put it behind a TLS-terminating reverse proxy (or reach
+> it over a VPN / the built-in WireGuard). Never port-forward `:8080` to the world.
+
+When a proxy terminates TLS in front of RubyMIK, set **`RUBYMIK_TRUST_PROXY`** so the
+app honours `X-Forwarded-Proto`/`X-Forwarded-For`. Two things depend on it:
+
+- the session cookie gains the **`Secure`** flag (RubyMIK sees the request as HTTPS);
+- the **login rate-limiter and audit** log the *real* client IP, not the proxy's.
+
+Set it to `true` when RubyMIK sits behind exactly one proxy you control. (`true`
+trusts the immediate upstream; a number trusts that many hops; a subnet/keyword like
+`10.0.0.0/8` is passed to Express verbatim.) Bind the container's port to `127.0.0.1`
+so only the proxy can reach it.
+
+**Caddy** (automatic HTTPS — the shortest path):
+
+```
+rubymik.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+```yaml
+# docker-compose: bind to localhost so only Caddy reaches it
+services:
+  rubymik:
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      RUBYMIK_TRUST_PROXY: "true"
+```
+
+**Nginx Proxy Manager (NPM)** — add a Proxy Host → forward to `rubymik:8080`, enable
+**Websockets**, request a Let's Encrypt cert, and set `RUBYMIK_TRUST_PROXY=true` on
+the container. (WebFig, if used, needs its own proxy host to `:8081`.)
+
+**Traefik** (labels):
+
+```yaml
+services:
+  rubymik:
+    environment:
+      RUBYMIK_TRUST_PROXY: "true"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rubymik.rule=Host(`rubymik.example.com`)
+      - traefik.http.routers.rubymik.tls.certresolver=le
+      - traefik.http.services.rubymik.loadbalancer.server.port=8080
+```
+
+After wiring it up, confirm HTTPS end-to-end: log in over `https://…` and check the
+session cookie carries `Secure` (browser dev-tools → Application → Cookies).
 
 ---
 
