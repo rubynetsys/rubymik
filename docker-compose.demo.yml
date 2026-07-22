@@ -24,6 +24,26 @@ services:
     # unaffected by `internal`, which only removes the container's route OUT).
     networks: [demonet]
 
+  router:
+    # SYNTHETIC RouterOS REST responder — the ONE live device the demo manages. Reuses
+    # the RubyMIK image to run a tiny read-only `/rest/*` server (server/src/devtools/
+    # demo-router.ts). Needs no KVM / /dev/net/tun / default route, so it runs happily on
+    # the `internal: true` net where the qemu CHR cannot. The demo device is seeded to
+    # host `router` port 8080 (http). Manages ZERO real devices — this is fabricated data.
+    image: ${RUBYMIK_IMAGE:-ghcr.io/rubynetsys/rubymik:latest}
+    container_name: rubymik-demo-router
+    restart: unless-stopped
+    command: ["node", "dist/devtools/demo-router.js"]
+    environment:
+      PORT: "8080"
+      DEMO_ROUTER_IDENTITY: "zzz-demo-gw"
+    healthcheck:   # override the app healthcheck (this container serves /rest, not /api)
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/rest/system/identity').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+    networks: [demonet]
+
   chr:
     # RouterOS CHR — INCOMPATIBLE with this demo's `internal: true` blast-radius network:
     # its entrypoint (generate-dhcpd-conf.py) requires a DEFAULT ROUTE on the container's

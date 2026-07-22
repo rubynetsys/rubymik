@@ -2,10 +2,10 @@
 # Nightly reset for the public demo: down → wipe volume → up → reseed. Idempotent.
 # Driven by a systemd timer (see scripts/rubymik-demo-reset.timer).
 #
-# The demo manages ZERO real devices: the single seeded device ("zzz-demo-chr") is
-# synthetic (unreachable 10.99.0.1) and shows offline. A live demo device would have to
-# be a synthetic RouterOS-REST responder ON demonet — the qemu CHR image cannot run on an
-# `internal: true` network (it requires a default route). See docs/P41-PENDING-RAY.md.
+# The demo manages ZERO real devices: the single seeded device ("zzz-demo-gw") is a
+# SYNTHETIC RouterOS-REST responder (service `router`, fabricated data) — it lets the
+# dashboard/traffic/topology populate without any real router, KVM or the qemu CHR (which
+# can't run on an `internal: true` network). See server/src/devtools/demo-router.ts.
 #
 #   Admin password: /opt/rubymik-demo/.admin-pass (root-only, held by Ray — NOT published).
 #   Viewer "demo@rubymik.com" password is published.
@@ -20,8 +20,8 @@ $COMPOSE stop demo >/dev/null 2>&1 || true
 $COMPOSE rm -fsv demo >/dev/null 2>&1 || true                    # -v drops the anonymous /offhost volume too
 docker volume rm rubymikdemo_demo-data >/dev/null 2>&1 || true   # wipe the named data volume
 
-echo "up demo"
-$COMPOSE up -d demo 2>&1 | tail -2
+echo "up demo + synthetic router (leave the tunnel running)"
+$COMPOSE up -d demo router 2>&1 | tail -3
 
 # demonet is internal → published ports don't wire up; reach the app on its bridge IP.
 echo "resolve demo container IP on demonet + wait for health"
@@ -43,8 +43,9 @@ curl -s -b "$J" -c "$J" -o /dev/null -X POST "$BASE/api/login" -H 'content-type:
 # published VIEWER account
 curl -s -b "$J" -o /dev/null -X POST "$BASE/api/users" -H 'content-type: application/json' \
   -d "{\"email\":\"demo@rubymik.com\",\"role\":\"viewer\",\"password\":\"$DEMO_VIEWER_PASS\"}"
-# the ONLY managed device: synthetic + unreachable (shows offline). Manages ZERO real devices.
+# the ONLY managed device: the synthetic responder (http://router:8080). Fabricated data,
+# manages ZERO real devices. read-only creds (no write creds → not manageable in the UI).
 curl -s -b "$J" -o /dev/null -X POST "$BASE/api/devices" -H 'content-type: application/json' \
-  -d '{"name":"zzz-demo-chr","host":"10.99.0.1","username":"admin","password":"","writeUsername":"admin","writePassword":""}'
+  -d '{"name":"zzz-demo-gw","host":"router","port":8080,"useTls":false,"username":"demo","password":"demo"}'
 rm -f "$J"
 echo "[$(date -u +%FT%TZ)] demo reset complete"

@@ -54,7 +54,7 @@ to add at the root.) Nothing pending here. When wiring app notifications, set th
 `noreply@rubymik.com` (Settings → Notifications; from-address is configurable, no hardcoded
 sender).
 
-## 3. Demo device — the qemu CHR is INCOMPATIBLE with the internal net (deferred)
+## 3. Demo device — ✅ DONE (synthetic REST responder; qemu CHR was incompatible)
 
 Attempted the qemu CHR (`evilfreelancer/docker-routeros`) under TCG per your call — it
 **cannot** run on this demo's blast-radius network. Two hard blockers, independent of the
@@ -69,17 +69,15 @@ radius (a non-negotiable standing rule), so security wins. The `chr` service is 
 compose but **profile-gated so it never starts**, with the incompatibility documented
 inline.
 
-**Current demo state (shipped):** the demo app runs and manages **one synthetic, offline
-device** (`zzz-demo-chr`, host `10.99.0.1` — unreachable, shows `status=down`). That
-honours "manages ZERO real devices" and the dashboard/login/config UI all demonstrate
-fine. Proven: banner ✓, viewer login ✓, isolation (`internal: true`) ✓, nightly reset ✓,
-zero shared volumes ✓.
-
-**To show a LIVE device with synthetic data (follow-up):** the only design compatible with
-`internal: true` is a **synthetic RouterOS-REST responder** container **on demonet** (it
-needs no default route, no KVM, no tun — just an HTTP server answering the REST endpoints
-RubyMIK polls). That's a small dedicated build (not the qemu CHR). Say the word and I'll
-add it as a P41 follow-up; until then the offline synthetic device is the safe default.
+**Current demo state (shipped):** the demo manages **one LIVE synthetic device** — a
+**RouterOS-REST responder** (`server/src/devtools/demo-router.ts`, compose service
+`router`) that runs on demonet and answers the `/rest/*` API RubyMIK polls with coherent
+fabricated `zzz-*` data. It needs no default route / KVM / tun, so it runs where the qemu
+CHR can't. The demo device (`zzz-demo-gw`, host `router:8080`, http) polls **`up`** and the
+dashboard/traffic/topology/detail pages all populate (model RB5009UG+S+IN, 7 interfaces,
+health, CPU/mem graphs, 3 discovered neighbors). Still **manages ZERO real devices** — every
+byte is fabricated. Proven: banner ✓, viewer login ✓, isolation (`internal: true`) ✓,
+nightly reset ✓, zero shared volumes ✓, live synthetic device ✓. Nothing pending here.
 
 ## 4. Demo admin credential
 
