@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Archive, Bell, Building2, Clock, Cpu, Loader2, MemoryStick, Plus, RefreshCw,
-  Router as RouterIcon, Search, Server,
+  Rocket, Router as RouterIcon, Search, Server,
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import FleetUpdateModal from '../components/FleetUpdateModal';
 import {
   fmtAgo, fmtBytes,
   type FleetDevice, type FleetPayload, type FleetSite, type HealthStatus,
@@ -26,6 +27,7 @@ export default function Fleet() {
   const [siteFilter, setSiteFilter] = useState<SiteFilter>('all');
   const [search, setSearch] = useState('');
   const [polling, setPolling] = useState(false);
+  const [fleetUpdateOpen, setFleetUpdateOpen] = useState(false);
   const [, tick] = useState(0);
 
   const load = useCallback(async () => {
@@ -138,6 +140,12 @@ export default function Fleet() {
           {fetchedAt ? `Updated ${fmtAgo(new Date(fetchedAt).toISOString())}` : ''} · auto-refresh {REFRESH_MS / 1000}s · poll {fleet.pollIntervalSec}s
           </span>
           <button
+            onClick={() => setFleetUpdateOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text"
+          >
+            <Rocket className="h-3.5 w-3.5" /> Fleet update
+          </button>
+          <button
             onClick={() => void pollNow()}
             disabled={polling}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
@@ -235,6 +243,7 @@ export default function Fleet() {
           </div>
         </section>
       ))}
+      {fleetUpdateOpen && <FleetUpdateModal onClose={() => setFleetUpdateOpen(false)} />}
     </PageChrome>
   );
 }
