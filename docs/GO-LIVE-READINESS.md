@@ -95,6 +95,22 @@ Execute top to bottom. Each step gates the next.
 
 ---
 
+## 6. Known gaps (backlog — not go-live blockers)
+
+- **Admin self-recovery / password reset (RED for polish, not a blocker).** P39
+  ships **no** self-service password recovery and no supported admin-reset path. If
+  the sole admin forgets their password (no second admin, no 2FA recovery code to
+  hand), the only recourse today is a **manual SQLite edit inside the container** —
+  which is exactly what happened once on the dev instance. Every self-hosting MSP
+  will eventually hit this, and "edit the database" is not an acceptable answer.
+  **Backlog:** a first-class, documented CLI reset — e.g.
+  `docker exec -it rubymik node reset-admin.js` — that generates a new password,
+  hashes it with the app's own argon2id, clears TOTP + sessions, audits the action,
+  and prints the password once. (A one-off script did exactly this to unlock the dev
+  admin on 2026-07-22; productizing + documenting it is the gap.) Interim mitigation
+  for pilots: create a **second admin** so a lockout of one is recoverable via the
+  other.
+
 ## Appendix — process note (transparency)
 
 During the doc cold-follow, a first attempt ran `docker compose` from a copy of
