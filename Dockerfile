@@ -35,9 +35,12 @@ COPY --from=serverbuild /srv/package.json ./package.json
 COPY --from=serverbuild /srv/node_modules ./node_modules
 COPY --from=serverbuild /srv/dist ./dist
 COPY --from=webbuild /web/dist ./public
-RUN mkdir -p /data && chown node:node /data /app
+RUN mkdir -p /data /offhost && chown node:node /data /offhost /app
 USER node
 VOLUME /data
+# P36: a second volume as the off-host copy stand-in (a mounted path). node-owned
+# so the app can write to it. Real off-host (SFTP/rclone/share) is PENDING-RAY.
+VOLUME /offhost
 # 8080 = dashboard/API; 8081 = WebFig reverse proxy (router admin UIs need
 # web-root '/', so they get their own listener). See RUBYMIK_WEBFIG_PORT.
 EXPOSE 8080 8081

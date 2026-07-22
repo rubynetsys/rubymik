@@ -19,6 +19,7 @@ import AddDevice from './pages/AddDevice';
 import Dashboard from './pages/Dashboard';
 import Wallboard from './pages/Wallboard';
 import Users from './pages/Users';
+import SelfBackup from './pages/SelfBackup';
 import Account from './pages/Account';
 import Audit from './pages/Audit';
 import { applyTheme } from './theme';
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/backup" element={<SelfBackup />} />
           <Route path="/account" element={<Account onChanged={refresh} />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Bell, Building2, Eye, LayoutDashboard, LogOut, RadioTower, Router as RouterIcon, ScrollText, Server, UsersRound, Waypoints, Wand2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Bell, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Router as RouterIcon, ScrollText, Server, UsersRound, Waypoints, Wand2 } from 'lucide-react';
 import { api } from '../api';
-import type { AlertSummary } from '../types';
+import type { AlertSummary, BackupStatus } from '../types';
 import { useMe } from '../me';
 import { useDesktopAlerts } from './NotificationChannels';
 import Logo from './Logo';
@@ -18,6 +19,7 @@ const NAV: Array<{ to: string; label: string; icon: typeof Bell; adminOnly?: boo
   { to: '/sites', label: 'Sites', icon: Building2 },
   { to: '/remote-access', label: 'Remote Access', icon: RadioTower },
   { to: '/users', label: 'Users', icon: UsersRound, adminOnly: true },
+  { to: '/backup', label: 'Backup', icon: DatabaseBackup, adminOnly: true },
   { to: '/audit', label: 'Audit', icon: ScrollText },
 ];
 
@@ -26,15 +28,17 @@ const SUMMARY_REFRESH_MS = 15_000;
 export default function Layout({ onLogout }: { onLogout: () => void }) {
   const me = useMe();
   const [summary, setSummary] = useState<AlertSummary | null>(null);
+  const [backup, setBackup] = useState<BackupStatus | null>(null);
   useDesktopAlerts(); // browser pops for new alerts while the app is open (opt-in)
 
   useEffect(() => {
-    const loadSummary = () => {
+    const load = () => {
       api.get<AlertSummary>('/api/alerts/summary').then(setSummary).catch(() => {});
+      api.get<BackupStatus>('/api/backup/status').then(setBackup).catch(() => {});
     };
-    loadSummary();
+    load();
     const t = setInterval(() => {
-      if (!document.hidden) loadSummary();
+      if (!document.hidden) load();
     }, SUMMARY_REFRESH_MS);
     return () => clearInterval(t);
   }, []);
@@ -104,6 +108,13 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
         </div>
       </aside>
       <main className="ml-60 flex-1 px-8 py-8">
+        {backup && !backup.healthy && (
+          <div className={`mb-5 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm ${backup.severity === 'critical' ? 'border-danger-line bg-danger-bg text-danger-fg-strong' : 'border-warning-line bg-warning-bg text-warning-fg'}`}>
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span><b>Backups {backup.severity === 'critical' ? 'need attention' : 'warning'}:</b> {backup.reason}</span>
+            {me.role === 'admin' && <Link to="/backup" className="ml-auto rounded-md border border-current/40 px-2.5 py-1 text-xs font-semibold hover:bg-black/5">Open backups →</Link>}
+          </div>
+        )}
         {me.role === 'viewer' && (
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-fg-dim">
             <Eye className="h-4 w-4 shrink-0 text-fg-faint" />

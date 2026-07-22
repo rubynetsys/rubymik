@@ -18,8 +18,17 @@ services:
       RUBYMIK_POLL_INTERVAL: ${RUBYMIK_POLL_INTERVAL:-30}
       RUBYMIK_BACKUP_INTERVAL: ${RUBYMIK_BACKUP_INTERVAL:-86400}
       RUBYMIK_BACKUP_KEEP: ${RUBYMIK_BACKUP_KEEP:-10}
+      # P36 DB self-backup. The dedicated key is NEVER hardcoded here — it is read
+      # from a gitignored .env (or the shell). Unset ⇒ self-backups stay disabled.
+      RUBYMIK_BACKUP_KEY: ${RUBYMIK_BACKUP_KEY:-}
+      RUBYMIK_SELFBACKUP_INTERVAL: ${RUBYMIK_SELFBACKUP_INTERVAL:-21600}
+      RUBYMIK_SELFBACKUP_KEEP: ${RUBYMIK_SELFBACKUP_KEEP:-28}
     volumes:
       - rubymik-data:/data
+      # A SECOND, separate volume as the off-host copy stand-in (a mounted path).
+      # Real off-host destination (SFTP/rclone/mounted share) is PENDING-RAY.
+      - rubymik-offhost:/offhost
 
 volumes:
   rubymik-data:
+  rubymik-offhost:

@@ -651,6 +651,29 @@ export interface AlertSummary {
   info: number;
 }
 
+// --- P36: RubyMIK DB self-backup ---
+export interface BackupStatus {
+  configured: boolean; healthy: boolean; severity: 'ok' | 'warn' | 'critical'; reason: string;
+  lastOkAt: string | null; ageHours: number | null;
+  lastRun: { ts: string; status: string; detail: string | null } | null;
+  offhost: { enabled: boolean; lastStatus: string | null };
+  keyConfigured: boolean; gapHours: number;
+}
+export interface BackupManifestView {
+  format: string; createdAt: string; kind: string; schemaVersion: number; appVersion: string;
+  testBaseline: number; sha256Plain: string; bytesPlain: number; bytesCipher: number;
+  tableCounts: Record<string, number>; cipher: string;
+}
+export interface BackupEntryView { name: string; createdAt: string; sizeBytes: number; manifest: BackupManifestView | null }
+export interface BackupLogRow {
+  id: number; ts: string; kind: string; status: string; filename: string | null;
+  bytes_cipher: number | null; sha256: string | null; schema_version: number | null;
+  offhost_status: string | null; offhost_target: string | null; detail: string | null;
+}
+export interface OffhostConfig { enabled: boolean; kind: string; path: string | null; pendingRay?: boolean }
+export interface DrillCheck { name: string; ok: boolean; detail: string }
+export interface DrillResult { backup?: string; ok: boolean; checks: DrillCheck[] }
+
 export interface AlertRule {
   id: number;
   rule: string;

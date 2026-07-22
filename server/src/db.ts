@@ -386,6 +386,33 @@ const MIGRATIONS: string[] = [
   // P33: geographic coordinates per site, for the topology map view.
   `ALTER TABLE sites ADD COLUMN latitude REAL;
    ALTER TABLE sites ADD COLUMN longitude REAL`,
+
+  // P36: RubyMIK's own DB self-backup — a log of every run + off-host config.
+  `CREATE TABLE self_backup_log (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     ts TEXT NOT NULL,
+     kind TEXT NOT NULL,              -- scheduled | manual | startup
+     status TEXT NOT NULL,            -- ok | failed
+     filename TEXT,
+     bytes_plain INTEGER,
+     bytes_cipher INTEGER,
+     sha256 TEXT,                     -- of the plaintext DB
+     schema_version INTEGER,
+     app_version TEXT,
+     offhost_status TEXT,             -- ok | failed | skipped | disabled
+     offhost_target TEXT,
+     detail TEXT
+   );
+   CREATE INDEX idx_self_backup_log_ts ON self_backup_log(ts);
+   CREATE TABLE self_backup_config (
+     id INTEGER PRIMARY KEY CHECK (id = 1),
+     offhost_enabled INTEGER NOT NULL DEFAULT 0,
+     offhost_kind TEXT NOT NULL DEFAULT 'path',   -- path | sftp | rclone (v1: path)
+     offhost_path TEXT,
+     updated_at TEXT NOT NULL
+   );
+   INSERT INTO self_backup_config (id, offhost_enabled, offhost_kind, offhost_path, updated_at)
+     VALUES (1, 0, 'path', NULL, datetime('now'))`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

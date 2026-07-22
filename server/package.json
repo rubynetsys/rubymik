@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsc && node --test test/topology.test.mjs test/alerts.test.mjs test/safeapply.test.mjs test/firewall.test.mjs test/backup.test.mjs test/netconfig.test.mjs test/netconfig.route.test.mjs test/transport.test.mjs test/provision.test.mjs test/webfig.test.mjs test/wireless.test.mjs test/netroutes.test.mjs test/netwireguard.test.mjs test/netaddr.test.mjs test/netl2.test.mjs test/snapshots.test.mjs test/snapshothook.test.mjs test/netnat.test.mjs test/netqos.test.mjs test/netpppoe.test.mjs test/audit.route.test.mjs test/devices.route.test.mjs test/reboot.test.mjs test/totp.test.mjs test/auth.roles.test.mjs test/notify.test.mjs",
+    "test": "tsc && node --test",
     "start": "node dist/index.js"
   },
   "dependencies": {

@@ -8,6 +8,13 @@ export interface Config {
   dataDir: string;
   logLevel: LogLevel;
   encryptionKeyHex: string | undefined;
+  /** P36: DEDICATED key for RubyMIK's own DB self-backup (NOT the field key).
+   *  When unset, self-backups are DISABLED and the UI prompts to set one up. */
+  backupKeyHex: string | undefined;
+  /** Seconds between RubyMIK DB self-backups (P36). */
+  selfBackupIntervalSec: number;
+  /** How many DB self-backups to retain locally (P36). */
+  selfBackupKeep: number;
   /** Seconds between device poll cycles. */
   pollIntervalSec: number;
   /** Max devices polled in parallel within a cycle. */
@@ -55,6 +62,19 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_ENCRYPTION_KEY must be 64 hex characters (32 bytes). Generate one with: openssl rand -hex 32');
   }
 
+  // P36: a SEPARATE key for the DB self-backup. Deliberately no file fallback
+  // (unlike the field key) — a backup encrypted with the field key would defeat
+  // the point, so this must be set explicitly or self-backups stay disabled.
+  const backupKeyHex = process.env.RUBYMIK_BACKUP_KEY || undefined;
+  if (backupKeyHex !== undefined && !/^[0-9a-fA-F]{64}$/.test(backupKeyHex)) {
+    throw new Error('RUBYMIK_BACKUP_KEY must be 64 hex characters (32 bytes). Generate one with: openssl rand -hex 32');
+  }
+  if (backupKeyHex !== undefined && backupKeyHex === encryptionKeyHex) {
+    throw new Error('RUBYMIK_BACKUP_KEY must differ from RUBYMIK_ENCRYPTION_KEY — the backup key protects the whole DB (which already contains field-encrypted secrets).');
+  }
+  const selfBackupIntervalSec = intEnv('RUBYMIK_SELFBACKUP_INTERVAL', 21600, 300, 2592000); // 6h default
+  const selfBackupKeep = intEnv('RUBYMIK_SELFBACKUP_KEEP', 28, 2, 500);                      // 7 days @ 6h
+
   // 0 = polling disabled (serve stored status/topology only — useful for a
   // frozen/demo/read-only instance); otherwise 5..3600s.
   const pollIntervalSec = process.env.RUBYMIK_POLL_INTERVAL === '0'
@@ -73,5 +93,5 @@ export function loadConfig(): Config {
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
 
-  return { port, dataDir, logLevel, encryptionKeyHex, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent };
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent };
 }

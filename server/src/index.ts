@@ -10,6 +10,8 @@ import { Poller } from './poller.js';
 import { BackupScheduler } from './backupscheduler.js';
 import { installCaptureHook } from './snapshothook.js';
 import { SnapshotScheduler } from './snapshotscheduler.js';
+import { SelfBackupScheduler } from './selfbackupscheduler.js';
+import { selfbackupRoutes } from './routes/selfbackup.js';
 import { snapshotRoutes } from './routes/snapshots.js';
 import { AlertEngine } from './alerts.js';
 import { Notifier } from './notify.js';
@@ -54,6 +56,10 @@ const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollCon
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);
 const snapshotScheduler = new SnapshotScheduler(db, box, config.snapshotIntervalSec * 1000);
 const wgHub = new WireguardHub(db, box);
+// P36: RubyMIK's OWN DB self-backup (dedicated key; disabled until RUBYMIK_BACKUP_KEY is set).
+const backupKey = config.backupKeyHex ? Buffer.from(config.backupKeyHex, 'hex') : null;
+const SELFBACKUP_GAP_HOURS = 8;
+const selfBackupScheduler = new SelfBackupScheduler(db, backupKey, config.dataDir, config.selfBackupIntervalSec * 1000, config.selfBackupKeep, notifier, SELFBACKUP_GAP_HOURS);
 
 const app = express();
 app.disable('x-powered-by');
@@ -83,6 +89,7 @@ app.use('/api/devices', netnatRoutes(db, box));
 app.use('/api/devices', netqosRoutes(db, box));
 app.use('/api/devices', netpppoeRoutes(db, box));
 app.use('/api/devices', netvpnRoutes(db, box));
+app.use('/api/backup', selfbackupRoutes(db, backupKey, config.dataDir, box, selfBackupScheduler, SELFBACKUP_GAP_HOURS));
 app.use('/api/devices', snapshotRoutes(db, box, snapshotScheduler));
 app.use('/api/remote-access', remoteAccessRoutes(db, box, wgHub));
 app.use('/api/provision', provisionRoutes(db));
@@ -131,6 +138,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   else log.warn('Polling disabled (RUBYMIK_POLL_INTERVAL=0) — serving stored status/topology only');
   backupScheduler.start();
   snapshotScheduler.start();
+  selfBackupScheduler.start();
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });
 
@@ -150,6 +158,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     log.info(`${signal} received, shutting down`);
     poller.stop();
     backupScheduler.stop();
+    selfBackupScheduler.stop();
     webfigServer?.close();
     server.close(() => {
       db.close();
