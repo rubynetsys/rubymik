@@ -451,6 +451,27 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     res.json({ windowSec, points });
   });
 
+  // --- GET /api/devices/:id/logs?limit=300 — the RouterOS log buffer (read-only,
+  // works on monitor-only devices too). Newest-first; Logs v2 filters/parses client-side.
+  router.get('/:id/logs', async (req, res) => {
+    const row = loadDevice(Number(req.params.id));
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    const limit = Math.min(Math.max(Number(req.query.limit) || 300, 20), 1000);
+    const target = readTarget(box, row);
+    let scheme: Scheme; let port: number;
+    try { ({ scheme, port } = await transportFor(row, target)); }
+    catch (err) { writeErr(res, err); return; }
+    try {
+      const entries = await restGet(target, scheme, port, '/log') as Array<Record<string, unknown>>;
+      const rows = (Array.isArray(entries) ? entries : []).slice(-limit).reverse().map((l) => ({
+        time: str(l['time']), topics: str(l['topics']), message: str(l['message']),
+      }));
+      res.json({ entries: rows });
+    } catch (err) {
+      res.status(502).json({ error: (err as Error).message });
+    }
+  });
+
   // --- POST /api/devices/:id/poll — immediate health poll of OUR database
   // record (read-only toward the device, like every poll).
   router.post('/:id/poll', (req, res) => {

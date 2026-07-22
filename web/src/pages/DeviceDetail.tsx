@@ -29,6 +29,7 @@ import AddressManager from '../components/AddressManager';
 import L2Manager from '../components/L2Manager';
 import WebfigPanel from '../components/WebfigPanel';
 import RebootPanel from '../components/RebootPanel';
+import LogsManager from '../components/LogsManager';
 
 const LIVE_REFRESH_MS = 7_000;
 const TABLES_REFRESH_MS = 60_000;
@@ -500,24 +501,7 @@ export default function DeviceDetail() {
         );
 
       case 'logs':
-        return (
-          <CapabilityBody section={d.sections.logs} naText="Log not accessible via REST on this device."
-            render={(logs) => (
-              <div className="max-h-80 overflow-y-auto rounded-lg bg-sunken p-3 font-mono text-xs leading-5 text-fg-body">
-                {logs.length === 0 && <div className="text-fg-faint">Log buffer is empty.</div>}
-                {logs.map((l, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="shrink-0 text-fg-faint">{l.time ?? ''}</span>
-                    <span className={`shrink-0 ${l.topics?.includes('error') || l.topics?.includes('critical') ? 'text-danger-fg' : 'text-fg-faint'}`}>
-                      {l.topics ?? ''}
-                    </span>
-                    <span className="break-all">{l.message ?? ''}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          />
-        );
+        return <LogsManager deviceId={deviceId} />;
 
       case 'admin':
         return (
