@@ -4,7 +4,7 @@ import { api } from '../api';
 import Select from '../components/Select';
 import { useMe, type Role } from '../me';
 
-interface User { id: number; username: string; role: Role; disabled: boolean; twoFactor: boolean; createdAt: string }
+interface User { id: number; email: string | null; username: string; role: Role; disabled: boolean; twoFactor: boolean; createdAt: string }
 const ROLE_OPTS = [
   { value: 'admin', label: 'Admin — full access incl. users' },
   { value: 'editor', label: 'Editor — device read/write' },
@@ -66,7 +66,7 @@ export default function Users() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id} className={`border-b border-border-subtle text-fg-body ${u.disabled ? 'opacity-55' : ''}`}>
-                <td className="px-4 py-2.5 font-medium text-fg">{u.username}{u.username === me.username && <span className="ml-2 rounded-full bg-app px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">you</span>}</td>
+                <td className="px-4 py-2.5 font-medium text-fg">{u.email ?? u.username}{u.username === me.username && <span className="ml-2 rounded-full bg-app px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">you</span>}</td>
                 <td className="px-3 py-2.5">
                   <Select value={u.role} onChange={(v) => setRole(u, v as Role)} className="w-52" ariaLabel={`role for ${u.username}`}
                     options={ROLE_OPTS} disabled={u.username === me.username || busy === u.id} />
@@ -107,19 +107,20 @@ function IconBtn({ children, title, onClick, danger }: { children: React.ReactNo
 }
 
 function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (secret: { title: string; username: string; password: string } | null) => void }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState<Role>('viewer');
   const [mode, setMode] = useState<'generate' | 'type'>('generate');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   async function create() {
     setBusy(true); setErr(null);
     try {
-      const body: Record<string, unknown> = { username: username.trim(), role };
+      const body: Record<string, unknown> = { email: email.trim(), role };
       if (mode === 'type') body.password = password;
-      const r = await api.post<{ username: string; generatedPassword?: string }>('/api/users', body);
-      onCreated(r.generatedPassword ? { title: 'New account', username: r.username, password: r.generatedPassword } : null);
+      const r = await api.post<{ email: string | null; username: string; generatedPassword?: string }>('/api/users', body);
+      onCreated(r.generatedPassword ? { title: 'New account', username: r.email ?? r.username, password: r.generatedPassword } : null);
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   }
   const inputCls = 'w-full rounded-lg border border-border-strong bg-app px-3 py-2 text-sm text-fg-body outline-none focus:border-accent-border-strong';
@@ -128,8 +129,8 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between"><h3 className="text-lg font-bold text-fg-strong">Add user</h3><button onClick={onClose} className="rounded-lg p-1.5 text-fg-faint hover:bg-app"><X className="h-5 w-5" /></button></div>
         {err && <div className="mt-3 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
-        <label className="mt-4 block text-xs font-semibold text-fg-dim">Username
-          <input autoFocus value={username} onChange={(e) => setUsername(e.target.value)} className={`mt-1 ${inputCls}`} placeholder="zzz-editor" /></label>
+        <label className="mt-4 block text-xs font-semibold text-fg-dim">Email
+          <input autoFocus type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`mt-1 ${inputCls}`} placeholder="user@example.com" /></label>
         <label className="mt-3 block text-xs font-semibold text-fg-dim">Role
           <Select value={role} onChange={(v) => setRole(v as Role)} className="mt-1 w-full" ariaLabel="Role" options={ROLE_OPTS} /></label>
         <div className="mt-3 text-xs font-semibold text-fg-dim">Password
@@ -144,7 +145,7 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </div>
         <div className="mt-5 flex justify-end gap-3">
           <button onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>
-          <button disabled={busy || username.trim().length < 3 || (mode === 'type' && password.length < 8)} onClick={() => void create()}
+          <button disabled={busy || !validEmail || (mode === 'type' && password.length < 8)} onClick={() => void create()}
             className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-40">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create user
           </button>
@@ -156,14 +157,14 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
 function SecretModal({ secret, onClose }: { secret: { title: string; username: string; password: string }; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => { navigator.clipboard?.writeText(`Username: ${secret.username}\nPassword: ${secret.password}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
+  const copy = () => { navigator.clipboard?.writeText(`Email: ${secret.username}\nPassword: ${secret.password}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-fg-strong">{secret.title} for “{secret.username}”</h3>
         <p className="mt-1 text-sm text-fg-dim">This is shown <b>once</b>. Copy it now — it can't be retrieved later (only reset).</p>
         <div className="mt-4 rounded-lg border border-border-strong bg-app p-3 font-mono text-sm">
-          <div className="text-fg-dim">username: <span className="text-fg">{secret.username}</span></div>
+          <div className="text-fg-dim">email: <span className="text-fg">{secret.username}</span></div>
           <div className="text-fg-dim">password: <span className="text-fg-strong">{secret.password}</span></div>
         </div>
         <div className="mt-4 flex justify-end gap-3">

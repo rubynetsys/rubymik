@@ -222,6 +222,38 @@ export class Notifier {
     return 'mocked';
   }
 
+  /** P40: can we send a transactional email at all? (host + a from-address). The
+   *  alert `enabled` toggle is about alert delivery — password-reset/invite email is
+   *  transactional and only needs a working SMTP host + sender. */
+  smtpReady(): boolean {
+    const r = this.row();
+    return !!r.smtp_host && !!r.smtp_from;
+  }
+  /** The configured sender address (PENDING-RAY: set this in Settings → Notifications;
+   *  there is NO hardcoded default sender). */
+  smtpFrom(): string | null { return this.row().smtp_from; }
+
+  /** P40: send a one-off email to an explicit recipient (password reset / invite),
+   *  using the configured SMTP transport + from-address. Throws if SMTP isn't set up. */
+  async sendMailTo(to: string, subject: string, text: string): Promise<void> {
+    const r = this.row();
+    if (!r.smtp_host || !r.smtp_from) throw new Error('SMTP is not configured (set host + from in Settings → Notifications).');
+    const pass = this.dec(r.smtp_pass_enc);
+    const transport = nodemailer.createTransport({
+      host: r.smtp_host, port: r.smtp_port ?? 587, secure: r.smtp_secure === 'tls',
+      ...(r.smtp_secure === 'starttls' ? { requireTLS: true } : {}),
+      ...(r.smtp_user && pass ? { auth: { user: r.smtp_user, pass } } : {}),
+      connectionTimeout: TIMEOUT_MS,
+    });
+    try {
+      await transport.sendMail({ from: r.smtp_from, to, subject, text });
+      this.logEntry('smtp', 'transactional', to, 'sent', `Sent "${subject}".`);
+    } catch (err) {
+      this.logEntry('smtp', 'transactional', to, 'failed', (err as Error).message);
+      throw err;
+    }
+  }
+
   // Back-compat for the old webhook-only settings API shape.
   getSettings(): { webhookEnabled: boolean; webhookUrl: string | null } {
     const r = this.row();

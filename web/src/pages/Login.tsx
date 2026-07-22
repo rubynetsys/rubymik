@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { api, ApiError } from '../api';
 import AuthShell, { Field, FormError, SubmitButton } from '../components/AuthShell';
 
-export default function Login({ onDone }: { onDone: () => void }) {
-  const [username, setUsername] = useState('');
+export default function Login({ onDone, onForgot }: { onDone: () => void; onForgot: () => void }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [needsCode, setNeedsCode] = useState(false);
@@ -15,7 +15,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/login', { username, password, ...(needsCode ? { code: code.trim() } : {}) });
+      await api.post('/api/login', { email, password, ...(needsCode ? { code: code.trim() } : {}) });
       onDone();
     } catch (err) {
       const body = err instanceof ApiError ? (err.body as { needsCode?: boolean } | undefined) : undefined;
@@ -36,10 +36,13 @@ export default function Login({ onDone }: { onDone: () => void }) {
         <FormError message={error} />
         {!needsCode ? (
           <>
-            <Field label="Username" value={username} onChange={(e) => setUsername(e.target.value)}
+            <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               autoComplete="username" autoFocus required />
             <Field label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password" required />
+            <div className="text-right">
+              <button type="button" onClick={onForgot} className="text-xs font-semibold text-accent hover:underline">Forgot password?</button>
+            </div>
           </>
         ) : (
           <>

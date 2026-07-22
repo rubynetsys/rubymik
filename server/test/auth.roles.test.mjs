@@ -43,23 +43,23 @@ async function req(port, method, p, { cookie, body } = {}) {
 
 async function setup(f) {
   // first-run creates the admin (role admin), returns its session cookie
-  const r = await req(f.port, 'POST', '/api/setup', { body: { username: 'zzz-admin', password: 'adminpass1' } });
+  const r = await req(f.port, 'POST', '/api/setup', { body: { email: 'admin@zzz.test', password: 'adminpass1' } });
   assert.equal(r.status, 201);
   return r.cookie;
 }
-const login = async (f, u, p) => (await req(f.port, 'POST', '/api/login', { body: { username: u, password: p } }));
+const login = async (f, u, p) => (await req(f.port, 'POST', '/api/login', { body: { email: u, password: p } }));
 
 test('role matrix — reads open to all; writes editor+; user-mgmt admin-only (server-side)', async () => {
   const f = fixture();
   try {
     const admin = await setup(f);
     // admin creates an editor and a viewer
-    const ce = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { username: 'zzz-editor', role: 'editor', password: 'editorpass1' } });
+    const ce = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { email: 'editor@zzz.test', role: 'editor', password: 'editorpass1' } });
     assert.equal(ce.status, 201);
-    const cv = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { username: 'zzz-viewer', role: 'viewer', password: 'viewerpass1' } });
+    const cv = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { email: 'viewer@zzz.test', role: 'viewer', password: 'viewerpass1' } });
     assert.equal(cv.status, 201);
-    const editor = (await login(f, 'zzz-editor', 'editorpass1')).cookie;
-    const viewer = (await login(f, 'zzz-viewer', 'viewerpass1')).cookie;
+    const editor = (await login(f, 'editor@zzz.test', 'editorpass1')).cookie;
+    const viewer = (await login(f, 'viewer@zzz.test', 'viewerpass1')).cookie;
 
     // GET (read) → 200 for all three
     for (const [name, c] of [['admin', admin], ['editor', editor], ['viewer', viewer]]) {
@@ -75,7 +75,7 @@ test('role matrix — reads open to all; writes editor+; user-mgmt admin-only (s
     assert.equal((await req(f.port, 'GET', '/api/users', { cookie: admin })).status, 200, 'admin sees users');
     assert.equal((await req(f.port, 'GET', '/api/users', { cookie: editor })).status, 403, 'EDITOR cannot reach user mgmt (403)');
     assert.equal((await req(f.port, 'GET', '/api/users', { cookie: viewer })).status, 403, 'viewer cannot reach user mgmt (403)');
-    assert.equal((await req(f.port, 'POST', '/api/users', { cookie: editor, body: { username: 'sneak', role: 'admin' } })).status, 403, 'editor cannot create users');
+    assert.equal((await req(f.port, 'POST', '/api/users', { cookie: editor, body: { email: 'sneak@zzz.test', role: 'admin' } })).status, 403, 'editor cannot create users');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
 
@@ -83,16 +83,16 @@ test('passwords are argon2id and never stored/echoed in plaintext', async () => 
   const f = fixture();
   try {
     const admin = await setup(f);
-    const created = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { username: 'zzz-e2', role: 'editor', password: 'secretpass99' } });
+    const created = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { email: 'e2@zzz.test', role: 'editor', password: 'secretpass99' } });
     assert.equal(created.status, 201);
-    const dump = JSON.stringify(f.db.prepare('SELECT username, password_hash, role FROM users').all());
+    const dump = JSON.stringify(f.db.prepare('SELECT username, email, password_hash, role FROM users').all());
     assert.ok(dump.includes('$argon2id$'), 'stored hashes are argon2id');
     assert.ok(!dump.includes('secretpass99') && !dump.includes('adminpass1'), 'no plaintext password anywhere in the users table');
     // a generated password is returned exactly once and is argon2id at rest
-    const gen = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { username: 'zzz-gen', role: 'viewer' } });
+    const gen = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { email: 'gen@zzz.test', role: 'viewer' } });
     assert.equal(gen.status, 201);
     assert.ok(typeof gen.json.generatedPassword === 'string' && gen.json.generatedPassword.length >= 12, 'a generated password is returned once');
-    const stored = f.db.prepare("SELECT password_hash FROM users WHERE username = 'zzz-gen'").get();
+    const stored = f.db.prepare("SELECT password_hash FROM users WHERE email = 'gen@zzz.test'").get();
     assert.ok(stored.password_hash.startsWith('$argon2id$') && !stored.password_hash.includes(gen.json.generatedPassword), 'generated password stored only as an argon2id hash');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
@@ -101,25 +101,25 @@ test('session invalidation on disable / role change / password reset', async () 
   const f = fixture();
   try {
     const admin = await setup(f);
-    const ed = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { username: 'zzz-ed3', role: 'editor', password: 'editorpass1' } });
+    const ed = await req(f.port, 'POST', '/api/users', { cookie: admin, body: { email: 'ed3@zzz.test', role: 'editor', password: 'editorpass1' } });
     const editorId = ed.json.id;
-    let editor = (await login(f, 'zzz-ed3', 'editorpass1')).cookie;
+    let editor = (await login(f, 'ed3@zzz.test', 'editorpass1')).cookie;
     assert.equal((await req(f.port, 'GET', '/api/devices', { cookie: editor })).status, 200, 'editor session works');
 
     // disable → their live session dies
     assert.equal((await req(f.port, 'PATCH', `/api/users/${editorId}`, { cookie: admin, body: { disabled: true } })).status, 200);
     assert.notEqual((await req(f.port, 'GET', '/api/devices', { cookie: editor })).status, 200, 'disabled editor session no longer authorised');
-    assert.equal((await login(f, 'zzz-ed3', 'editorpass1')).status, 403, 'disabled account cannot log in');
+    assert.equal((await login(f, 'ed3@zzz.test', 'editorpass1')).status, 403, 'disabled account cannot log in');
 
     // re-enable + reset password → old creds dead, new creds work
     await req(f.port, 'PATCH', `/api/users/${editorId}`, { cookie: admin, body: { disabled: false } });
     const reset = await req(f.port, 'POST', `/api/users/${editorId}/reset-password`, { cookie: admin, body: {} });
     assert.equal(reset.status, 200);
-    assert.equal((await login(f, 'zzz-ed3', 'editorpass1')).status, 401, 'old password no longer works');
-    assert.equal((await login(f, 'zzz-ed3', reset.json.generatedPassword)).status, 200, 'the reset password works');
+    assert.equal((await login(f, 'ed3@zzz.test', 'editorpass1')).status, 401, 'old password no longer works');
+    assert.equal((await login(f, 'ed3@zzz.test', reset.json.generatedPassword)).status, 200, 'the reset password works');
 
     // role change also invalidates sessions
-    editor = (await login(f, 'zzz-ed3', reset.json.generatedPassword)).cookie;
+    editor = (await login(f, 'ed3@zzz.test', reset.json.generatedPassword)).cookie;
     await req(f.port, 'PATCH', `/api/users/${editorId}`, { cookie: admin, body: { role: 'viewer' } });
     assert.notEqual((await req(f.port, 'GET', '/api/fleet', { cookie: editor })).status, 200, 'role change dropped the old session');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
@@ -129,7 +129,7 @@ test('last-active-admin cannot be demoted, disabled, or deleted', async () => {
   const f = fixture();
   try {
     const admin = await setup(f);
-    const meId = (f.db.prepare("SELECT id FROM users WHERE username='zzz-admin'").get()).id;
+    const meId = (f.db.prepare("SELECT id FROM users WHERE email='admin@zzz.test'").get()).id;
     assert.equal((await req(f.port, 'PATCH', `/api/users/${meId}`, { cookie: admin, body: { role: 'viewer' } })).status, 400, 'cannot demote self / last admin');
     assert.equal((await req(f.port, 'DELETE', `/api/users/${meId}`, { cookie: admin })).status, 400, 'cannot delete self');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }

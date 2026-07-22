@@ -16,6 +16,20 @@ third-party service**. `docker compose up -d`, add a router, done.
 > image with a migration-safe upgrade path. See the [roadmap](#roadmap) for what is
 > still deliberately gated (e.g. live fleet-wide RouterOS upgrades).
 
+## Why I built this
+
+I touch MikroTik routers every single day. I love these boxes — but managing a fleet of them means Winbox windows everywhere, and one wrong bridge or VLAN change on a remote site means a drive or a very awkward phone call.
+
+There are other tools out there, and some of them are good. But I never found one that did what I actually needed end to end — full config (firewall, NAT, VPN, queues, PPPoE, bridges/VLANs, DHCP, wireless), automatic config snapshots before and after every change, diffs, restore, updates — and, most importantly, one that refuses to let you cut off your own management path. Every write in RubyMIK goes through guards and a dead-man check, because I've locked myself out of enough routers for one lifetime.
+
+So this started as a fun side project to manage my own routers, and it grew into something I now rely on daily. I'm sharing it because it might help you too.
+
+Honest disclaimer: this is not a perfect app. It's built for my needs, by one person, and there will be rough edges. But it's free, it's self-hosted (your router credentials stay on your server), and it does what it says.
+
+Found a bug? Want a feature? Open to a collab, or just want to tell me it helped? Email me: ray@rubynet.co.za. If RubyMIK saved you a site visit and you feel like buying me a coffee, there's a link above — no pressure.
+
+— Ray
+
 **What you get today**
 
 - **Fleet overview** — every device across every site on one screen: status

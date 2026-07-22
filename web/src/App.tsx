@@ -6,6 +6,9 @@ import { RubyDiamond } from './components/Logo';
 import Layout from './components/Layout';
 import Setup from './pages/Setup';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import ClaimEmail from './pages/ClaimEmail';
 import Fleet from './pages/Fleet';
 import Topology from './pages/Topology';
 import Alerts from './pages/Alerts';
@@ -22,6 +25,8 @@ import Users from './pages/Users';
 import SelfBackup from './pages/SelfBackup';
 import Account from './pages/Account';
 import Audit from './pages/Audit';
+import Notifications from './pages/Notifications';
+import Updates from './pages/Updates';
 import { applyTheme } from './theme';
 import { MeContext, type Me } from './me';
 
@@ -29,6 +34,7 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [publicView, setPublicView] = useState<'login' | 'forgot'>('login');
 
   const refresh = useCallback(async () => {
     try {
@@ -40,8 +46,8 @@ export default function App() {
       const def = st.installDefault ?? { theme: 'ruby-light', accent: null };
       if (st.authenticated) {
         try {
-          const meRes = await api.get<{ username: string; role: Me['role']; twoFactor: boolean; theme: string | null; accent: string | null }>('/api/me');
-          setMe({ username: meRes.username, role: meRes.role ?? 'admin', twoFactor: !!meRes.twoFactor });
+          const meRes = await api.get<{ email: string | null; username: string; needsEmailClaim: boolean; role: Me['role']; twoFactor: boolean; theme: string | null; accent: string | null }>('/api/me');
+          setMe({ email: meRes.email, username: meRes.username, needsEmailClaim: !!meRes.needsEmailClaim, role: meRes.role ?? 'admin', twoFactor: !!meRes.twoFactor });
           applyTheme(meRes.theme ?? def.theme, meRes.accent ?? def.accent);
         } catch { setMe(null); applyTheme(def.theme, def.accent); }
       } else {
@@ -80,10 +86,19 @@ export default function App() {
   }
 
   if (status.needsSetup) return <Setup onDone={refresh} />;
-  if (!status.authenticated) return <Login onDone={refresh} />;
+  if (!status.authenticated) {
+    // Public password-reset link (emailed): /reset-password?token=… works without a session.
+    const token = new URLSearchParams(window.location.search).get('token');
+    if (window.location.pathname.startsWith('/reset-password') && token) {
+      return <ResetPassword token={token} onDone={() => { window.history.replaceState({}, '', '/'); setPublicView('login'); void refresh(); }} />;
+    }
+    if (publicView === 'forgot') return <ForgotPassword onBack={() => setPublicView('login')} />;
+    return <Login onDone={refresh} onForgot={() => setPublicView('forgot')} />;
+  }
+  if (me?.needsEmailClaim) return <ClaimEmail onDone={refresh} />;
 
   return (
-    <MeContext.Provider value={me ?? { username: '', role: 'admin', twoFactor: false }}>
+    <MeContext.Provider value={me ?? { email: null, username: '', needsEmailClaim: false, role: 'admin', twoFactor: false }}>
     <BrowserRouter>
       <Routes>
         {/* Wallboard is full-screen with no app chrome, so it lives OUTSIDE Layout. */}
@@ -105,6 +120,8 @@ export default function App() {
           <Route path="/remote-access" element={<RemoteAccess />} />
           <Route path="/users" element={<Users />} />
           <Route path="/backup" element={<SelfBackup />} />
+          <Route path="/settings/notifications" element={<Notifications />} />
+          <Route path="/settings/updates" element={<Updates />} />
           <Route path="/account" element={<Account onChanged={refresh} />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/" replace />} />

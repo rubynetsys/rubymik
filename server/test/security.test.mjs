@@ -107,15 +107,15 @@ test('401 sweep — protected endpoints refuse the unauthenticated', async () =>
 test('lockout — 5 bad logins → 429, audited; a good password is then refused; other account still works', async () => {
   const f = fixture();
   try {
-    await req(f.port, 'POST', '/api/setup', { body: { username: 'zzz-admin', password: 'adminpass1' } });
+    await req(f.port, 'POST', '/api/setup', { body: { email: 'admin@zzz.test', password: 'adminpass1' } });
     await req(f.port, 'POST', '/api/setup', { body: {} }); // no-op (already set up)
     // 5 wrong attempts
     for (let i = 0; i < 5; i++) {
-      const r = await req(f.port, 'POST', '/api/login', { body: { username: 'zzz-admin', password: 'wrong' } });
+      const r = await req(f.port, 'POST', '/api/login', { body: { email: 'admin@zzz.test', password: 'wrong' } });
       assert.equal(r.status, 401, `attempt ${i + 1} is 401`);
     }
     // now locked — even the CORRECT password is refused with 429 + Retry-After
-    const locked = await req(f.port, 'POST', '/api/login', { body: { username: 'zzz-admin', password: 'adminpass1' } });
+    const locked = await req(f.port, 'POST', '/api/login', { body: { email: 'admin@zzz.test', password: 'adminpass1' } });
     assert.equal(locked.status, 429, 'locked out → 429');
     assert.ok(Number(locked.retryAfter) > 0, 'Retry-After set');
     // audited
@@ -123,7 +123,7 @@ test('lockout — 5 bad logins → 429, audited; a good password is then refused
     assert.ok(audit >= 1, 'lockout is audited');
     // a different account from the same IP is NOT locked (proves per-account keying)
     // (create one first via the admin? admin is locked; instead assert the limiter key isolation via a fresh username login attempt returns 401 not 429)
-    const other = await req(f.port, 'POST', '/api/login', { body: { username: 'someone-else', password: 'nope' } });
+    const other = await req(f.port, 'POST', '/api/login', { body: { email: 'someone-else@zzz.test', password: 'nope' } });
     assert.equal(other.status, 401, 'a different username is not swept into the lockout');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
@@ -132,14 +132,14 @@ test('Secure cookie — omitted on plain HTTP, added behind an HTTPS proxy', asy
   // plain HTTP (no trust proxy) → no Secure
   let f = fixture({ trustProxy: false });
   try {
-    const r = await req(f.port, 'POST', '/api/setup', { body: { username: 'zzz-a', password: 'adminpass1' } });
+    const r = await req(f.port, 'POST', '/api/setup', { body: { email: 'a@zzz.test', password: 'adminpass1' } });
     assert.ok(/HttpOnly/i.test(r.setCookie) && /SameSite=Lax/i.test(r.setCookie), 'HttpOnly + SameSite always');
     assert.ok(!/;\s*Secure/i.test(r.setCookie), 'no Secure on plain HTTP');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
   // behind a trusted proxy presenting X-Forwarded-Proto: https → Secure
   f = fixture({ trustProxy: true });
   try {
-    const r = await req(f.port, 'POST', '/api/setup', { body: { username: 'zzz-b', password: 'adminpass1' }, headers: { 'X-Forwarded-Proto': 'https' } });
+    const r = await req(f.port, 'POST', '/api/setup', { body: { email: 'b@zzz.test', password: 'adminpass1' }, headers: { 'X-Forwarded-Proto': 'https' } });
     assert.ok(/;\s*Secure/i.test(r.setCookie), 'Secure added when the request arrived over HTTPS');
   } finally { f.server.close(); f.db.close(); fs.rmSync(f.dir, { recursive: true, force: true }); }
 });

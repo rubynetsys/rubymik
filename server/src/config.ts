@@ -38,6 +38,9 @@ export interface Config {
    *  reverse proxy so X-Forwarded-Proto/For are honoured (Secure cookie, real client
    *  IP for rate-limiting). false | true | <hops> | a subnet/keyword string. */
   trustProxy: boolean | number | string;
+  /** P40: the externally-reachable base URL (e.g. https://rubymik.example.com), used
+   *  to build password-reset links. Falls back to the request's own host. */
+  publicUrl: string | undefined;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -107,7 +110,12 @@ export function loadConfig(): Config {
 
   const trustProxy = parseTrustProxy(process.env.RUBYMIK_TRUST_PROXY);
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl, trustProxy };
+  const publicUrl = process.env.RUBYMIK_PUBLIC_URL ? process.env.RUBYMIK_PUBLIC_URL.trim().replace(/\/$/, '') : undefined;
+  if (publicUrl !== undefined && !/^https?:\/\//i.test(publicUrl)) {
+    throw new Error('RUBYMIK_PUBLIC_URL must be an http(s) URL.');
+  }
+
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl, trustProxy, publicUrl };
 }
 
 /** RUBYMIK_TRUST_PROXY: unset/false/0 → off; true/1 → trust the immediate proxy;

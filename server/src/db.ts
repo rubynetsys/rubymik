@@ -430,6 +430,27 @@ const MIGRATIONS: string[] = [
      updated_at TEXT NOT NULL
    );
    INSERT INTO app_update_config (id, enabled, url, updated_at) VALUES (1, 1, NULL, datetime('now'))`,
+
+  // P40: email is the identity. The column is nullable so existing accounts (the
+  // first admin created before P40) migrate cleanly and CLAIM their email on next
+  // login; a PARTIAL unique index enforces uniqueness only for set emails (SQLite
+  // treats NULLs as distinct, so multiple un-claimed accounts coexist). New accounts
+  // always set it. Stored lowercased.
+  `ALTER TABLE users ADD COLUMN email TEXT;
+   CREATE UNIQUE INDEX idx_users_email ON users(email) WHERE email IS NOT NULL`,
+
+  // P40: password-reset tokens (forgot-password). The raw 32-byte token is emailed;
+  // only its sha256 is stored. Single-use (used_at), 30-min expiry (expires_at).
+  `CREATE TABLE password_reset_tokens (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     token_hash TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     expires_at TEXT NOT NULL,
+     used_at TEXT
+   );
+   CREATE INDEX idx_prt_user ON password_reset_tokens(user_id);
+   CREATE INDEX idx_prt_hash ON password_reset_tokens(token_hash)`,
 ];
 
 /** The total number of migrations this build knows about — the schema version a

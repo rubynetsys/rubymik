@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
-import NotificationChannels from '../components/NotificationChannels';
 import {
   fmtAgo, fmtDuration,
   type Alert, type AlertRule, type AlertSeverity, type NotificationLogEntry, type Site,
@@ -300,8 +299,6 @@ function SettingsTab() {
           </table>
         </div>
       </section>
-
-      <NotificationChannels />
     </div>
   );
 }

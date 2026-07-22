@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Bell, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Rocket, Router as RouterIcon, ScrollText, Server, UsersRound, Waypoints, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Bell, BellRing, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Rocket, Router as RouterIcon, ScrollText, Server, Settings as SettingsIcon, UsersRound, Waypoints, Wand2, X } from 'lucide-react';
 import { api } from '../api';
 import type { AlertSummary, BackupStatus, UpdateStatus } from '../types';
 import { useMe } from '../me';
@@ -18,9 +18,16 @@ const NAV: Array<{ to: string; label: string; icon: typeof Bell; adminOnly?: boo
   { to: '/add-device', label: 'Add device', icon: Wand2, writeOnly: true },
   { to: '/sites', label: 'Sites', icon: Building2 },
   { to: '/remote-access', label: 'Remote Access', icon: RadioTower },
-  { to: '/users', label: 'Users', icon: UsersRound, adminOnly: true },
-  { to: '/backup', label: 'Backup', icon: DatabaseBackup, adminOnly: true },
   { to: '/audit', label: 'Audit', icon: ScrollText },
+];
+
+// P40: a discoverable Settings section (admin-only). Notification channels used to be
+// buried at the bottom of the Alerts page — now they have a home.
+const SETTINGS_NAV: Array<{ to: string; label: string; icon: typeof Bell }> = [
+  { to: '/settings/notifications', label: 'Notifications', icon: BellRing },
+  { to: '/backup', label: 'Backup', icon: DatabaseBackup },
+  { to: '/settings/updates', label: 'Updates', icon: Rocket },
+  { to: '/users', label: 'Users', icon: UsersRound },
 ];
 
 const SUMMARY_REFRESH_MS = 15_000;
@@ -89,16 +96,36 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               )}
             </NavLink>
           ))}
+          {me.role === 'admin' && (
+            <div className="pt-3">
+              <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-sidebar-idle/50">
+                <SettingsIcon className="h-3 w-3" /> Settings
+              </div>
+              {SETTINGS_NAV.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-accent/15 text-sidebar-fg shadow-[inset_2px_0_0_0_var(--color-accent-hover)]'
+                        : 'text-sidebar-idle hover:bg-sidebar-fg/10 hover:text-sidebar-hover'
+                    }`}
+                >
+                  <Icon className="h-4.5 w-4.5" />
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          )}
         </nav>
         <div className="space-y-1 border-t border-sidebar-fg/10 px-3 py-3">
           <ThemePicker />
           <div className="flex items-center justify-between px-1">
             <NavLink to="/account" title="Your account" className="flex items-center gap-2.5 overflow-hidden rounded-md p-1 hover:bg-sidebar-fg/10">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-inverse">
-                {(me.username[0] ?? '?').toUpperCase()}
+                {((me.email ?? me.username)[0] ?? '?').toUpperCase()}
               </div>
               <div className="min-w-0">
-                <div className="truncate text-sm text-sidebar-idle">{me.username}</div>
+                <div className="truncate text-sm text-sidebar-idle">{me.email ?? me.username}</div>
                 <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-sidebar-idle/70">{me.role}</div>
               </div>
             </NavLink>

@@ -130,6 +130,7 @@ automatically) or in the `environment:` block.
 | `RUBYMIK_SELFBACKUP_KEEP` | `28` | DB self-backups kept locally (7 days @ 6h). |
 | `RUBYMIK_UPDATE_URL` | built-in | Override the daily update-check URL (or point at a mirror). Turn the check off in-app. |
 | `RUBYMIK_TRUST_PROXY` | `false` | Enable when behind a TLS-terminating reverse proxy so `X-Forwarded-Proto`/`For` are honoured (`Secure` cookie, real client IP for rate-limiting). `true` \| a hop count \| a subnet/keyword (see §4b). |
+| `RUBYMIK_PUBLIC_URL` | *(the request's own host)* | The externally-reachable base URL (e.g. `https://rubymik.example.com`) used to build **password-reset links** in emails. Set it when the URL users hit differs from what the container sees. |
 | `RUBYMIK_DEFAULT_THEME` | `ruby-light` | Instance default theme (a user's own choice overrides it). |
 | `RUBYMIK_DEFAULT_ACCENT` | *(unset)* | Instance default accent colour. |
 
@@ -194,6 +195,45 @@ services:
 
 After wiring it up, confirm HTTPS end-to-end: log in over `https://…` and check the
 session cookie carries `Secure` (browser dev-tools → Application → Cookies).
+
+---
+
+## 4c. Password reset & admin recovery
+
+RubyMIK signs users in by **email**. There are two recovery paths.
+
+**Forgot password (email).** If SMTP is configured (Settings → Notifications), the
+sign-in page's **"Forgot password?"** link emails a single-use, 30-minute reset link.
+Set `RUBYMIK_PUBLIC_URL` so the link points at the address your users actually use.
+The response is deliberately identical whether or not the email exists (no account
+enumeration), and requests are rate-limited.
+
+**Locked out with no email (self-hosted recovery).** If SMTP isn't set up — or the
+*only* admin is locked out — reset an account from the server's shell:
+
+```bash
+docker exec -it rubymik node scripts/reset-admin.mjs
+```
+
+It lists the accounts, lets you pick one, sets a new password using RubyMIK's own
+argon2id hashing, optionally clears that account's 2FA, invalidates its sessions,
+audits the action, and prints the new password **once**. (A brute-force lockout is
+in-memory; restart the container to clear it.)
+
+> **Tip:** create a **second admin** so a lockout of one is always recoverable from
+> the other without touching a shell.
+
+---
+
+## 4d. Running more than one instance on one host
+
+The shipped `docker-compose.yml` intentionally has **no hard-coded project `name:`**,
+so Compose derives the project from the directory — a copy in a *different* directory
+gets its **own** isolated volumes (a second instance can never silently attach to, or
+`docker compose down -v` wipe, another install's data). It keeps a fixed
+`container_name: rubymik` so a naive second instance fails *loudly* on the name clash
+rather than sharing state. To genuinely run two on one host, give the second its own
+directory, and override `container_name`, `RUBYMIK_PORT`, and `RUBYMIK_WEBFIG_PORT`.
 
 ---
 

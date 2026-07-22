@@ -35,6 +35,8 @@ COPY --from=serverbuild /srv/package.json ./package.json
 COPY --from=serverbuild /srv/node_modules ./node_modules
 COPY --from=serverbuild /srv/dist ./dist
 COPY --from=webbuild /web/dist ./public
+# P40: the supported admin-recovery CLI (docker exec rubymik node scripts/reset-admin.mjs).
+COPY scripts/reset-admin.mjs ./scripts/reset-admin.mjs
 RUN mkdir -p /data /offhost && chown node:node /data /offhost /app
 USER node
 VOLUME /data

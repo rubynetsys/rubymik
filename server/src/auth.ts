@@ -42,8 +42,42 @@ export const ROLE_RANK: Record<Role, number> = { viewer: 1, editor: 2, admin: 3 
 export interface SessionUser {
   id: number;
   username: string;
+  /** P40: email is the identity. Null only for a pre-P40 account that hasn't
+   *  claimed one yet (→ the one-time claim screen). */
+  email: string | null;
   role: Role;
   disabled: boolean;
+}
+
+// --- P40: email as identity ---
+
+/** Trim + lowercase. Returns null if it isn't a plausible email. */
+export function normalizeEmail(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const e = raw.trim().toLowerCase();
+  // Deliberately permissive (one @, a dot in the domain, no spaces) — this is a
+  // self-hosted admin-managed system, not a public sign-up needing RFC 5322.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) || e.length > 254) return null;
+  return e;
+}
+
+/** The display/audit identity for a user: their email once claimed, else username. */
+export function identityOf(u: { email: string | null; username: string }): string {
+  return u.email ?? u.username;
+}
+
+/** Resolve a login identifier to a user. Primary path: email (normalized). Legacy
+ *  path: a pre-P40 account with no email yet, matched by its old username so it can
+ *  log in once and claim an email. */
+export function findLoginUser(db: DatabaseSync, identifier: string): { id: number; username: string; email: string | null; password_hash: string; disabled: number; totp_enabled: number; totp_secret: string | null } | undefined {
+  const email = normalizeEmail(identifier);
+  type U = { id: number; username: string; email: string | null; password_hash: string; disabled: number; totp_enabled: number; totp_secret: string | null };
+  if (email) {
+    const byEmail = db.prepare('SELECT id, username, email, password_hash, disabled, totp_enabled, totp_secret FROM users WHERE email = ?').get(email) as U | undefined;
+    if (byEmail) return byEmail;
+  }
+  // legacy fallback: an un-claimed account keyed by its old username
+  return db.prepare('SELECT id, username, email, password_hash, disabled, totp_enabled, totp_secret FROM users WHERE email IS NULL AND username = ?').get(identifier.trim()) as U | undefined;
 }
 
 /** Drop every session for a user (on disable, role change, or password change). */
@@ -93,13 +127,13 @@ export function getSessionUser(db: DatabaseSync, req: Request): SessionUser | un
   const sid = getSessionId(req);
   if (!sid) return undefined;
   const row = db.prepare(`
-    SELECT u.id AS id, u.username AS username, u.role AS role, u.disabled AS disabled
+    SELECT u.id AS id, u.username AS username, u.email AS email, u.role AS role, u.disabled AS disabled
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.id = ? AND s.expires_at > ?
-  `).get(sid, new Date().toISOString()) as { id: number; username: string; role: string; disabled: number } | undefined;
+  `).get(sid, new Date().toISOString()) as { id: number; username: string; email: string | null; role: string; disabled: number } | undefined;
   if (!row) return undefined;
   const role: Role = row.role === 'editor' || row.role === 'viewer' ? row.role : 'admin';
-  return { id: row.id, username: row.username, role, disabled: row.disabled === 1 };
+  return { id: row.id, username: row.username, email: row.email, role, disabled: row.disabled === 1 };
 }
 
 export function setSessionCookie(req: Request, res: Response, sessionId: string): void {

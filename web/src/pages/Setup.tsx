@@ -3,7 +3,7 @@ import { api } from '../api';
 import AuthShell, { Field, FormError, SubmitButton } from '../components/AuthShell';
 
 export default function Setup({ onDone }: { onDone: () => void }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export default function Setup({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await api.post('/api/setup', { username, password });
+      await api.post('/api/setup', { email, password });
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -33,8 +33,8 @@ export default function Setup({ onDone }: { onDone: () => void }) {
     >
       <form onSubmit={(e) => void submit(e)} className="space-y-4">
         <FormError message={error} />
-        <Field label="Username" value={username} onChange={(e) => setUsername(e.target.value)}
-          autoComplete="username" autoFocus required minLength={3} />
+        <Field label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+          autoComplete="username" autoFocus required placeholder="you@example.com" />
         <Field label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password" required minLength={8} placeholder="At least 8 characters" />
         <Field label="Confirm password" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}

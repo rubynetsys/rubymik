@@ -1,10 +1,16 @@
-name: rubymik
-
+# No hard-coded `name:` on purpose. The Compose project name defaults to THIS
+# directory's name, so a copy of this file in a different directory gets its OWN
+# isolated volumes — a second instance can never silently attach (and `down -v`
+# can never wipe) another install's data. Run each instance from its own directory;
+# to run two on one host, give the second a different dir AND a different
+# `container_name` + host ports. See README-DEPLOY.md § Running more than one instance.
 services:
   rubymik:
     # The published image. `docker compose pull && docker compose up -d` updates it.
     # Override RUBYMIK_IMAGE to pin a specific version tag or a locally-built image.
     image: ${RUBYMIK_IMAGE:-ghcr.io/rubynetsys/rubymik:latest}
+    # A fixed container name so `docker exec rubymik …` works and a naive second
+    # instance fails LOUDLY on the name clash instead of silently sharing state.
     container_name: rubymik
     restart: unless-stopped
     init: true
@@ -34,6 +40,8 @@ services:
       # P39 — set when behind a TLS-terminating reverse proxy (see README-DEPLOY §4b).
       # Never expose the port below raw to the internet.
       RUBYMIK_TRUST_PROXY: ${RUBYMIK_TRUST_PROXY:-}
+      # P40 — base URL for password-reset links in emails (else the request's host).
+      RUBYMIK_PUBLIC_URL: ${RUBYMIK_PUBLIC_URL:-}
     volumes:
       - rubymik-data:/data
       # A SECOND, separate volume as the off-host copy stand-in (a mounted path).

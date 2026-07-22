@@ -3,6 +3,8 @@
   "version": "0.9.1",
   "private": true,
   "description": "Modern, self-hosted monitoring dashboard for MikroTik RouterOS devices",
+  "license": "MIT",
+  "author": "Ray Roberts / Rubynet (Pty) Ltd",
   "scripts": {
     "dev:server": "npm --prefix server run dev",
     "dev:web": "npm --prefix web run dev",
