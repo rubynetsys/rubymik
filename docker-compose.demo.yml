@@ -18,15 +18,20 @@ services:
       # published demo login is a VIEWER (demo@rubymik.com), created by the seed.
     volumes:
       - demo-data:/data                       # dedicated volume, wiped nightly
-    ports:
-      - "127.0.0.1:8093:8080"                 # localhost only; tunnel reaches it via demonet
+    # No published port: demonet is `internal: true`, so host port-publishing does not
+    # wire up. The tunnel reaches the app at demo:8080 over demonet; local admin/seed
+    # access is via the container's demonet bridge IP (host↔container on the bridge is
+    # unaffected by `internal`, which only removes the container's route OUT).
     networks: [demonet]
 
   chr:
-    # RouterOS CHR (the ONLY device the demo manages), seeded with synthetic zzz-*
-    # config. Runs under qemu — needs /dev/kvm for speed. THIS HOST HAS NO KVM, so it
-    # would run under TCG (slow + CPU-heavy) — PENDING-RAY: decide to run it here with
-    # resource limits, or host the CHR on a KVM-capable box. Start with `--profile chr`.
+    # RouterOS CHR — INCOMPATIBLE with this demo's `internal: true` blast-radius network:
+    # its entrypoint (generate-dhcpd-conf.py) requires a DEFAULT ROUTE on the container's
+    # network, which `internal: true` deliberately denies (→ "ValueError: no default
+    # route"), and it needs /dev/net/tun (absent here) plus /dev/kvm (absent → slow TCG).
+    # Left profile-gated so it NEVER starts by default. A live demo device that honours the
+    # internal net must be a synthetic RouterOS-REST responder container ON demonet (needs
+    # no default route) — see docs/P41-PENDING-RAY.md. Do NOT enable `--profile chr` here.
     image: evilfreelancer/docker-routeros:7.15
     container_name: rubymik-demo-chr
     restart: unless-stopped
@@ -57,4 +62,4 @@ networks:
   demonet:
     internal: true      # the blast radius: no LAN / other-network / internet route
   tunnelnet:            # only the tunnel touches this (outbound to Cloudflare)
-    profiles: [tunnel]
+    # created only when the `tunnel` profile is active (the sole service that uses it)
