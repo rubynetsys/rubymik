@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import { CATALOG, CATEGORY_META, MODEL_COUNT } from '../catalog';
 
 /**
  * New-router provisioning wizard (P11). Builds a complete baseline for a blank
@@ -25,20 +26,35 @@ interface Spec {
   remote: boolean;
 }
 
-const MODELS: Record<string, string[]> = {
-  'hEX / hEX S (RB750/E60)': ['ether1', 'ether2', 'ether3', 'ether4', 'ether5'],
-  'hAP ac²': ['ether1', 'ether2', 'ether3', 'ether4', 'ether5', 'wlan1', 'wlan2'],
-  'RB4011': ['ether1', 'ether2', 'ether3', 'ether4', 'ether5', 'ether6', 'ether7', 'ether8', 'ether9', 'ether10', 'sfp-sfpplus1'],
-};
+// Port lists come from the data-driven catalogue (web/src/catalog.ts) — the full
+// current MikroTik line — plus an "Other / not listed" fallback with a manual count.
+const MODEL_PORTS: Record<string, string[]> = Object.fromEntries(CATALOG.map((c) => [c.model, c.ports]));
+const OTHER_MODEL = 'Other / not listed';
+const DEFAULT_MODEL = 'hEX (RB750Gr3)';
+/** Select options grouped by category via disabled header rows. */
+const MODEL_OPTIONS: { value: string; label: string; disabled?: boolean }[] = (() => {
+  const opts: { value: string; label: string; disabled?: boolean }[] = [];
+  for (const cat of CATEGORY_META) {
+    const items = CATALOG.filter((c) => c.category === cat.id);
+    if (!items.length) continue;
+    opts.push({ value: `__hdr_${cat.id}`, label: `—— ${cat.plural} ——`, disabled: true });
+    for (const it of items) opts.push({ value: it.model, label: it.model });
+  }
+  opts.push({ value: '__hdr_other', label: '——', disabled: true });
+  opts.push({ value: OTHER_MODEL, label: OTHER_MODEL });
+  return opts;
+})();
+const portsForCount = (n: number): string[] => Array.from({ length: Math.max(1, n) }, (_, i) => `ether${i + 1}`);
 const input = 'w-full rounded-lg border border-border-strong px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
 const STEPS = ['Basics', 'Interfaces & WAN', 'LAN & firewall', 'Review', 'Apply'];
 
 export default function Provision() {
   const [step, setStep] = useState(0);
-  const [model, setModel] = useState('hEX / hEX S (RB750/E60)');
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [otherPorts, setOtherPorts] = useState(5);
   const [spec, setSpec] = useState<Spec>({
     identity: '', remote: false, firewall: 'standard',
-    interfaces: MODELS['hEX / hEX S (RB750/E60)'].map((name, i) => ({ name, role: i === 0 ? 'wan' : 'lan' as Role })),
+    interfaces: MODEL_PORTS[DEFAULT_MODEL].map((name, i) => ({ name, role: i === 0 ? 'wan' : 'lan' as Role })),
     wan: { type: 'dhcp' },
     lan: { routerIp: '192.168.88.1', prefix: 24 },
     dhcp: { enabled: true, poolStart: '192.168.88.10', poolEnd: '192.168.88.254', dns: '1.1.1.1', leaseTime: '1h' },
@@ -51,10 +67,12 @@ export default function Provision() {
   const [applyOut, setApplyOut] = useState<any>(null);
   const set = (patch: Partial<Spec>) => setSpec((s) => ({ ...s, ...patch }));
 
-  function pickModel(m: string) {
-    setModel(m);
-    if (MODELS[m]) set({ interfaces: MODELS[m].map((name, i) => ({ name, role: i === 0 ? 'wan' : 'lan' as Role })) });
+  function pickModel(mName: string, count?: number) {
+    setModel(mName);
+    const ports = mName === OTHER_MODEL ? portsForCount(count ?? otherPorts) : MODEL_PORTS[mName];
+    if (ports) set({ interfaces: ports.map((name, i) => ({ name, role: i === 0 ? 'wan' : 'lan' as Role })) });
   }
+  const setOtherCount = (n: number) => { setOtherPorts(n); pickModel(OTHER_MODEL, n); };
   async function validate() {
     setBusy(true); setErr(null);
     try { setValidation(await api.post('/api/provision/validate', { spec })); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -84,7 +102,7 @@ export default function Provision() {
         </ol>
         {err && <div className="mb-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
 
-        {step === 0 && <Basics spec={spec} set={set} model={model} pickModel={pickModel} />}
+        {step === 0 && <Basics spec={spec} set={set} model={model} pickModel={pickModel} otherPorts={otherPorts} setOtherCount={setOtherCount} />}
         {step === 1 && <InterfacesWan spec={spec} set={set} setSpec={setSpec} />}
         {step === 2 && <LanFirewall spec={spec} set={set} />}
         {step === 3 && <Review spec={spec} validation={validation} busy={busy} revalidate={validate} mode={mode} setMode={setMode} />}
@@ -110,14 +128,21 @@ function Field({ label, children }: { label: string; children: any }) {
   return <label className="block"><span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-fg-dim">{label}</span>{children}</label>;
 }
 
-function Basics({ spec, set, model, pickModel }: any) {
+function Basics({ spec, set, model, pickModel, otherPorts, setOtherCount }: any) {
   return (
     <div className="space-y-4">
       <Title icon={Cpu} title="Router basics" sub="Name it, pick the model (for its port list), and say whether it's local or at a remote site." />
       <Field label="Router identity (name)"><input className={input} value={spec.identity} onChange={(e) => set({ identity: e.target.value })} placeholder="cpt-branch-gw" autoFocus /></Field>
       <Field label="Model (defines the interface list)">
-        <Select className={input} value={model} onChange={pickModel} ariaLabel="Model" options={Object.keys(MODELS).map((m) => ({ value: m, label: m }))} />
+        <Select className={input} value={model} onChange={pickModel} ariaLabel="Model" options={MODEL_OPTIONS} />
+        <span className="mt-1 block text-[11px] text-fg-faint">{MODEL_COUNT} models in the catalogue · pick the closest, or "Other / not listed" to set the port count by hand.</span>
       </Field>
+      {model === OTHER_MODEL && (
+        <Field label="Number of ethernet ports">
+          <input className={input} type="number" min={1} max={64} value={otherPorts}
+            onChange={(e) => setOtherCount(Math.max(1, Math.min(64, Number(e.target.value) || 1)))} />
+        </Field>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <button onClick={() => set({ remote: false })} className={`rounded-xl border p-4 text-left ${!spec.remote ? 'border-accent-border bg-accent-subtle/40' : 'border-border'}`}>
           <Network className="h-6 w-6 text-accent" /><div className="mt-2 font-semibold text-fg">Local router</div><div className="text-sm text-fg-dim">On your network. Mode A (script) or Mode B (live-apply).</div>

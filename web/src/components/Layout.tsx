@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Bell, Building2, HardDriveDownload, LayoutDashboard, LogOut, RadioTower, Router as RouterIcon, ScrollText, Waypoints, Wand2 } from 'lucide-react';
+import { Bell, Building2, LayoutDashboard, LogOut, RadioTower, Router as RouterIcon, ScrollText, Waypoints, Wand2 } from 'lucide-react';
 import { api } from '../api';
 import type { AlertSummary } from '../types';
 import Logo from './Logo';
@@ -11,8 +11,7 @@ const NAV = [
   { to: '/topology', label: 'Topology', icon: Waypoints },
   { to: '/alerts', label: 'Alerts', icon: Bell },
   { to: '/devices', label: 'Devices', icon: RouterIcon },
-  { to: '/onboard', label: 'Onboard', icon: Wand2 },
-  { to: '/provision', label: 'Provision', icon: HardDriveDownload },
+  { to: '/add-device', label: 'Add device', icon: Wand2 },
   { to: '/sites', label: 'Sites', icon: Building2 },
   { to: '/remote-access', label: 'Remote Access', icon: RadioTower },
   { to: '/audit', label: 'Audit', icon: ScrollText },

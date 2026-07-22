@@ -329,6 +329,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_snapshot_failures_router ON snapshot_failures(router_id, created_at);
   `,
+
+  // P27: optional per-device category override (router | switch | ap | other).
+  // NULL means "derive from the polled model" (done in the frontend catalogue).
+  `ALTER TABLE devices ADD COLUMN category TEXT`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

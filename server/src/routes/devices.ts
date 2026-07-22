@@ -26,9 +26,11 @@ interface DeviceRow {
   net_transport?: string | null;
   tunnel_ip?: string | null;
   backups_enabled?: number;
+  category?: string | null;
   created_at: string;
   site_name?: string | null;
   status_state?: string | null;
+  status_model?: string | null;
 }
 
 /** Public shape — credentials never leave the server. */
@@ -47,6 +49,10 @@ function toPublic(row: DeviceRow) {
     siteName: row.site_name ?? null,
     notes: row.notes,
     status: row.status_state ?? null,
+    // Stored category override (nullable) + the last polled model, so the client
+    // can show an effective category (override ?? derive-from-model) and filter.
+    category: row.category ?? null,
+    model: row.status_model ?? null,
     // A device is "manageable" only when it has an explicit write credential.
     manageable: row.write_username_enc !== null && row.write_password_enc !== null,
     createdAt: row.created_at,
@@ -67,7 +73,11 @@ interface DeviceInput {
   /** undefined = leave write cred as-is; '' = explicitly clear; string = set. */
   writeUsername: string | undefined;
   writePassword: string | undefined;
+  /** undefined = leave as-is (edit); null = clear override (derive from model). */
+  category: string | null | undefined;
 }
+
+const CATEGORIES = ['router', 'switch', 'ap', 'other'];
 
 function parseDeviceInput(body: unknown, db: DatabaseSync, opts: { requireName: boolean; requireCreds: boolean }): DeviceInput | string {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -95,7 +105,14 @@ function parseDeviceInput(body: unknown, db: DatabaseSync, opts: { requireName: 
   // when both write fields are present. `null` clears it; undefined leaves it.
   const writeUsername = b.writeUsername === null ? '' : typeof b.writeUsername === 'string' ? b.writeUsername : undefined;
   const writePassword = b.writePassword === null ? '' : typeof b.writePassword === 'string' ? b.writePassword : undefined;
-  return { name, host, port, useTls, siteId, notes, username, password, writeUsername, writePassword };
+  // Category override: null/'' clears it (derive from model); a valid enum sets it.
+  let category: string | null | undefined;
+  if (b.category === null || b.category === '') category = null;
+  else if (typeof b.category === 'string') {
+    if (!CATEGORIES.includes(b.category)) return 'Invalid category.';
+    category = b.category;
+  }
+  return { name, host, port, useTls, siteId, notes, username, password, writeUsername, writePassword, category };
 }
 
 export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): Router {
@@ -103,7 +120,7 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
   router.use(requireAuth(db));
 
   const selectDevice = `
-    SELECT d.*, s.name AS site_name, st.state AS status_state
+    SELECT d.*, s.name AS site_name, st.state AS status_state, st.model AS status_model
     FROM devices d
     LEFT JOIN sites s ON s.id = d.site_id
     LEFT JOIN device_status st ON st.device_id = d.id
@@ -131,8 +148,8 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     const backupsEnabled = (req.body ?? {}).backupsEnabled === false ? 0 : 1;
     const now = new Date().toISOString();
     const result = db.prepare(`
-      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, write_username_enc, write_password_enc, backups_enabled, created_at, updated_at)
-      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devices (name, host, port, transport, use_tls, verify_tls, site_id, notes, username_enc, password_enc, write_username_enc, write_password_enc, backups_enabled, category, created_at, updated_at)
+      VALUES (?, ?, ?, 'rest', ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       input.name, input.host, input.port,
       input.useTls === null ? null : input.useTls ? 1 : 0,
@@ -140,7 +157,7 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       box.encrypt(input.username), box.encrypt(input.password),
       hasWrite ? box.encrypt(input.writeUsername!) : null,
       hasWrite ? box.encrypt(input.writePassword!) : null,
-      backupsEnabled, now, now,
+      backupsEnabled, input.category ?? null, now, now,
     );
     const id = result.lastInsertRowid as number;
     const row = db.prepare(`${selectDevice} WHERE d.id = ?`).get(id) as unknown as DeviceRow;
@@ -187,14 +204,16 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
         writePassEnc = null;
       }
     }
+    // undefined = leave the stored override as-is; null clears it; value sets it.
+    const categoryVal = input.category === undefined ? (existing.category ?? null) : input.category;
     db.prepare(`
       UPDATE devices SET name = ?, host = ?, port = ?, use_tls = ?, site_id = ?, notes = ?,
-        username_enc = ?, password_enc = ?, write_username_enc = ?, write_password_enc = ?, updated_at = ?
+        username_enc = ?, password_enc = ?, write_username_enc = ?, write_password_enc = ?, category = ?, updated_at = ?
       WHERE id = ?
     `).run(
       input.name, input.host, input.port,
       input.useTls === null ? null : input.useTls ? 1 : 0,
-      input.siteId, input.notes, usernameEnc, passwordEnc, writeUserEnc, writePassEnc,
+      input.siteId, input.notes, usernameEnc, passwordEnc, writeUserEnc, writePassEnc, categoryVal,
       new Date().toISOString(), id,
     );
     const row = db.prepare(`${selectDevice} WHERE d.id = ?`).get(id) as unknown as DeviceRow;

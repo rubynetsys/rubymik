@@ -97,13 +97,31 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
     }
 
     const emptyCounts = () => ({ total: 0, up: 0, warning: 0, down: 0, pending: 0 });
-    const summary = emptyCounts();
+    // P27: counts dedupe by host:port, so one physical router entered twice (e.g. the
+    // 172.16.111.1 pair) is counted once. A duplicate's worst *known* status wins
+    // (down > warning > up > pending) so a real problem is never masked by a copy.
+    const STATUS_RANK: Record<string, number> = { down: 3, warning: 2, up: 1, pending: 0 };
+    const dedupeCounts = (list: Array<{ host: string; port: number | null; status: string }>) => {
+      const worst = new Map<string, string>();
+      for (const d of list) {
+        const key = `${d.host}:${d.port ?? ''}`;
+        const cur = worst.get(key);
+        if (cur === undefined || (STATUS_RANK[d.status] ?? 0) > (STATUS_RANK[cur] ?? 0)) worst.set(key, d.status);
+      }
+      const counts = emptyCounts();
+      for (const st of worst.values()) {
+        counts.total++;
+        if (st === 'up') counts.up++;
+        else if (st === 'warning') counts.warning++;
+        else if (st === 'down') counts.down++;
+        else if (st === 'pending') counts.pending++;
+      }
+      return counts;
+    };
 
     const devicesBySite = new Map<number | null, ReturnType<typeof toFleetDevice>[]>();
     function toFleetDevice(row: FleetRow) {
       const { status, reasons } = computeHealth(row);
-      summary.total++;
-      summary[status]++;
       const memUsedPct = row.mem_total && row.mem_free !== null
         ? Math.round(((row.mem_total - row.mem_free) / row.mem_total) * 1000) / 10
         : null;
@@ -141,24 +159,15 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
       list.push(d);
       devicesBySite.set(row.site_id, list);
     }
+    const summary = dedupeCounts([...devicesBySite.values()].flat());
 
     const siteEntries = sites.map((s) => {
       const devices = devicesBySite.get(s.id) ?? [];
-      const counts = emptyCounts();
-      for (const d of devices) {
-        counts.total++;
-        counts[d.status]++;
-      }
-      return { id: s.id, name: s.name, location: s.location, clientName: s.client_name, counts, devices };
+      return { id: s.id, name: s.name, location: s.location, clientName: s.client_name, counts: dedupeCounts(devices), devices };
     });
     const unassigned = devicesBySite.get(null) ?? [];
     if (unassigned.length > 0) {
-      const counts = emptyCounts();
-      for (const d of unassigned) {
-        counts.total++;
-        counts[d.status]++;
-      }
-      siteEntries.push({ id: null as unknown as number, name: 'Unassigned', location: null, clientName: null, counts, devices: unassigned });
+      siteEntries.push({ id: null as unknown as number, name: 'Unassigned', location: null, clientName: null, counts: dedupeCounts(unassigned), devices: unassigned });
     }
 
     res.json({

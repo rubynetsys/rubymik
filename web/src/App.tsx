@@ -15,6 +15,7 @@ import Sites from './pages/Sites';
 import RemoteAccess from './pages/RemoteAccess';
 import Onboard from './pages/Onboard';
 import Provision from './pages/Provision';
+import AddDevice from './pages/AddDevice';
 import Audit from './pages/Audit';
 import { applyTheme } from './theme';
 
@@ -80,8 +81,12 @@ export default function App() {
           <Route path="/topology" element={<Topology />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/devices" element={<Devices />} />
-          <Route path="/onboard" element={<Onboard />} />
-          <Route path="/provision" element={<Provision />} />
+          <Route path="/add-device" element={<AddDevice />} />
+          <Route path="/add-device/existing" element={<Onboard />} />
+          <Route path="/add-device/new" element={<Provision />} />
+          {/* old single-purpose routes now redirect into the unified flow */}
+          <Route path="/onboard" element={<Navigate to="/add-device/existing" replace />} />
+          <Route path="/provision" element={<Navigate to="/add-device/new" replace />} />
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />

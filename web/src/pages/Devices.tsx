@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Building2, CheckCircle2, ChevronDown, Cpu, HardDrive, Loader2, MemoryStick,
+  AlertTriangle, Building2, CheckCircle2, ChevronDown, Cpu, HardDrive, Loader2, MemoryStick,
   Pencil, Plus, RefreshCw, Router as RouterIcon, StickyNote, Trash2, X, XCircle,
 } from 'lucide-react';
 import { api } from '../api';
 import { fmtBytes, type Device, type RouterSystemInfo, type Site, type TestResult } from '../types';
 import Select from '../components/Select';
+import { CATEGORY_META, type DeviceCategory, effectiveCategory } from '../catalog';
+
+const dupKey = (d: { host: string; port: number | null }) => `${d.host}:${d.port ?? ''}`;
+const catOf = (d: Device): DeviceCategory => effectiveCategory(d.category as DeviceCategory | null, d.model);
 
 export default function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; device: Device } | null>(null);
   const [tests, setTests] = useState<Record<number, { state: 'busy' } | { state: 'ok'; result: TestResult } | { state: 'fail'; error: string }>>({});
+  const [catFilter, setCatFilter] = useState<DeviceCategory | 'all'>('all');
 
   const reload = useCallback(() => {
     api.get<Device[]>('/api/devices').then(setDevices).catch(() => {});
@@ -38,6 +43,14 @@ export default function Devices() {
     reload();
   }
 
+  // Group by host:port to flag duplicates (same physical router entered twice).
+  const byAddr = new Map<string, Device[]>();
+  for (const d of devices) { const k = dupKey(d); const arr = byAddr.get(k) ?? []; arr.push(d); byAddr.set(k, arr); }
+  const dupPeers = (d: Device) => (byAddr.get(dupKey(d)) ?? []).filter((x) => x.id !== d.id);
+  const catCounts = new Map<DeviceCategory, number>();
+  for (const d of devices) catCounts.set(catOf(d), (catCounts.get(catOf(d)) ?? 0) + 1);
+  const shown = catFilter === 'all' ? devices : devices.filter((d) => catOf(d) === catFilter);
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="flex items-end justify-between">
@@ -45,21 +58,36 @@ export default function Devices() {
           <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Devices</h1>
           <p className="mt-1 text-sm text-fg-dim">MikroTik devices RubyMIK polls on this network.</p>
         </div>
-        <button
-          onClick={() => setModal({ mode: 'add' })}
+        <Link
+          to="/add-device"
           className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover"
         >
           <Plus className="h-4 w-4" /> Add device
-        </button>
+        </Link>
       </div>
 
-      <div className="mt-6 space-y-3">
+      {devices.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-1.5">
+          <CatTab label="All" count={devices.length} active={catFilter === 'all'} onClick={() => setCatFilter('all')} />
+          {CATEGORY_META.map((c) => (
+            <CatTab key={c.id} label={c.plural} count={catCounts.get(c.id) ?? 0}
+              active={catFilter === c.id} onClick={() => setCatFilter(c.id)} />
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-3">
         {devices.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border-strong bg-surface/60 p-10 text-center text-sm text-fg-dim">
             No devices yet — add your first MikroTik with its IP and a RouterOS login.
           </div>
         )}
-        {devices.map((d) => {
+        {devices.length > 0 && shown.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border-strong bg-surface/60 p-8 text-center text-sm text-fg-dim">
+            No devices in this category.
+          </div>
+        )}
+        {shown.map((d) => {
           const t = tests[d.id];
           return (
             <div key={d.id} className="rounded-2xl border border-border bg-surface shadow-sm">
@@ -90,6 +118,19 @@ export default function Devices() {
                     {d.siteName && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-app px-2 py-0.5 text-[11px] font-semibold text-fg-muted">
                         <Building2 className="h-3 w-3" /> {d.siteName}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-app px-2 py-0.5 text-[11px] font-semibold text-fg-muted">
+                      {CATEGORY_META.find((c) => c.id === catOf(d))?.label}
+                    </span>
+                    {dupPeers(d).length > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warning-bg px-2 py-0.5 text-[11px] font-semibold text-warning-fg">
+                        <AlertTriangle className="h-3 w-3" /> same address as{' '}
+                        {dupPeers(d).map((p, i) => (
+                          <span key={p.id}>{i > 0 ? ', ' : ''}
+                            <Link to={`/devices/${p.id}`} className="underline hover:text-warning-fg-strong">{p.name}</Link>
+                          </span>
+                        ))}
                       </span>
                     )}
                   </div>
@@ -138,6 +179,7 @@ export default function Devices() {
         <DeviceModal
           device={modal.mode === 'edit' ? modal.device : undefined}
           sites={sites}
+          existingDevices={devices}
           onSitesChanged={reload}
           onClose={() => setModal(null)}
           onSaved={(keepOpen) => {
@@ -147,6 +189,20 @@ export default function Devices() {
         />
       )}
     </div>
+  );
+}
+
+function CatTab({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+        active ? 'border-accent-border bg-accent-subtle text-accent-text' : 'border-border-strong text-fg-dim hover:border-accent-border hover:text-accent-text'
+      }`}
+    >
+      {label}
+      <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-accent text-inverse' : 'bg-app text-fg-faint'}`}>{count}</span>
+    </button>
   );
 }
 
@@ -180,9 +236,11 @@ export function InfoGrid({ info, conn }: { info: RouterSystemInfo; conn: string 
 
 const NEW_SITE = '__new__';
 
-export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, onSaved }: {
+export function DeviceModal({ device, sites, existingDevices = [], initial, onSitesChanged, onClose, onSaved }: {
   device?: Device;
   sites: Site[];
+  /** All current devices, for host:port duplicate detection (non-blocking warn). */
+  existingDevices?: Device[];
   /** Prefill for add mode (e.g. from a discovered topology node). */
   initial?: { name?: string; host?: string };
   onSitesChanged: () => void;
@@ -197,6 +255,7 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
   const [siteSel, setSiteSel] = useState<string>(device?.siteId ? String(device.siteId) : '');
   const [newSiteName, setNewSiteName] = useState('');
   const [notes, setNotes] = useState(device?.notes ?? '');
+  const [category, setCategory] = useState<string>(device?.category ?? '');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [port, setPort] = useState(device?.port ? String(device.port) : '');
   const [conn, setConn] = useState<'auto' | 'https' | 'http'>(
@@ -228,6 +287,7 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
       password,
       siteId,
       notes: notes.trim() || null,
+      category: category || null,
       ...(port ? { port: Number(port) } : { port: null }),
       useTls: conn === 'auto' ? null : conn === 'https',
       // Write credential: null clears it (monitor-only); a value sets/updates it;
@@ -284,6 +344,10 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
     && (siteSel !== NEW_SITE || newSiteName.trim() !== '');
   const canTest = host.trim() !== '' && username !== '' && password !== '' && busy === null;
 
+  // Non-blocking duplicate-address warning: another device on the same host:port.
+  const portNum = port ? Number(port) : null;
+  const dupes = existingDevices.filter((x) => x.id !== device?.id && x.host === host.trim() && (x.port ?? null) === portNum);
+
   const inputCls =
     'w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
   const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim';
@@ -308,6 +372,19 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
           {savedFlash && (
             <div className="rounded-lg border border-success-line bg-success-bg px-3 py-2 text-sm font-medium text-success-fg">
               {savedFlash}
+            </div>
+          )}
+          {dupes.length > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-bg px-3 py-2.5 text-sm text-warning-fg">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Same address ({host.trim()}{portNum ? `:${portNum}` : ''}) as{' '}
+                {dupes.map((x, i) => (
+                  <span key={x.id}>{i > 0 ? ', ' : ''}
+                    <Link to={`/devices/${x.id}`} onClick={onClose} className="font-semibold underline">{x.name}</Link>
+                  </span>
+                ))}. This is usually a mistake, but multi-VRF setups can legitimately reuse an address — you can add it anyway.
+              </span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
@@ -399,6 +476,14 @@ export function DeviceModal({ device, sites, initial, onSitesChanged, onClose, o
                 <span className={labelCls}>Port</span>
                 <input className={inputCls} value={port} onChange={(e) => setPort(e.target.value)}
                   placeholder="443 / 80" inputMode="numeric" />
+              </label>
+              <label className="col-span-2 block">
+                <span className={labelCls}>Category</span>
+                <Select className={inputCls} value={category} onChange={setCategory} ariaLabel="Category"
+                  options={[{ value: '', label: 'Auto (from detected model)' }, ...CATEGORY_META.map((c) => ({ value: c.id, label: c.label }))]} />
+                <span className="mt-1 block text-[11px] font-normal normal-case text-fg-faint">
+                  Leave on Auto to classify by the router's model; override only if it lands in the wrong group.
+                </span>
               </label>
             </div>
           )}

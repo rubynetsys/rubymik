@@ -25,6 +25,10 @@ export interface Device {
   notes: string | null;
   /** Latest poll state ('up' | 'down') or null if never polled. */
   status: string | null;
+  /** Stored category override (P27); null = derive from the polled model. */
+  category: string | null;
+  /** Last polled RouterOS model, for deriving the effective category. */
+  model: string | null;
   /** True when the device has an explicit write credential. */
   manageable: boolean;
   createdAt: string;
