@@ -24,7 +24,7 @@ import PppoeManager from '../components/PppoeManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
-import WireguardManager from '../components/WireguardManager';
+import VpnManager from '../components/VpnManager';
 import AddressManager from '../components/AddressManager';
 import L2Manager from '../components/L2Manager';
 import WebfigPanel from '../components/WebfigPanel';
@@ -126,7 +126,7 @@ const SECTION_HELP: Record<SectionId, string> = {
   dns: "Turn website names into addresses, and keep the router's clock in sync.",
   qos: 'Limit how much of your internet speed a device or service is allowed to use.',
   pppoe: 'The fibre/DSL login your internet provider gave you.',
-  vpn: 'A private, encrypted tunnel to another site or device (WireGuard).',
+  vpn: 'Private, encrypted tunnels to another site or device — WireGuard, L2TP/IPsec, SSTP and OpenVPN, plus the user accounts and certificates they use.',
   backups: "Save and download the router's full settings, and browse the automatic snapshots.",
   logs: "The router's recent activity log.",
   admin: "The router's own admin page (WebFig), embedded here for advanced tasks.",
@@ -146,7 +146,7 @@ const SECTION_TECH: Partial<Record<SectionId, string>> = {
   dns: 'Resolver, static hosts & time sync · reads are safe · changes run through snapshot → verify → auto-rollback → audit',
   qos: 'Per-target rate limits · a queue that would strangle the management flow is refused; broader shaping rides a dead-man that checks latency (not just reachability) + is snapshotted pre/post',
   pppoe: 'WAN dial-up sessions · credentials write-only (never shown/logged) · a client on the mgmt port is refused; a mgmt-path WAN swap uses add-before-remove · snapshotted pre/post',
-  vpn: 'Site-to-site & client tunnels · the router generates its own private key (RubyMIK never holds it) · the management tunnel is protected · VPN routing rides the P17 mgmt-path guard + dead-man',
+  vpn: 'WireGuard · L2TP/IPsec · SSTP · OpenVPN clients + PPP accounts + cert store · passwords & PSKs are write-only (never shown/logged) · a tunnel the management path rides can’t be deleted/disabled/re-credited · snapshot → verify → auto-rollback → audit',
   backups: 'Full-text export (diffable) + auto pre/post snapshots (AES-256-GCM at rest) · restore rides the audited dead-man; snapshots are view / diff / download only',
   logs: 'Read-only · recent RouterOS log buffer',
   admin: "The router's own WebFig, proxied · advanced / rarely-needed tasks",
@@ -486,7 +486,7 @@ export default function DeviceDetail() {
         return <PppoeManager deviceId={deviceId} interfaces={ifaceNames} />;
 
       case 'vpn':
-        return <WireguardManager deviceId={deviceId} />;
+        return <VpnManager deviceId={deviceId} />;
 
       case 'backups':
         return (

@@ -104,6 +104,29 @@ export interface SiteToSiteResult {
   localPeer: Record<string, string>; remotePeer: Record<string, string>; remoteScript: string;
 }
 
+// --- VPN breadth: L2TP/IPsec · SSTP · OVPN · PPP accounts · certs (P32) ---
+export type TunnelProto = 'l2tp' | 'sstp' | 'ovpn';
+export interface TunnelClientView {
+  proto: TunnelProto; id: string; name: string; connectTo: string | null; user: string | null; hasPassword: boolean;
+  profile: string | null; disabled: boolean; running: boolean; status: string; uptime: string | null;
+  comment: string | null; managed: boolean; isMgmtPath: boolean; dynamic: boolean;
+  useIpsec: boolean; hasIpsecSecret: boolean; certificate: string | null; verifyServerCert: boolean;
+}
+export interface PppSecretView {
+  id: string; name: string; service: string | null; profile: string | null; hasPassword: boolean;
+  localAddress: string | null; remoteAddress: string | null; disabled: boolean; comment: string | null; managed: boolean;
+}
+export interface CertView {
+  id: string; name: string; commonName: string | null; keyType: string | null; hasPrivateKey: boolean;
+  invalidBefore: string | null; invalidAfter: string | null; fingerprint: string | null; ca: boolean; trusted: boolean; expired: boolean;
+}
+export interface VpnServerView { proto: TunnelProto; enabled: boolean; defaultProfile: string | null; certificate: string | null; supported: boolean }
+export interface VpnView {
+  manageable: boolean; clients: TunnelClientView[]; supported: Record<TunnelProto, boolean>;
+  servers: VpnServerView[]; secrets: PppSecretView[]; certs: CertView[];
+  mgmt: { mgmtIp: string; mgmtInterface: string | null; mgmtPort: number; mgmtScheme: string };
+}
+
 // --- Interface / address config (P19) ---
 export interface AddrEntry {
   id: string; address: string | null; network: string | null; interface: string | null;
