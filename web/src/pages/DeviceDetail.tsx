@@ -29,6 +29,7 @@ import AddressManager from '../components/AddressManager';
 import L2Manager from '../components/L2Manager';
 import WebfigPanel from '../components/WebfigPanel';
 import RebootPanel from '../components/RebootPanel';
+import UpdatePanel from '../components/UpdatePanel';
 import LogsManager from '../components/LogsManager';
 
 const LIVE_REFRESH_MS = 7_000;
@@ -506,6 +507,7 @@ export default function DeviceDetail() {
       case 'admin':
         return (
           <>
+            <UpdatePanel deviceId={deviceId} deviceName={dev.name} manageable={dev.manageable} />
             <RebootPanel deviceId={deviceId} deviceName={dev.name} manageable={dev.manageable} />
             <WebfigPanel deviceId={deviceId} />
           </>

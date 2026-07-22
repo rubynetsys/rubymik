@@ -7,8 +7,10 @@ import { allSites, scopeFilter } from '../scope.js';
 import { connectDevice, type DeviceTarget } from '../routeros/index.js';
 import { readTarget, resolveEndpoint, writeTarget, transportFor } from '../transport.js';
 import { restCommand } from '../routeros/write.js';
+import { restGet } from '../routeros/rest.js';
 import { captureForDevice } from '../snapshots.js';
 import { beginReboot, abortReboot, parseUptimeSec } from '../reboot.js';
+import { parseUpdateState, checkUpdatePreconditions } from '../update.js';
 import { writeAudit } from '../safeapply.js';
 import { log } from '../log.js';
 
@@ -302,6 +304,123 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     // Do NOT nudge a poll here: the box may still be reachable for a moment, and a
     // success before it actually goes down would prematurely clear the dead-man.
     res.status(202).json({ rebooting: true, until, windowSec });
+  });
+
+  // ============ P34: single-device RouterOS update (reuses the reboot dead-man) ============
+  const UPDATE_WINDOW_SEC = 600; // updates download+install+reboot — longer than a plain reboot
+
+  const readUpdateState = async (row: DeviceRow) => {
+    const readT = readTarget(box, row);
+    const transport = await transportFor(row, readT);
+    const [pkg, rb] = await Promise.all([
+      restGet(readT, transport.scheme, transport.port, '/system/package/update') as Promise<Record<string, unknown>>,
+      restGet(readT, transport.scheme, transport.port, '/system/routerboard').catch(() => null) as Promise<Record<string, unknown> | null>,
+    ]);
+    return parseUpdateState(pkg, rb);
+  };
+
+  // READ update state (any device, Home Lab included) — never contacts MikroTik.
+  router.get('/:id/update', async (req, res) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    const manageable = !!(row.write_username_enc && row.write_password_enc);
+    const st = db.prepare('SELECT state FROM device_status WHERE device_id = ?').get(id) as { state: string | null } | undefined;
+    const rebooting = st?.state === 'rebooting';
+    try {
+      const state = await readUpdateState(row);
+      res.json({ manageable, rebooting, reachable: true, state, preconditions: checkUpdatePreconditions(state, { manageable, reachable: true, rebooting }) });
+    } catch (err) {
+      res.json({ manageable, rebooting, reachable: false, state: null, preconditions: { ok: false, blockers: [`Not reachable: ${(err as Error).message}`] } });
+    }
+  });
+
+  // CHECK for updates — a write-path command that contacts MikroTik's server to
+  // refresh latest-version. Non-config-mutating, but a POST to the router, so it
+  // requires a write credential (Home Lab is monitor-only → 403 → never touched).
+  router.post('/:id/update/check', async (req, res) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    if (!row.write_username_enc || !row.write_password_enc) { res.status(403).json({ error: 'This device is monitor-only. Add a write credential to check for updates.' }); return; }
+    const actor = (req as unknown as { user: SessionUser }).user.username;
+    try {
+      const readT = readTarget(box, row);
+      const write = writeTarget(box, row);
+      const transport = await transportFor(row, readT);
+      await restCommand(write, transport, '/system/package/update/check-for-updates', {});
+      const state = await readUpdateState(row);
+      writeAudit(
+        { db, actor, deviceId: id, deviceName: row.name, action: 'system.update.check', targetLabel: 'update' },
+        'applied', 'Checked for RouterOS updates', null, { installed: state.installed, latest: state.latest },
+        `check-for-updates ran; latest = ${state.latest ?? 'unknown'}${state.updateAvailable ? ' (update available)' : ''}.`,
+      );
+      res.json({ state });
+    } catch (err) {
+      res.status(502).json({ error: `Check-for-updates failed: ${(err as Error).message}` });
+    }
+  });
+
+  // INSTALL the update — DESTRUCTIVE: downloads, reboots, installs. Gated by
+  // write-cred + name-confirm + preconditions + a fail-closed pre-snapshot, then
+  // rides the P29 expected-outage dead-man. RubyMIK never auto-runs this.
+  router.post('/:id/update/install', async (req, res) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    if (!row.write_username_enc || !row.write_password_enc) { res.status(403).json({ error: 'This device is monitor-only. Add a write credential to update it.' }); return; }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const confirm = typeof body.confirm === 'string' ? body.confirm.trim() : '';
+    if (confirm !== row.name) { res.status(400).json({ error: `Type the device name exactly ("${row.name}") to confirm the update-and-reboot.` }); return; }
+    const windowSec = Math.min(Math.max(Number(body.windowSec) || UPDATE_WINDOW_SEC, 60), 1800);
+    const actor = (req as unknown as { user: SessionUser }).user.username;
+
+    // 1) Reachable baseline (serial + uptime) + current state + preconditions.
+    const readT = readTarget(box, row);
+    let baseline: { serial: string | null; uptimeSec: number | null; at: string };
+    let state: ReturnType<typeof parseUpdateState>;
+    try {
+      const conn = await connectDevice('rest', readT);
+      baseline = { serial: conn.info.serialNumber, uptimeSec: parseUptimeSec(conn.info.uptime), at: new Date().toISOString() };
+      state = await readUpdateState(row);
+    } catch (err) {
+      res.status(502).json({ error: `Cannot reach the device to update it: ${(err as Error).message}` });
+      return;
+    }
+    const st = db.prepare('SELECT state FROM device_status WHERE device_id = ?').get(id) as { state: string | null } | undefined;
+    const pre = checkUpdatePreconditions(state, { manageable: true, reachable: true, rebooting: st?.state === 'rebooting' });
+    if (!pre.ok) { res.status(409).json({ error: pre.blockers.join(' '), blockers: pre.blockers, preconditionFailed: true }); return; }
+
+    // 2) Pre-update snapshot, fail-closed.
+    try { await captureForDevice(db, box, id, { trigger: 'pre_write', operation: 'system.update' }); }
+    catch (err) { res.status(409).json({ error: `Refusing to update without a pre-update snapshot: ${(err as Error).message}`, snapshotRequired: true }); return; }
+
+    // 3) Arm the dead-man BEFORE issuing (the install reboots the box).
+    const until = new Date(Date.now() + windowSec * 1000).toISOString();
+    beginReboot(db, id, baseline, until);
+
+    // 4) Issue the install. Like reboot, it drops the connection mid-flight; only a
+    //    clear auth/permission error means it did NOT run — then disarm.
+    try {
+      const write = writeTarget(box, row);
+      const transport = await transportFor(row, readT);
+      await restCommand(write, transport, '/system/package/update/install', {});
+    } catch (err) {
+      const msg = (err as Error).message.toLowerCase();
+      if (/\b(401|403)\b|forbidden|permission|not permitted|no permission|login/.test(msg)) {
+        abortReboot(db, id);
+        res.status(502).json({ error: `Update refused by the router: ${(err as Error).message}` });
+        return;
+      }
+      // connection reset / timeout → the box is going down to install, as expected
+    }
+    writeAudit(
+      { db, actor, deviceId: id, deviceName: row.name, action: 'system.update', targetLabel: `update ${state.installed ?? '?'} → ${state.latest ?? '?'}` },
+      'applied', `RouterOS update issued (${state.installed ?? '?'} → ${state.latest ?? '?'}, return window ${windowSec}s)`,
+      { from: state.installed }, { to: state.latest, until, baseline },
+      'Update-and-install issued. Expected-outage dead-man armed — the device shows "rebooting" (no down-alert) until it returns (serial + uptime verified) or the window expires. Confirm the new version once it is back.',
+    );
+    res.status(202).json({ updating: true, until, windowSec, from: state.installed, to: state.latest });
   });
 
   // Live connection test for an UNSAVED device (form values from the add dialog).
