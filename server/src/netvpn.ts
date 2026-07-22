@@ -416,6 +416,64 @@ export async function setServerEnabled(ctx: VpnContext, sac: Sac, proto: TunnelP
   });
 }
 
+// ---------------- certificate generation (private key stays on the router) ----------------
+
+export type CertKind = 'ca' | 'server' | 'client';
+export interface CertSpec { name: string; commonName: string; kind: CertKind; daysValid?: number; keySize?: number; ca?: string | null }
+
+export function validateCertInput(spec: CertSpec): string[] {
+  const e: string[] = [];
+  if (!spec.name || !/^[A-Za-z][\w.\-]{0,63}$/.test(spec.name.trim())) e.push('A valid certificate name is required (letter first; letters/digits/-/_/., max 64).');
+  if (!spec.commonName || !spec.commonName.trim()) e.push('A common name (CN) is required.');
+  if (!(['ca', 'server', 'client'] as string[]).includes(spec.kind)) e.push('Certificate kind must be ca / server / client.');
+  if (spec.daysValid !== undefined && (!Number.isInteger(spec.daysValid) || spec.daysValid < 1 || spec.daysValid > 7300)) e.push('Days-valid must be 1–7300.');
+  if (spec.keySize !== undefined && ![2048, 4096].includes(spec.keySize)) e.push('Key size must be 2048 or 4096.');
+  return e;
+}
+
+export function keyUsageFor(kind: CertKind): string {
+  return kind === 'ca' ? 'key-cert-sign,crl-sign' : kind === 'server' ? 'tls-server' : 'tls-client';
+}
+
+/** Generate a self-signed CA (or a cert signed by an on-router CA). The private key
+ *  is generated ON the router and never leaves it — RubyMIK only reads back the
+ *  cert (CN / fingerprint / validity). Add the template, then sign it. */
+export async function generateCert(ctx: VpnContext, sac: Sac, spec: CertSpec): Promise<SafeApplyOutcome> {
+  const name = spec.name.trim();
+  let beforeIds: string[] = [];
+  return runSafeApply<{ ids: string[] }>(ctxFull(ctx, sac), {
+    snapshot: async () => { beforeIds = await readIds(ctx, '/certificate'); return { ids: beforeIds }; },
+    summary: () => `Generate ${spec.kind} certificate "${name}" (CN ${spec.commonName}) — private key generated on the router, never leaves it`,
+    apply: async () => {
+      await restAdd(ctx.write, ctx.transport, '/certificate', {
+        name, 'common-name': spec.commonName.trim(), 'key-size': String(spec.keySize ?? 2048),
+        'days-valid': String(spec.daysValid ?? 3650), 'key-usage': keyUsageFor(spec.kind),
+      });
+      // sign it (self-signed CA, or signed by the chosen CA). RouterOS `sign` takes
+      // the cert by name; RSA keygen may still be finishing when this returns.
+      await restCommand(ctx.write, ctx.transport, '/certificate/sign', {
+        number: name, ...(spec.kind !== 'ca' && spec.ca ? { ca: spec.ca } : {}),
+      });
+    },
+    verifyTook: async () => {
+      const found = ((await g(ctx, '/certificate')) as Dict[]).find((r) => s(r['name']) === name);
+      return found ? { ok: true, after: { name, fingerprint: s(found['fingerprint']) } } : { ok: false, detail: 'Certificate not present after generate.' };
+    },
+    rollback: async (bb) => { for (const id of (await readIds(ctx, '/certificate')).filter((x) => !bb.ids.includes(x))) await restRemove(ctx.write, ctx.transport, '/certificate', id); },
+  });
+}
+
+export async function removeCert(ctx: VpnContext, sac: Sac, id: string): Promise<SafeApplyOutcome> {
+  let before: Dict | undefined;
+  return runSafeApply<Dict | undefined>(ctxFull(ctx, sac), {
+    snapshot: async () => { before = ((await g(ctx, '/certificate')) as Dict[]).find((r) => s(r['.id']) === id); return before; },
+    summary: () => `Remove certificate ${s(before?.['name']) ?? id}`,
+    apply: async () => { await restRemove(ctx.write, ctx.transport, '/certificate', id); },
+    verifyTook: async () => ({ ok: !((await g(ctx, '/certificate')) as Dict[]).some((r) => s(r['.id']) === id) }),
+    rollback: async () => { /* a removed cert's private key can't be regenerated — no rollback */ },
+  });
+}
+
 // test hooks
 export { redactTunnel as _redactTunnelForTest, redactSecret as _redactSecretForTest };
 export type { DeviceTarget, AddressableRow };

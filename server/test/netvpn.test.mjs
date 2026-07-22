@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import {
   isValidHost, validateTunnelInput, validatePppSecretInput, vpnMgmtGuard, genOvpnClientConfig,
+  validateCertInput, keyUsageFor,
   _redactTunnelForTest as redactTunnel, _redactSecretForTest as redactSecret, TUNNEL_PROTOS,
 } from '../dist/netvpn.js';
 import { runSafeApply } from '../dist/safeapply.js';
@@ -127,4 +128,21 @@ test('creating an L2TP/IPsec tunnel: neither the password nor the PSK reaches th
 
 test('TUNNEL_PROTOS is the three PPP-family remote-access protocols', () => {
   assert.deepEqual([...TUNNEL_PROTOS].sort(), ['l2tp', 'ovpn', 'sstp']);
+});
+
+// ---------------- certificate generation ----------------
+
+test('validateCertInput enforces name/CN/kind/days/keysize', () => {
+  assert.deepEqual(validateCertInput({ name: 'zzz-ca', commonName: 'RubyMIK Test CA', kind: 'ca' }), []);
+  assert.ok(validateCertInput({ name: '', commonName: 'x', kind: 'ca' }).length, 'name required');
+  assert.ok(validateCertInput({ name: 'zzz', commonName: '', kind: 'ca' }).length, 'CN required');
+  assert.ok(validateCertInput({ name: 'zzz', commonName: 'x', kind: 'bogus' }).length, 'bad kind');
+  assert.ok(validateCertInput({ name: 'zzz', commonName: 'x', kind: 'ca', daysValid: 99999 }).length, 'days too big');
+  assert.ok(validateCertInput({ name: 'zzz', commonName: 'x', kind: 'ca', keySize: 1024 }).length, 'bad keysize');
+});
+
+test('keyUsageFor maps each kind to the right RouterOS key-usage', () => {
+  assert.equal(keyUsageFor('ca'), 'key-cert-sign,crl-sign');
+  assert.equal(keyUsageFor('server'), 'tls-server');
+  assert.equal(keyUsageFor('client'), 'tls-client');
 });

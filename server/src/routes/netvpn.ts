@@ -12,8 +12,9 @@ import {
   validateTunnelInput, validatePppSecretInput,
   createTunnel, editTunnel, setTunnelEnabled, removeTunnel, takeOwnershipTunnel,
   createSecret, editSecret, setSecretEnabled, removeSecret, takeOwnershipSecret, setServerEnabled,
+  generateCert, removeCert, validateCertInput,
   TUNNEL_PROTOS,
-  type VpnContext, type TunnelProto, type TunnelSpec, type PppSecretSpec, type TunnelClient, type PppSecret,
+  type VpnContext, type TunnelProto, type TunnelSpec, type PppSecretSpec, type TunnelClient, type PppSecret, type CertKind,
 } from '../netvpn.js';
 
 interface DeviceRow {
@@ -204,6 +205,28 @@ export function netvpnRoutes(db: DatabaseSync, box: SecretBox): Router {
     const proto = req.params.proto; if (!validProto(proto)) { res.status(400).json({ error: 'Unknown protocol.' }); return; }
     const enabled = (req.body ?? {}).enabled === true;
     try { send(res, 200, await setServerEnabled(m.ctx, sac(m.row, m.actor, enabled ? 'vpn.server.enable' : 'vpn.server.disable', proto), proto, enabled)); }
+    catch (err) { writeErr(res, err); }
+  });
+
+  // ---------------- certificate generation (private key stays on the router) ----------------
+
+  router.post('/:id/vpn/certs', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const spec = {
+      name: str(b.name) ?? '', commonName: str(b.commonName) ?? '', kind: (str(b.kind) ?? 'ca') as CertKind,
+      daysValid: typeof b.daysValid === 'number' ? b.daysValid : undefined, keySize: typeof b.keySize === 'number' ? b.keySize : undefined,
+      ca: str(b.ca) ?? null,
+    };
+    const errs = validateCertInput(spec);
+    if (errs.length) { auditRejected(sac(m.row, m.actor, 'vpn.cert.generate', spec.name), 'Generate certificate', `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
+    try { send(res, 201, await generateCert(m.ctx, sac(m.row, m.actor, 'vpn.cert.generate', spec.name), spec)); }
+    catch (err) { writeErr(res, err); }
+  });
+
+  router.delete('/:id/vpn/certs/:cid', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    try { send(res, 200, await removeCert(m.ctx, sac(m.row, m.actor, 'vpn.cert.remove', req.params.cid), req.params.cid)); }
     catch (err) { writeErr(res, err); }
   });
 

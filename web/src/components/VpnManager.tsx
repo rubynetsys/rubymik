@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, FileKey, KeyRound, Lock, Plus, Power, Shield, ShieldAlert, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import { CheckCircle2, Download, FileKey, FilePlus2, KeyRound, Lock, Pencil, Plus, Power, Shield, ShieldAlert, ShieldCheck, Trash2, Users, X } from 'lucide-react';
 import { api } from '../api';
 import type { ApplyOutcome, CertView, PppSecretView, TunnelClientView, TunnelProto, VpnServerView, VpnView } from '../types';
 import WireguardManager from './WireguardManager';
@@ -58,7 +58,7 @@ export default function VpnManager({ deviceId }: { deviceId: number }) {
             <TunnelTab proto={tab} view={view} deviceId={deviceId} ro={ro} onOutcome={setOutcome} reload={load} />
           )}
           {tab === 'ppp' && <PppTab view={view} deviceId={deviceId} ro={ro} onOutcome={setOutcome} reload={load} />}
-          {tab === 'certs' && <CertsTab certs={view.certs} />}
+          {tab === 'certs' && <CertsTab certs={view.certs} deviceId={deviceId} ro={ro} onOutcome={setOutcome} reload={load} />}
         </>
       )}
 
@@ -96,6 +96,7 @@ function TunnelTab({ proto, view, deviceId, ro, onOutcome, reload }: { proto: Tu
   return (
     <div className="space-y-3">
       {server && <ServerRow server={server} deviceId={deviceId} ro={ro} onOutcome={onOutcome} reload={reload} />}
+      {proto === 'ovpn' && <OvpnExport deviceId={deviceId} />}
       {clients.length === 0 && <div className="rounded-lg bg-sunken px-3 py-2.5 text-sm text-fg-muted">No {PROTO_LABEL[proto]} client tunnels.</div>}
       {clients.map((c) => <TunnelCard key={c.id} c={c} deviceId={deviceId} ro={ro} onOutcome={onOutcome} reload={reload} />)}
       {!ro && (adding
@@ -129,6 +130,7 @@ function ServerRow({ server, deviceId, ro, onOutcome, reload }: { server: VpnSer
 
 function TunnelCard({ c, deviceId, ro, onOutcome, reload }: { c: TunnelClientView; deviceId: number; ro: boolean; onOutcome: SetOutcome; reload: () => Promise<void> }) {
   const editable = !ro && c.managed && !c.isMgmtPath;
+  const [editing, setEditing] = useState(false);
   async function act(kind: 'del' | 'toggle' | 'own') {
     try {
       let o: ApplyOutcome;
@@ -150,6 +152,7 @@ function TunnelCard({ c, deviceId, ro, onOutcome, reload }: { c: TunnelClientVie
           {!c.managed && <span className="rounded-full bg-app px-2 py-0.5 text-[10px] font-bold text-fg-muted">unmanaged</span>}
         </div>
         {editable && <div className="flex gap-1.5">
+          <button onClick={() => setEditing(!editing)} className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-fg-body hover:border-accent-border"><Pencil className="h-3.5 w-3.5" /> Edit</button>
           <button onClick={() => void act('toggle')} className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-fg-body hover:border-accent-border"><Power className="h-3.5 w-3.5" /> {c.disabled ? 'Enable' : 'Disable'}</button>
           <button onClick={() => void act('del')} className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-danger-fg-strong hover:bg-danger-bg"><Trash2 className="h-3.5 w-3.5" /> Remove</button>
         </div>}
@@ -164,7 +167,47 @@ function TunnelCard({ c, deviceId, ro, onOutcome, reload }: { c: TunnelClientVie
         {(c.proto === 'sstp' || c.proto === 'ovpn') && <Field label="Certificate" value={c.certificate ?? 'none'} />}
         {c.profile && <Field label="Profile" value={c.profile} />}
       </dl>
+      {editing && editable && <EditTunnelForm c={c} deviceId={deviceId} onDone={() => { setEditing(false); void reload(); }} onCancel={() => setEditing(false)} onOutcome={onOutcome} />}
     </section>
+  );
+}
+
+function EditTunnelForm({ c, deviceId, onDone, onCancel, onOutcome }: { c: TunnelClientView; deviceId: number; onDone: () => void; onCancel: () => void; onOutcome: SetOutcome }) {
+  const [f, setF] = useState({ name: c.name, connectTo: c.connectTo ?? '', user: c.user ?? '', password: '', ipsecSecret: '', useIpsec: c.useIpsec, certificate: c.certificate ?? '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const up = (k: string, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  async function submit() {
+    setBusy(true); setErr(null);
+    try {
+      const body: Record<string, unknown> = { name: f.name, connectTo: f.connectTo, user: f.user };
+      if (f.password) body.password = f.password;                       // blank = keep
+      if (c.proto === 'l2tp') { body.useIpsec = f.useIpsec; if (f.ipsecSecret) body.ipsecSecret = f.ipsecSecret; }
+      if (c.proto === 'sstp' || c.proto === 'ovpn') body.certificate = f.certificate;
+      const o = await api.patch<ApplyOutcome>(`/api/devices/${deviceId}/vpn/tunnels/${c.proto}/${encodeURIComponent(c.id)}`, body);
+      onOutcome({ title: `Edit ${f.name}`, result: o.result, detail: o.detail, auditId: o.auditId }); onDone();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-accent-border bg-sunken p-4">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-fg-dim">Edit {PROTO_LABEL[c.proto]} client — leave a secret blank to keep it</div>
+      {err && <div className="mb-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Name</span><input className={inputCls} value={f.name} onChange={(e) => up('name', e.target.value)} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Server (host or IP)</span><input className={inputCls} value={f.connectTo} onChange={(e) => up('connectTo', e.target.value)} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">User</span><input className={inputCls} value={f.user} onChange={(e) => up('user', e.target.value)} autoComplete="off" /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Password (blank = keep)</span><input className={inputCls} type="password" autoComplete="new-password" value={f.password} onChange={(e) => up('password', e.target.value)} placeholder={c.hasPassword ? '•••••• (set)' : ''} /></label>
+        {c.proto === 'l2tp' && <>
+          <label className="flex items-center gap-2 self-end pb-2 text-sm text-fg-body"><input type="checkbox" checked={f.useIpsec} onChange={(e) => up('useIpsec', e.target.checked)} /> Use IPsec</label>
+          {f.useIpsec && <label><span className="mb-1 block text-xs font-semibold text-fg-dim">IPsec PSK (blank = keep)</span><input className={inputCls} type="password" autoComplete="new-password" value={f.ipsecSecret} onChange={(e) => up('ipsecSecret', e.target.value)} placeholder={c.hasIpsecSecret ? '•••••• (set)' : ''} /></label>}
+        </>}
+        {(c.proto === 'sstp' || c.proto === 'ovpn') && <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Certificate</span><input className={inputCls} value={f.certificate} onChange={(e) => up('certificate', e.target.value)} placeholder="cert name on router" /></label>}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button disabled={busy || !f.name} onClick={() => void submit()} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Save changes</button>
+        <button onClick={onCancel} className="rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app">Cancel</button>
+      </div>
+    </div>
   );
 }
 
@@ -230,6 +273,7 @@ function PppTab({ view, deviceId, ro, onOutcome, reload }: { view: VpnView; devi
 
 function SecretCard({ sct, deviceId, ro, onOutcome, reload }: { sct: PppSecretView; deviceId: number; ro: boolean; onOutcome: SetOutcome; reload: () => Promise<void> }) {
   const editable = !ro && sct.managed;
+  const [editing, setEditing] = useState(false);
   async function act(kind: 'del' | 'toggle' | 'own') {
     try {
       let o: ApplyOutcome;
@@ -240,18 +284,55 @@ function SecretCard({ sct, deviceId, ro, onOutcome, reload }: { sct: PppSecretVi
     } catch (e) { onOutcome({ title: sct.name, result: 'refused', detail: (e as Error).message }); }
   }
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-2.5">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Users className="h-4 w-4 text-accent" />
-        <span className="font-semibold text-fg-strong">{sct.name}</span>
-        <span className="text-xs text-fg-dim">{sct.service ?? 'any'}{sct.remoteAddress ? ` · ${sct.remoteAddress}` : ''}</span>
-        {sct.disabled && <span className="rounded-full bg-app px-2 py-0.5 text-[10px] font-bold text-fg-muted">disabled</span>}
-        {sct.managed ? <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-[10px] font-bold text-accent-text">RUBYMIK-VPN</span> : <span className="rounded-full bg-app px-2 py-0.5 text-[10px] font-bold text-fg-muted">unmanaged</span>}
+    <div className="rounded-xl border border-border bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Users className="h-4 w-4 text-accent" />
+          <span className="font-semibold text-fg-strong">{sct.name}</span>
+          <span className="text-xs text-fg-dim">{sct.service ?? 'any'}{sct.remoteAddress ? ` · ${sct.remoteAddress}` : ''}</span>
+          {sct.disabled && <span className="rounded-full bg-app px-2 py-0.5 text-[10px] font-bold text-fg-muted">disabled</span>}
+          {sct.managed ? <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-[10px] font-bold text-accent-text">RUBYMIK-VPN</span> : <span className="rounded-full bg-app px-2 py-0.5 text-[10px] font-bold text-fg-muted">unmanaged</span>}
+        </div>
+        <div className="flex gap-1.5">
+          {editable && <button onClick={() => setEditing(!editing)} className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-fg-body hover:border-accent-border"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
+          {editable && <button onClick={() => void act('toggle')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-fg-body hover:border-accent-border">{sct.disabled ? 'Enable' : 'Disable'}</button>}
+          {editable && <button onClick={() => void act('del')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-danger-fg-strong hover:bg-danger-bg">Remove</button>}
+          {!ro && !sct.managed && <button onClick={() => void act('own')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-semibold text-fg-body hover:border-accent-border">Take ownership</button>}
+        </div>
       </div>
-      <div className="flex gap-1.5">
-        {editable && <button onClick={() => void act('toggle')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-fg-body hover:border-accent-border">{sct.disabled ? 'Enable' : 'Disable'}</button>}
-        {editable && <button onClick={() => void act('del')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-medium text-danger-fg-strong hover:bg-danger-bg">Remove</button>}
-        {!ro && !sct.managed && <button onClick={() => void act('own')} className="rounded-md border border-border-strong px-2 py-1 text-xs font-semibold text-fg-body hover:border-accent-border">Take ownership</button>}
+      {editing && editable && <div className="px-4 pb-3"><EditSecretForm sct={sct} deviceId={deviceId} onDone={() => { setEditing(false); void reload(); }} onCancel={() => setEditing(false)} onOutcome={onOutcome} /></div>}
+    </div>
+  );
+}
+
+function EditSecretForm({ sct, deviceId, onDone, onCancel, onOutcome }: { sct: PppSecretView; deviceId: number; onDone: () => void; onCancel: () => void; onOutcome: SetOutcome }) {
+  const [f, setF] = useState({ name: sct.name, password: '', service: sct.service ?? 'any', remoteAddress: sct.remoteAddress ?? '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const up = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+  async function submit() {
+    setBusy(true); setErr(null);
+    try {
+      const body: Record<string, unknown> = { name: f.name, service: f.service, remoteAddress: f.remoteAddress || undefined };
+      if (f.password) body.password = f.password;                         // blank = keep
+      const o = await api.patch<ApplyOutcome>(`/api/devices/${deviceId}/vpn/secrets/${encodeURIComponent(sct.id)}`, body);
+      onOutcome({ title: `Edit ${f.name}`, result: o.result, detail: o.detail, auditId: o.auditId }); onDone();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="rounded-xl border border-accent-border bg-sunken p-4">
+      {err && <div className="mb-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Account name</span><input className={inputCls} value={f.name} onChange={(e) => up('name', e.target.value)} autoComplete="off" /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Password (blank = keep)</span><input className={inputCls} type="password" autoComplete="new-password" value={f.password} onChange={(e) => up('password', e.target.value)} placeholder={sct.hasPassword ? '•••••• (set)' : ''} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Service</span>
+          <select className={inputCls} value={f.service} onChange={(e) => up('service', e.target.value)}>{['any', 'l2tp', 'sstp', 'ovpn', 'pptp', 'ppp'].map((sv) => <option key={sv} value={sv}>{sv}</option>)}</select>
+        </label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Remote address (optional)</span><input className={inputCls} value={f.remoteAddress} onChange={(e) => up('remoteAddress', e.target.value)} placeholder="10.20.0.50" /></label>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button disabled={busy || !f.name} onClick={() => void submit()} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Save changes</button>
+        <button onClick={onCancel} className="rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app">Cancel</button>
       </div>
     </div>
   );
@@ -289,29 +370,125 @@ function AddSecretForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: nu
   );
 }
 
-// ---------------- certificate store (read-only) ----------------
+// ---------------- .ovpn client profile export (no secret) ----------------
 
-function CertsTab({ certs }: { certs: CertView[] }) {
-  if (certs.length === 0) return <div className="rounded-xl bg-sunken px-4 py-4 text-sm text-fg-muted">No certificates in the store. SSTP/OpenVPN servers need one — create it on the router (System → Certificates); RubyMIK shows it here read-only.</div>;
+function OvpnExport({ deviceId }: { deviceId: number }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ server: '', port: '1194', proto: 'udp', caCertName: '' });
+  const [config, setConfig] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const up = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+  async function gen() {
+    setErr(null);
+    try {
+      const r = await api.post<{ config: string }>(`/api/devices/${deviceId}/vpn/ovpn-config`, { server: f.server || undefined, port: Number(f.port) || undefined, proto: f.proto, caCertName: f.caCertName || undefined });
+      setConfig(r.config);
+    } catch (e) { setErr((e as Error).message); }
+  }
+  function download() {
+    if (!config) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([config], { type: 'application/x-openvpn-profile' }));
+    a.download = 'rubymik-client.ovpn'; a.click(); URL.revokeObjectURL(a.href);
+  }
+  if (!open) return <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:border-accent-border"><Download className="h-4 w-4" /> Export .ovpn client profile</button>;
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full min-w-[640px] text-sm">
-        <thead><tr className="bg-sunken text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
-          <th className="px-3 py-2">Name</th><th>Common name</th><th>Type</th><th>Private key</th><th>Valid until</th><th className="pr-3">Status</th>
-        </tr></thead>
-        <tbody>
-          {certs.map((c) => (
-            <tr key={c.id} className="border-t border-border-subtle">
-              <td className="px-3 py-2 font-medium text-fg-strong">{c.name}{c.ca && <span className="ml-1.5 rounded bg-accent-subtle px-1.5 py-0.5 text-[10px] font-bold text-accent-text">CA</span>}</td>
-              <td className="text-fg-body">{c.commonName ?? '—'}</td>
-              <td className="text-fg-dim">{c.keyType ?? '—'}</td>
-              <td>{c.hasPrivateKey ? <span className="inline-flex items-center gap-1 text-success-fg"><FileKey className="h-3.5 w-3.5" /> present</span> : <span className="text-fg-faint">—</span>}</td>
-              <td className="text-fg-body">{c.invalidAfter ?? '—'}</td>
-              <td className="pr-3">{c.expired ? <span className="rounded-full bg-danger-bg px-2 py-0.5 text-[10px] font-bold text-danger-fg-strong">expired</span> : c.trusted ? <span className="rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-bold text-success-fg-strong">trusted</span> : <span className="text-fg-dim text-xs">valid</span>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="rounded-xl border border-border bg-sunken p-4">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-fg-dim">Generate a client .ovpn profile (no key — the user pastes their own cert)</div>
+      {err && <div className="mb-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Server (blank = this router)</span><input className={inputCls} value={f.server} onChange={(e) => up('server', e.target.value)} placeholder="vpn.example.com" /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Port</span><input className={inputCls} value={f.port} onChange={(e) => up('port', e.target.value)} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Protocol</span><select className={inputCls} value={f.proto} onChange={(e) => up('proto', e.target.value)}><option value="udp">udp</option><option value="tcp">tcp</option></select></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">CA cert name</span><input className={inputCls} value={f.caCertName} onChange={(e) => up('caCertName', e.target.value)} placeholder="rubymik-ca" /></label>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={() => void gen()} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Generate</button>
+        {config && <button onClick={download} className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app"><Download className="h-4 w-4" /> Download .ovpn</button>}
+        <button onClick={() => { setOpen(false); setConfig(null); }} className="rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app">Close</button>
+      </div>
+      {config && <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-app p-3 font-mono text-[11px] leading-5 text-fg-body">{config}</pre>}
+    </div>
+  );
+}
+
+// ---------------- certificate store (read + generate/delete) ----------------
+
+function CertsTab({ certs, deviceId, ro, onOutcome, reload }: { certs: CertView[]; deviceId: number; ro: boolean; onOutcome: SetOutcome; reload: () => Promise<void> }) {
+  const [gen, setGen] = useState(false);
+  async function del(c: CertView) {
+    if (!confirm(`Remove certificate "${c.name}"? Its private key is destroyed and cannot be regenerated.`)) return;
+    try { const o = await api.del<ApplyOutcome>(`/api/devices/${deviceId}/vpn/certs/${encodeURIComponent(c.id)}`); onOutcome({ title: `Remove ${c.name}`, result: o.result, detail: o.detail, auditId: o.auditId }); await reload(); }
+    catch (e) { onOutcome({ title: c.name, result: 'refused', detail: (e as Error).message }); }
+  }
+  return (
+    <div className="space-y-3">
+      {certs.length === 0
+        ? <div className="rounded-xl bg-sunken px-4 py-4 text-sm text-fg-muted">No certificates in the store. SSTP/OpenVPN servers need one — generate a self-signed CA below (its private key is created on the router and never leaves it).</div>
+        : (
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead><tr className="bg-sunken text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+                <th className="px-3 py-2">Name</th><th>Common name</th><th>Type</th><th>Private key</th><th>Valid until</th><th>Status</th><th className="pr-3 text-right"></th>
+              </tr></thead>
+              <tbody>
+                {certs.map((c) => (
+                  <tr key={c.id} className="border-t border-border-subtle">
+                    <td className="px-3 py-2 font-medium text-fg-strong">{c.name}{c.ca && <span className="ml-1.5 rounded bg-accent-subtle px-1.5 py-0.5 text-[10px] font-bold text-accent-text">CA</span>}</td>
+                    <td className="text-fg-body">{c.commonName ?? '—'}</td>
+                    <td className="text-fg-dim">{c.keyType ?? '—'}</td>
+                    <td>{c.hasPrivateKey ? <span className="inline-flex items-center gap-1 text-success-fg"><FileKey className="h-3.5 w-3.5" /> present</span> : <span className="text-fg-faint">—</span>}</td>
+                    <td className="text-fg-body">{c.invalidAfter ?? '—'}</td>
+                    <td>{c.expired ? <span className="rounded-full bg-danger-bg px-2 py-0.5 text-[10px] font-bold text-danger-fg-strong">expired</span> : c.trusted ? <span className="rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-bold text-success-fg-strong">trusted</span> : <span className="text-fg-dim text-xs">valid</span>}</td>
+                    <td className="pr-3 text-right">{!ro && <button onClick={() => void del(c)} className="rounded border border-border-strong px-1.5 py-0.5 text-xs text-danger-fg-strong hover:bg-danger-bg">remove</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      {!ro && (gen
+        ? <CertGenForm deviceId={deviceId} cas={certs.filter((c) => c.ca)} onDone={() => { setGen(false); void reload(); }} onCancel={() => setGen(false)} onOutcome={onOutcome} />
+        : <button onClick={() => setGen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse hover:bg-accent-hover"><FilePlus2 className="h-4 w-4" /> Generate certificate</button>)}
+    </div>
+  );
+}
+
+function CertGenForm({ deviceId, cas, onDone, onCancel, onOutcome }: { deviceId: number; cas: CertView[]; onDone: () => void; onCancel: () => void; onOutcome: SetOutcome }) {
+  const [f, setF] = useState({ name: 'rubymik-ca', commonName: 'RubyMIK CA', kind: 'ca', daysValid: '3650', ca: cas[0]?.name ?? '' });
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const up = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
+  async function submit() {
+    setBusy(true); setErr(null);
+    try {
+      const body: Record<string, unknown> = { name: f.name, commonName: f.commonName, kind: f.kind, daysValid: Number(f.daysValid) || undefined };
+      if (f.kind !== 'ca' && f.ca) body.ca = f.ca;
+      const o = await api.post<ApplyOutcome>(`/api/devices/${deviceId}/vpn/certs`, body);
+      onOutcome({ title: `Generate ${f.name}`, result: o.result, detail: o.detail, auditId: o.auditId }); onDone();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <div className="rounded-xl border border-border bg-sunken p-4">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-fg-dim">Generate certificate — the private key is created on the router and never leaves it</div>
+      {err && <div className="mb-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">{err}</div>}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Name</span><input className={inputCls} value={f.name} onChange={(e) => up('name', e.target.value)} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Common name (CN)</span><input className={inputCls} value={f.commonName} onChange={(e) => up('commonName', e.target.value)} /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Kind</span>
+          <select className={inputCls} value={f.kind} onChange={(e) => up('kind', e.target.value)}><option value="ca">CA (self-signed)</option><option value="server">Server</option><option value="client">Client</option></select>
+        </label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Valid (days)</span><input className={inputCls} value={f.daysValid} onChange={(e) => up('daysValid', e.target.value)} /></label>
+        {f.kind !== 'ca' && (
+          <label className="sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-fg-dim">Sign with CA</span>
+            <select className={inputCls} value={f.ca} onChange={(e) => up('ca', e.target.value)}><option value="">(self-signed)</option>{cas.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+          </label>
+        )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <button disabled={busy || !f.name || !f.commonName} onClick={() => void submit()} className="rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">Generate &amp; sign</button>
+        <button onClick={onCancel} className="rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app">Cancel</button>
+      </div>
     </div>
   );
 }
