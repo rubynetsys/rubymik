@@ -391,7 +391,7 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       res.status(400).json({ error: 'iface query parameter is required.' });
       return;
     }
-    const windowSec = Math.min(Math.max(Number(req.query.window) || 3600, 300), 6 * 3600);
+    const windowSec = Math.min(Math.max(Number(req.query.window) || 3600, 300), 24 * 3600);
     const cutoff = new Date(Date.now() - windowSec * 1000).toISOString();
     const rows = db.prepare(
       'SELECT ts, data FROM interface_traffic WHERE device_id = ? AND ts >= ? ORDER BY ts',
@@ -423,6 +423,29 @@ export function detailRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
       prev = { at, rx, tx };
     }
     res.json({ iface, windowSec, points });
+  });
+
+  // --- GET /api/devices/:id/metrics?window=3600 — CPU/mem/up time-series ---
+  // Reads the persisted device_metrics ring buffer (24h retention); read-only,
+  // no device contact. Powers the dashboard + device-overview CPU/mem graphs.
+  router.get('/:id/metrics', (req, res) => {
+    const row = loadDevice(Number(req.params.id));
+    if (!row) {
+      res.status(404).json({ error: 'Device not found.' });
+      return;
+    }
+    const windowSec = Math.min(Math.max(Number(req.query.window) || 3600, 300), 24 * 3600);
+    const cutoff = new Date(Date.now() - windowSec * 1000).toISOString();
+    const rows = db.prepare(
+      'SELECT ts, up, cpu_load, mem_used_pct FROM device_metrics WHERE device_id = ? AND ts >= ? ORDER BY ts',
+    ).all(row.id, cutoff) as unknown as Array<{ ts: string; up: number; cpu_load: number | null; mem_used_pct: number | null }>;
+    const points = rows.map((r) => ({
+      t: r.ts,
+      up: r.up === 1,
+      cpu: r.up === 1 ? r.cpu_load : null,
+      mem: r.up === 1 ? r.mem_used_pct : null,
+    }));
+    res.json({ windowSec, points });
   });
 
   // --- POST /api/devices/:id/poll — immediate health poll of OUR database

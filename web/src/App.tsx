@@ -16,6 +16,8 @@ import RemoteAccess from './pages/RemoteAccess';
 import Onboard from './pages/Onboard';
 import Provision from './pages/Provision';
 import AddDevice from './pages/AddDevice';
+import Dashboard from './pages/Dashboard';
+import Wallboard from './pages/Wallboard';
 import Audit from './pages/Audit';
 import { applyTheme } from './theme';
 
@@ -76,8 +78,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Wallboard is full-screen with no app chrome, so it lives OUTSIDE Layout. */}
+        <Route path="/wallboard" element={<Wallboard />} />
         <Route element={<Layout onLogout={refresh} />}>
-          <Route path="/" element={<Fleet />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/fleet" element={<Fleet />} />
           <Route path="/topology" element={<Topology />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/devices" element={<Devices />} />

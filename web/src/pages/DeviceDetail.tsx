@@ -13,6 +13,7 @@ import {
 } from '../types';
 import StatusBadge from '../components/StatusBadge';
 import TrafficChart from '../components/TrafficChart';
+import MetricChart, { type MetricPoint } from '../components/MetricChart';
 import DhcpManager from '../components/DhcpManager';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
@@ -304,6 +305,9 @@ export default function DeviceDetail() {
                 Live · updated {fmtAgo(live.fetchedAt)} · refreshes every {LIVE_REFRESH_MS / 1000}s while this page is open
               </div>
             )}
+            <div className="mt-5 border-t border-border-subtle pt-4">
+              <MetricsChart deviceId={deviceId} />
+            </div>
           </>
         );
 
@@ -628,7 +632,7 @@ function GroupNav({ group, openSecs, onGroup, onSub }: {
 function Shell({ name, children }: { name?: string; children: React.ReactNode }) {
   return (
     <div className="mx-auto max-w-6xl">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-dim transition hover:text-accent-text">
+      <Link to="/fleet" className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-dim transition hover:text-accent-text">
         <ArrowLeft className="h-4 w-4" /> Fleet
       </Link>
       <div className="mt-3 space-y-5">{children}</div>
@@ -793,6 +797,38 @@ function InterfaceRow({ iface: i, deviceId, open, onToggle }: {
   );
 }
 
+/** Device CPU + memory over time (from the persisted metrics ring buffer). */
+function MetricsChart({ deviceId }: { deviceId: number }) {
+  const [points, setPoints] = useState<MetricPoint[] | null>(null);
+  const [windowSec, setWindowSec] = useState(3600);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      api.get<{ points: MetricPoint[] }>(`/api/devices/${deviceId}/metrics?window=${windowSec}`)
+        .then((r) => { if (!cancelled) setPoints(r.points); }).catch(() => {});
+    };
+    load();
+    const timer = setInterval(() => { if (!document.hidden) load(); }, CHART_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [deviceId, windowSec]);
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide text-fg-dim">CPU &amp; memory ({windowSec / 3600}h)</span>
+        <div className="flex gap-1">
+          {[3600, 24 * 3600].map((w) => (
+            <button key={w} onClick={() => setWindowSec(w)}
+              className={`rounded-md px-2 py-1 text-xs font-semibold transition ${windowSec === w ? 'bg-accent text-inverse' : 'text-fg-dim hover:bg-app'}`}>
+              {w / 3600}h
+            </button>
+          ))}
+        </div>
+      </div>
+      {points === null ? <div className="h-40 animate-pulse rounded-lg bg-app" /> : <MetricChart points={points} />}
+    </div>
+  );
+}
+
 function IfaceChart({ deviceId, iface }: { deviceId: number; iface: string }) {
   const [points, setPoints] = useState<TrafficPoint[] | null>(null);
   const [windowSec, setWindowSec] = useState(3600);
@@ -823,7 +859,7 @@ function IfaceChart({ deviceId, iface }: { deviceId: number; iface: string }) {
           {iface} — traffic ({windowSec / 3600}h, {`30s`} samples)
         </span>
         <div className="flex gap-1">
-          {[3600, 6 * 3600].map((w) => (
+          {[3600, 24 * 3600].map((w) => (
             <button
               key={w}
               onClick={() => setWindowSec(w)}

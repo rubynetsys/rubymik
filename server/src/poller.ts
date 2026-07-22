@@ -28,7 +28,9 @@ import { log } from './log.js';
 const LAUNCH_SPACING_MS = 250;
 const POLL_TIMEOUT_MS = 10_000;
 const HISTORY_RETENTION_MS = 24 * 60 * 60 * 1000;
-const TRAFFIC_RETENTION_MS = 6 * 60 * 60 * 1000;
+// P28: 24h so the dashboard/device graphs can show a 24h traffic range (was 6h).
+// Still one JSON row per device per cycle — ~2880 rows/device/24h at 30s cadence.
+const TRAFFIC_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 interface PollDeviceRow {
   id: number;
