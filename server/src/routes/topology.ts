@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth } from '../auth.js';
 import { allSites, siteScope, scopeFilter, type AccessScope } from '../scope.js';
-import { buildTopology, type TopoDeviceInput, type TopoNeighborInput, type TopoDiscoveryInput } from '../topology.js';
+import { buildTopology, rollupSites, type TopoDeviceInput, type TopoNeighborInput, type TopoDiscoveryInput } from '../topology.js';
 
 /**
  * Topology endpoint. Reads ONLY tables the poller maintains (devices,
@@ -99,7 +99,9 @@ export function topologyRoutes(db: DatabaseSync): Router {
     }));
 
     const topo = buildTopology(devices, neighbors, discovery);
-    const sites = db.prepare('SELECT id, name FROM sites ORDER BY name').all() as unknown as Array<{ id: number; name: string }>;
+    const siteRows = db.prepare('SELECT id, name, latitude, longitude FROM sites ORDER BY name')
+      .all() as unknown as Array<{ id: number; name: string; latitude: number | null; longitude: number | null }>;
+    const sites = rollupSites(topo.nodes, siteRows);   // P33: worst-status + counts per site
 
     res.json({
       generatedAt: new Date().toISOString(),

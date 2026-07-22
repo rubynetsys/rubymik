@@ -9,6 +9,8 @@ export interface Site {
   name: string;
   location: string | null;
   clientName: string | null;
+  latitude: number | null;
+  longitude: number | null;
   deviceCount: number;
   createdAt: string;
 }
@@ -592,9 +594,13 @@ export interface DiscoveryNote {
   message: string;
 }
 
+export interface TopoSite {
+  id: number; name: string; latitude: number | null; longitude: number | null;
+  status: HealthStatus; counts: { total: number; up: number; warning: number; down: number; pending: number };
+}
 export interface TopologyPayload {
   generatedAt: string;
-  sites: Array<{ id: number; name: string }>;
+  sites: TopoSite[];
   nodes: TopoNode[];
   edges: TopoEdge[];
   notes: DiscoveryNote[];

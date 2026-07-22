@@ -382,6 +382,10 @@ const MIGRATIONS: string[] = [
      detail TEXT
    );
    CREATE INDEX idx_notification_log_ts ON notification_log(ts)`,
+
+  // P33: geographic coordinates per site, for the topology map view.
+  `ALTER TABLE sites ADD COLUMN latitude REAL;
+   ALTER TABLE sites ADD COLUMN longitude REAL`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

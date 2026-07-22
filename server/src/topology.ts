@@ -236,3 +236,31 @@ export function buildTopology(
 
   return { nodes: [...nodes.values()], edges: [...edges.values()], notes };
 }
+
+// ---------------- per-site geographic rollup (P33 map view) ----------------
+
+export interface SiteGeo { id: number; name: string; latitude: number | null; longitude: number | null }
+export interface TopoSiteRollup extends SiteGeo {
+  status: Health | 'pending';
+  counts: { total: number; up: number; warning: number; down: number; pending: number };
+}
+const SITE_STATUS_RANK: Record<string, number> = { down: 4, rebooting: 3, warning: 2, up: 1, pending: 0 };
+
+/** Fold the managed nodes into one worst-status + counts per site, keyed by siteId,
+ *  and stitch the geographic columns back on. Pure — unit-tested. Discovered
+ *  (unmanaged) nodes never influence a site's health. */
+export function rollupSites(nodes: TopoNode[], siteRows: SiteGeo[]): TopoSiteRollup[] {
+  const roll = new Map<number, { total: number; up: number; warning: number; down: number; pending: number; worst: string }>();
+  for (const n of nodes) {
+    if (n.kind !== 'managed' || n.siteId == null || !n.status) continue;
+    const r = roll.get(n.siteId) ?? { total: 0, up: 0, warning: 0, down: 0, pending: 0, worst: 'pending' };
+    r.total++;
+    if (n.status === 'up') r.up++; else if (n.status === 'warning') r.warning++; else if (n.status === 'down') r.down++; else r.pending++;
+    if ((SITE_STATUS_RANK[n.status] ?? 0) > (SITE_STATUS_RANK[r.worst] ?? 0)) r.worst = n.status;
+    roll.set(n.siteId, r);
+  }
+  return siteRows.map((s) => {
+    const r = roll.get(s.id);
+    return { ...s, status: (r?.worst ?? 'pending') as Health | 'pending', counts: { total: r?.total ?? 0, up: r?.up ?? 0, warning: r?.warning ?? 0, down: r?.down ?? 0, pending: r?.pending ?? 0 } };
+  });
+}

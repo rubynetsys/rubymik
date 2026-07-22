@@ -6,6 +6,7 @@ import Select from '../components/Select';
 import { fmtAgo, type Site, type TopoNode, type TopologyPayload } from '../types';
 import { computeLayout, layoutStats, type LayoutNode, type LayoutSite } from '../topology/layout';
 import TopoCanvas, { type TopoCanvasHandle } from '../components/TopoCanvas';
+import SiteMap from '../components/SiteMap';
 import StatusBadge from '../components/StatusBadge';
 import { DeviceModal } from './Devices';
 
@@ -29,6 +30,7 @@ export default function Topology() {
   const [search, setSearch] = useState('');
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [hover, setHover] = useState<{ node: LayoutNode; x: number; y: number } | null>(null);
+  const [viewMode, setViewMode] = useState<'graph' | 'map'>('graph');
   const [, tick] = useState(0);
 
   const load = useCallback(async () => {
@@ -140,20 +142,37 @@ export default function Topology() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Topology</h1>
           <p className="mt-1 text-sm text-fg-dim">
-            Auto-discovered from MNDP / LLDP / CDP neighbor tables — read-only, direct sightings only.
-            Zoom out for the fleet at a glance; click a site to dive in.
+            {viewMode === 'graph'
+              ? 'Auto-discovered from MNDP / LLDP / CDP neighbor tables — read-only, direct sightings only. Zoom out for the fleet at a glance; click a site to dive in.'
+              : 'Sites plotted on a map by the worst device status in each. Set a site’s coordinates under Sites; the map only shows what you’ve placed.'}
           </p>
         </div>
-        <span className="text-xs text-fg-faint">
-          {fetchedAt ? `Updated ${fmtAgo(new Date(fetchedAt).toISOString())}` : ''} · refreshes with poll data
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex overflow-hidden rounded-lg border border-border-strong text-xs font-semibold">
+            {(['graph', 'map'] as const).map((v) => (
+              <button key={v} onClick={() => setViewMode(v)}
+                className={`px-3 py-2 capitalize transition ${viewMode === v ? 'bg-accent text-inverse' : 'bg-surface text-fg-dim hover:bg-sunken'}`}>
+                {v === 'graph' ? 'Graph' : 'Map'}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-fg-faint">
+            {fetchedAt ? `Updated ${fmtAgo(new Date(fetchedAt).toISOString())}` : ''} · refreshes with poll data
+          </span>
+        </div>
       </div>
 
       {error && (
         <div className="mt-6 rounded-2xl border border-danger-line bg-danger-bg p-6 text-sm text-danger-fg-strong">{error}</div>
       )}
 
-      {topo && topo.nodes.length === 0 && (
+      {topo && viewMode === 'map' && (
+        <div className="mt-5">
+          <SiteMap sites={topo.sites} onSiteClick={(id) => { setViewMode('graph'); setSiteFilter(id); setFocusedKey(null); }} />
+        </div>
+      )}
+
+      {viewMode === 'graph' && topo && topo.nodes.length === 0 && (
         <div className="mt-6 rounded-2xl border border-border bg-surface p-12 text-center shadow-sm">
           <p className="text-sm text-fg-dim">
             {siteFilter === 'all' ? 'No devices to map yet — add a MikroTik first.' : 'No devices in this site.'}
@@ -164,7 +183,7 @@ export default function Topology() {
         </div>
       )}
 
-      {topo && topo.nodes.length > 0 && (
+      {viewMode === 'graph' && topo && topo.nodes.length > 0 && (
         <div className="mt-5">
           {warnings.length > 0 && (
             <div className="mb-4 rounded-xl border border-warning-line bg-warning-bg px-4 py-3">

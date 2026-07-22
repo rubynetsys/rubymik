@@ -101,15 +101,36 @@ function SiteModal({ site, onClose, onSaved }: { site?: Site; onClose: () => voi
   const [name, setName] = useState(site?.name ?? '');
   const [location, setLocation] = useState(site?.location ?? '');
   const [clientName, setClientName] = useState(site?.clientName ?? '');
+  const [lat, setLat] = useState(site?.latitude != null ? String(site.latitude) : '');
+  const [lng, setLng] = useState(site?.longitude != null ? String(site.longitude) : '');
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoNote, setGeoNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function findAddress() {
+    const q = location.trim();
+    if (q.length < 3) { setGeoNote('Type an address or place in Location first.'); return; }
+    setGeoBusy(true); setGeoNote(null);
+    try {
+      const r = await api.get<{ results: Array<{ lat: number; lng: number; displayName: string }> }>(`/api/sites/geocode?q=${encodeURIComponent(q)}`);
+      const top = r.results[0];
+      if (!top) { setGeoNote('No match — enter coordinates manually.'); return; }
+      setLat(top.lat.toFixed(6)); setLng(top.lng.toFixed(6));
+      setGeoNote(`Found: ${top.displayName}`);
+    } catch (err) { setGeoNote((err as Error).message); }
+    finally { setGeoBusy(false); }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const body = { name, location: location || null, clientName: clientName || null };
+      const body = {
+        name, location: location || null, clientName: clientName || null,
+        latitude: lat.trim() === '' ? null : Number(lat), longitude: lng.trim() === '' ? null : Number(lng),
+      };
       if (site) await api.patch(`/api/sites/${site.id}`, body);
       else await api.post('/api/sites', body);
       onSaved();
@@ -142,14 +163,28 @@ function SiteModal({ site, onClose, onSaved }: { site?: Site; onClose: () => voi
           </label>
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim">Location (optional)</span>
-            <input className={inputCls} value={location} onChange={(e) => setLocation(e.target.value)}
-              placeholder="Cape Town" />
+            <div className="flex gap-2">
+              <input className={inputCls} value={location} onChange={(e) => setLocation(e.target.value)}
+                placeholder="123 Example Ave, Cape Town" />
+              <button type="button" onClick={() => void findAddress()} disabled={geoBusy}
+                className="shrink-0 rounded-lg border border-border-strong px-3 py-2 text-xs font-semibold text-fg-body transition hover:bg-sunken disabled:opacity-50">
+                {geoBusy ? 'Finding…' : 'Find on map'}
+              </button>
+            </div>
           </label>
           <label className="block">
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim">Client (optional)</span>
             <input className={inputCls} value={clientName} onChange={(e) => setClientName(e.target.value)}
               placeholder="Acme (Pty) Ltd" />
           </label>
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim">Map coordinates (optional — powers the Topology map)</span>
+            <div className="flex gap-2">
+              <input className={inputCls} value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude (−90…90)" inputMode="decimal" />
+              <input className={inputCls} value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude (−180…180)" inputMode="decimal" />
+            </div>
+            {geoNote && <p className="mt-1.5 text-xs text-fg-dim">{geoNote}</p>}
+          </div>
           <div className="flex justify-end gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body transition hover:bg-sunken">
