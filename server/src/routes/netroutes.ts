@@ -12,6 +12,7 @@ import {
   type RoutesContext,
 } from '../netroutes.js';
 import { writeErr } from '../snapshothook.js';
+import { wanRouteGuard } from '../netwan.js';
 
 interface DeviceRow {
   id: number; name: string; host: string; port: number | null;
@@ -127,6 +128,13 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     if (!route.managed && (req.body ?? {}).force !== true) {
       res.status(409).json({ error: 'This is a pre-existing static route (not RubyMIK-managed). Re-send with force:true to remove it.', preExistingRoute: true });
       return;
+    }
+    // P42: deleting a DEFAULT route is dual-WAN-guarded — refuse cutting the sole active
+    // default unless another WAN's default is present AND verified reachable (active).
+    if (route.dst === '0.0.0.0/0') {
+      const defaults = view.routes.filter((r) => r.dst === '0.0.0.0/0').map((r) => ({ distance: String(r.distance ?? ''), active: r.active }));
+      const wg = wanRouteGuard('delete', { dst: '0.0.0.0/0', distance: String(route.distance ?? ''), active: route.active }, defaults);
+      if (wg) { auditRejected(sac(m.row, m.actor, 'route.remove', route.dst), 'Remove route', `Blocked by WAN failover guard: ${wg}`); res.status(409).json({ error: wg, wanFailoverMgmtGuard: true }); return; }
     }
     try {
       const outcome = await removeRoute(m.ctx, sac(m.row, m.actor, 'route.remove', route.dst), req.params.routeId);

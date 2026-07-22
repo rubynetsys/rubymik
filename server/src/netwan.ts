@@ -283,7 +283,7 @@ export function wanRouteGuard(
   if (!targetRoute.active) return null; // cutting a standby default can't drop the live path
   const verifiedAlternate = allDefaults.filter((r) => r.distance !== targetRoute.distance).some((r) => r.active);
   if (verifiedAlternate) return null;
-  return `Refused: this default route (distance ${targetRoute.distance}) currently carries the management path and no other WAN's default route is verified reachable (active). ${op === 'delete' ? 'Deleting' : 'Disabling'} it would strand RubyMIK. Bring the other WAN up first, or use failover teardown.`;
+  return `Refused: this active default route (distance ${targetRoute.distance}) is the only internet path currently verified reachable — no other WAN's default route is active (its check-target does not resolve). ${op === 'delete' ? 'Deleting' : 'Disabling'} it would black-hole egress and strand any management that rides this WAN. Bring the other WAN up first, or use failover teardown.`;
 }
 
 // ── write ops (safe-apply + P21-snapshot-bracketed) ──
