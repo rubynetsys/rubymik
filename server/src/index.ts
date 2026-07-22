@@ -2,9 +2,14 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { DatabaseSync } from 'node:sqlite';
 import { loadConfig } from './config.js';
 import { log, setLogLevel } from './log.js';
-import { openDb } from './db.js';
+import { openDb, preMigratePlan, BootError, type MigrationStatus } from './db.js';
+import { runSelfBackup, writeSelfBackupLog } from './selfbackup.js';
+import { appUpdateRoutes } from './routes/appupdate.js';
+import { startUpdateChecks } from './appupdate.js';
+import { APP_VERSION } from './version.js';
 import { SecretBox } from './secretbox.js';
 import { Poller } from './poller.js';
 import { BackupScheduler } from './backupscheduler.js';
@@ -48,7 +53,39 @@ import { webfigSessionRoutes, webfigProxyApp } from './routes/webfig.js';
 const config = loadConfig();
 setLogLevel(config.logLevel);
 
-const db = openDb(config.dataDir);
+// P36: RubyMIK's OWN DB self-backup key (dedicated; disabled until RUBYMIK_BACKUP_KEY
+// is set). P38 reuses it for the pre-migration backup below.
+const backupKey = config.backupKeyHex ? Buffer.from(config.backupKeyHex, 'hex') : null;
+
+// P38 boot upgrade-guard: when the schema OR the app version has moved, take a
+// fail-closed pre-migration backup BEFORE any migration is applied. A REQUIRED
+// backup that cannot be taken aborts startup — RubyMIK never migrates real data
+// without a safety net. (Rollback = restore that backup + pin the old image tag.)
+function preMigrateBackup(status: MigrationStatus, mdb: DatabaseSync): void {
+  const plan = preMigratePlan(status, { backupConfigured: !!backupKey });
+  if (plan.action === 'skip') { log.info(`Boot upgrade-guard: ${plan.reason}`); return; }
+  if (plan.action === 'refuse') throw new BootError(plan.reason);
+  try {
+    const res = runSelfBackup(mdb, backupKey!, config.dataDir, 'pre-upgrade');
+    try { writeSelfBackupLog(mdb, { kind: 'startup', status: 'ok', filename: res.name, manifest: res.manifest, detail: `pre-upgrade backup (schema ${status.prevSchema}→${status.targetSchema}, app ${status.prevAppVersion ?? '—'}→${status.appVersion})` }); } catch { /* log table predates this DB */ }
+    log.info(`Boot upgrade-guard: pre-upgrade backup written (${res.file}).`);
+  } catch (err) {
+    const msg = (err as Error).message;
+    try { writeSelfBackupLog(mdb, { kind: 'startup', status: 'failed', detail: `pre-upgrade backup FAILED: ${msg}` }); } catch { /* best-effort */ }
+    if (plan.action === 'backup-required') {
+      throw new BootError(`Pre-migration backup FAILED — refusing to migrate (fail-closed): ${msg}. Fix the backup key/destination and retry, or pin the previous image tag (see README-DEPLOY.md § Rollback).`);
+    }
+    log.warn(`Boot upgrade-guard: courtesy backup failed, continuing (schema unchanged): ${msg}`);
+  }
+}
+
+let db: DatabaseSync;
+try {
+  db = openDb(config.dataDir, { beforeMigrate: preMigrateBackup });
+} catch (err) {
+  if (err instanceof BootError) { log.error(err.message); process.exit(1); }
+  throw err;
+}
 const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
 installCaptureHook(db, box); // P21: bracket every config write with pre/post snapshots (fail-closed)
 const notifier = new Notifier(db, box);
@@ -57,8 +94,7 @@ const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollCon
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);
 const snapshotScheduler = new SnapshotScheduler(db, box, config.snapshotIntervalSec * 1000);
 const wgHub = new WireguardHub(db, box);
-// P36: RubyMIK's OWN DB self-backup (dedicated key; disabled until RUBYMIK_BACKUP_KEY is set).
-const backupKey = config.backupKeyHex ? Buffer.from(config.backupKeyHex, 'hex') : null;
+let updateChecker: { stop: () => void } = { stop: () => {} }; // P38: replaced once the server is listening
 const SELFBACKUP_GAP_HOURS = 8;
 const selfBackupScheduler = new SelfBackupScheduler(db, backupKey, config.dataDir, config.selfBackupIntervalSec * 1000, config.selfBackupKeep, notifier, SELFBACKUP_GAP_HOURS);
 
@@ -101,6 +137,7 @@ app.use('/api/fleet', fleetUpdateRoutes(db, box));
 app.use('/api/topology', topologyRoutes(db));
 app.use('/api/alerts', alertRoutes(db, notifier));
 app.use('/api/audit', auditRoutes(db));
+app.use('/api/update', appUpdateRoutes(db, config.updateUrl)); // P38: in-app update check (read/manual/config; never applies)
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -141,6 +178,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   backupScheduler.start();
   snapshotScheduler.start();
   selfBackupScheduler.start();
+  updateChecker = startUpdateChecks(db, { currentVersion: APP_VERSION, defaultUrl: config.updateUrl }); // P38: daily update check (opt-out honored, offline-safe)
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
 });
 
@@ -161,6 +199,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     poller.stop();
     backupScheduler.stop();
     selfBackupScheduler.stop();
+    updateChecker.stop();
     webfigServer?.close();
     server.close(() => {
       db.close();

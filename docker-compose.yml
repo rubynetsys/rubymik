@@ -2,8 +2,9 @@ name: rubymik
 
 services:
   rubymik:
-    build: .
-    image: rubymik/rubymik:latest
+    # The published image. `docker compose pull && docker compose up -d` updates it.
+    # Override RUBYMIK_IMAGE to pin a specific version tag or a locally-built image.
+    image: ${RUBYMIK_IMAGE:-ghcr.io/rubynetsys/rubymik:latest}
     container_name: rubymik
     restart: unless-stopped
     init: true
@@ -18,11 +19,18 @@ services:
       RUBYMIK_POLL_INTERVAL: ${RUBYMIK_POLL_INTERVAL:-30}
       RUBYMIK_BACKUP_INTERVAL: ${RUBYMIK_BACKUP_INTERVAL:-86400}
       RUBYMIK_BACKUP_KEEP: ${RUBYMIK_BACKUP_KEEP:-10}
-      # P36 DB self-backup. The dedicated key is NEVER hardcoded here — it is read
-      # from a gitignored .env (or the shell). Unset ⇒ self-backups stay disabled.
+      # Field-encryption key. Empty ⇒ RubyMIK generates one at /data/secret.key on
+      # first run (persisted in the volume). Set it to manage the key yourself.
+      # Read from the environment (a gitignored .env or the shell) — NEVER baked in.
+      RUBYMIK_ENCRYPTION_KEY: ${RUBYMIK_ENCRYPTION_KEY:-}
+      # P36 DB self-backup key — dedicated, NEVER hardcoded here; read from a
+      # gitignored .env (or the shell). Unset ⇒ self-backups disabled AND a schema
+      # upgrade refuses to run (P38 fail-closed: no backup, no migration).
       RUBYMIK_BACKUP_KEY: ${RUBYMIK_BACKUP_KEY:-}
       RUBYMIK_SELFBACKUP_INTERVAL: ${RUBYMIK_SELFBACKUP_INTERVAL:-21600}
       RUBYMIK_SELFBACKUP_KEEP: ${RUBYMIK_SELFBACKUP_KEEP:-28}
+      # P38 update check — optional URL override (or turn it off in the app).
+      RUBYMIK_UPDATE_URL: ${RUBYMIK_UPDATE_URL:-}
     volumes:
       - rubymik-data:/data
       # A SECOND, separate volume as the off-host copy stand-in (a mounted path).

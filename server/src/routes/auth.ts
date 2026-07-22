@@ -8,6 +8,8 @@ import {
 import {
   consumeRecoveryCode, generateRecoveryCodes, generateSecret, storeRecoveryCodes, totpUri, verifyTotp,
 } from '../totp.js';
+import { APP_VERSION } from '../version.js';
+import { TARGET_SCHEMA } from '../db.js';
 import { log } from '../log.js';
 
 interface UserRow {
@@ -35,8 +37,11 @@ const ACCENTS = ['ruby', 'blue', 'red', 'green', 'purple', 'amber', 'teal'];
 export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: string | null }): Router {
   const router = Router();
 
+  // Liveness + a little diagnostic context. Public (the Docker HEALTHCHECK and any
+  // uptime monitor hit it before login). If the server is listening, migrations have
+  // already completed (openDb runs to completion before listen), so ok=true.
   router.get('/health', (_req, res) => {
-    res.json({ ok: true });
+    res.json({ ok: true, version: APP_VERSION, schema: TARGET_SCHEMA });
   });
 
   router.get('/status', (req, res) => {

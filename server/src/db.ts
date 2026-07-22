@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { log } from './log.js';
+import { APP_VERSION } from './version.js';
 
 // Schema lives here as ordered migrations. SQL is kept portable where practical
 // so an optional Postgres backend can slot in later; SQLite is the default and
@@ -413,25 +414,112 @@ const MIGRATIONS: string[] = [
    );
    INSERT INTO self_backup_config (id, offhost_enabled, offhost_kind, offhost_path, updated_at)
      VALUES (1, 0, 'path', NULL, datetime('now'))`,
+
+  // P38: in-app update check. A singleton config row: whether the daily version.json
+  // fetch runs (opt-out), an optional URL override, and a cache of the last result
+  // (so the banner is instant and survives an offline window). The check sends
+  // NOTHING but the HTTP GET — no telemetry, no instance id — and there is NO
+  // auto-update path; it only ever surfaces "a newer version exists, here's how".
+  `CREATE TABLE app_update_config (
+     id INTEGER PRIMARY KEY CHECK (id = 1),
+     enabled INTEGER NOT NULL DEFAULT 1,
+     url TEXT,
+     last_check_at TEXT,
+     last_status TEXT,                 -- ok | offline | error
+     last_result TEXT,                 -- cached parsed version.json (JSON) from the last OK check
+     updated_at TEXT NOT NULL
+   );
+   INSERT INTO app_update_config (id, enabled, url, updated_at) VALUES (1, 1, NULL, datetime('now'))`,
 ];
 
-export function openDb(dataDir: string): DatabaseSync {
-  const dbPath = path.join(dataDir, 'rubymik.db');
-  const db = new DatabaseSync(dbPath);
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  migrate(db);
-  log.debug(`SQLite ready at ${dbPath}`);
-  return db;
+/** The total number of migrations this build knows about — the schema version a
+ *  fully-migrated DB converges to. */
+export const TARGET_SCHEMA = MIGRATIONS.length;
+
+/** Thrown when the app cannot safely start — a clear, actionable message for the
+ *  operator. index.ts logs `.message` (no stack noise) and exits non-zero. */
+export class BootError extends Error {
+  constructor(message: string) { super(message); this.name = 'BootError'; }
 }
 
-function migrate(db: DatabaseSync): void {
+export interface MigrationStatus {
+  /** schema version recorded before this boot (== count of applied migrations). */
+  prevSchema: number;
+  /** schema version this build migrates TO. */
+  targetSchema: number;
+  /** how many migrations are pending. */
+  pending: number;
+  /** brand-new empty database — nothing to protect, no pre-migration backup. */
+  freshInstall: boolean;
+  prevAppVersion: string | null;
+  appVersion: string;
+  /** the app binary version changed since the last recorded boot. */
+  appChanged: boolean;
+  /** schema OR app version moved — the trigger for the upgrade hook. */
+  changed: boolean;
+}
+
+/** Runs BEFORE any migration is applied. May throw (e.g. a backup could not be
+ *  taken) to abort startup fail-closed. Receives the pre-migration DB state. */
+export type BeforeMigrate = (status: MigrationStatus, db: DatabaseSync) => void;
+
+// ---- bootstrap tables (created outside the numbered chain, like a bootloader) ----
+// schema_migrations tracks the chain; app_meta is a tiny key/value store the boot
+// upgrade-guard must be able to READ before the chain runs (so it can't itself be
+// a migration). Both are IF NOT EXISTS and safe on every boot.
+export function ensureBootstrap(db: DatabaseSync): void {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL
   )`);
-  const row = db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations').get() as { v: number };
-  for (let v = row.v; v < MIGRATIONS.length; v++) {
+  db.exec(`CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`);
+}
+
+export function getMeta(db: DatabaseSync, key: string): string | null {
+  const r = db.prepare('SELECT value FROM app_meta WHERE key = ?').get(key) as { value: string } | undefined;
+  return r ? r.value : null;
+}
+function setMeta(db: DatabaseSync, key: string, value: string): void {
+  db.prepare('INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+}
+
+export function migrationStatus(db: DatabaseSync, appVersion: string): MigrationStatus {
+  const prevSchema = (db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations').get() as { v: number }).v;
+  const prevAppVersion = getMeta(db, 'app_version');
+  const pending = TARGET_SCHEMA - prevSchema;
+  // Fresh = no migrations applied AND we've never recorded a boot. (A DB that was
+  // fully migrated by a *previous* app that predates app_meta reports prevApp=null
+  // but prevSchema>0 → NOT fresh, so its data is still protected on the next bump.)
+  const freshInstall = prevSchema === 0 && prevAppVersion === null;
+  const appChanged = prevAppVersion !== null && prevAppVersion !== appVersion;
+  return { prevSchema, targetSchema: TARGET_SCHEMA, pending, freshInstall, prevAppVersion, appVersion, appChanged, changed: pending > 0 || appChanged };
+}
+
+/** What the boot upgrade-guard should do about a pre-migration backup. Pure so it
+ *  is unit-testable without a real backup key or router. */
+export type PreMigrateAction = 'skip' | 'backup-required' | 'backup-courtesy' | 'refuse';
+export function preMigratePlan(status: MigrationStatus, opts: { backupConfigured: boolean }): { action: PreMigrateAction; reason: string } {
+  if (status.freshInstall) return { action: 'skip', reason: 'Fresh install — no existing data to back up before the initial migration.' };
+  if (status.pending > 0) {
+    if (opts.backupConfigured) return { action: 'backup-required', reason: `Schema upgrade ${status.prevSchema}→${status.targetSchema}: a pre-migration backup is required and must succeed.` };
+    // Fail-closed: never migrate real data with no safety net.
+    return { action: 'refuse', reason: `Refusing to migrate schema ${status.prevSchema}→${status.targetSchema}: RUBYMIK_BACKUP_KEY is not set, so no pre-migration backup can be taken. Set a backup key (see README-DEPLOY.md) and retry, or pin the previous image tag.` };
+  }
+  // App version changed but the schema did not — a courtesy backup if we can, but
+  // its failure is non-fatal because there is no migration to protect.
+  if (opts.backupConfigured) return { action: 'backup-courtesy', reason: `App ${status.prevAppVersion}→${status.appVersion} (schema unchanged): taking a courtesy backup.` };
+  return { action: 'skip', reason: `App ${status.prevAppVersion}→${status.appVersion} (schema unchanged) — no backup key set; nothing to migrate, continuing.` };
+}
+
+/** Apply pending migrations up to `target` (default: the whole chain), each in its
+ *  own transaction, in order. `target` < the full length is used by tests to build
+ *  an older-schema fixture; production always migrates to the end. */
+export function applyMigrations(db: DatabaseSync, target: number = MIGRATIONS.length): void {
+  const from = (db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM schema_migrations').get() as { v: number }).v;
+  for (let v = from; v < target; v++) {
     const sql = MIGRATIONS[v]!;
     db.exec('BEGIN');
     try {
@@ -441,8 +529,34 @@ function migrate(db: DatabaseSync): void {
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
-      throw err;
+      // Fail-closed: a partially-applied migration is rolled back and startup stops
+      // with a message that names the failing step and the recovery path.
+      throw new BootError(`Database migration ${v + 1}/${MIGRATIONS.length} failed and was rolled back — refusing to start: ${(err as Error).message}. Restore the most recent RubyMIK backup and pin the previous image tag (see README-DEPLOY.md § Rollback).`);
     }
     log.info(`Applied database migration ${v + 1}/${MIGRATIONS.length}`);
   }
+}
+
+/** The full boot sequence: bootstrap → detect change → (fail-closed) pre-migrate
+ *  hook → apply the chain in order → record this boot's version. Exported so tests
+ *  can drive it against a scratch DB with an injected hook. */
+export function runMigrations(db: DatabaseSync, opts: { appVersion: string; beforeMigrate?: BeforeMigrate }): MigrationStatus {
+  ensureBootstrap(db);
+  const status = migrationStatus(db, opts.appVersion);
+  if (status.changed && opts.beforeMigrate) opts.beforeMigrate(status, db); // may throw → abort (fail-closed)
+  applyMigrations(db);
+  setMeta(db, 'app_version', opts.appVersion);
+  setMeta(db, 'schema_version', String(TARGET_SCHEMA));
+  setMeta(db, 'booted_at', new Date().toISOString());
+  return status;
+}
+
+export function openDb(dataDir: string, opts: { appVersion?: string; beforeMigrate?: BeforeMigrate } = {}): DatabaseSync {
+  const dbPath = path.join(dataDir, 'rubymik.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA foreign_keys = ON');
+  runMigrations(db, { appVersion: opts.appVersion ?? APP_VERSION, beforeMigrate: opts.beforeMigrate });
+  log.debug(`SQLite ready at ${dbPath}`);
+  return db;
 }

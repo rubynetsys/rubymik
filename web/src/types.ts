@@ -668,6 +668,17 @@ export interface BackupStatus {
   offhost: { enabled: boolean; lastStatus: string | null };
   keyConfigured: boolean; gapHours: number;
 }
+// P38 — in-app update check (never applies; just surfaces + tells you the command).
+export interface UpdateReport {
+  current: string; latest: string | null; updateAvailable: boolean;
+  belowMinimum: boolean; minimumSupported: string | null; breakingAhead: string[];
+  changelogUrl: string | null; notes: string | null; pullCommand: string;
+}
+export interface UpdateStatus {
+  current: string; schemaVersion: number; bootedAt: string | null;
+  enabled: boolean; url: string; lastCheckAt: string | null;
+  lastStatus: 'ok' | 'offline' | 'disabled' | null; report: UpdateReport | null;
+}
 export interface BackupManifestView {
   format: string; createdAt: string; kind: string; schemaVersion: number; appVersion: string;
   testBaseline: number; sha256Plain: string; bytesPlain: number; bytesCipher: number;

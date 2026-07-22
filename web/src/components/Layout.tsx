@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Bell, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Router as RouterIcon, ScrollText, Server, UsersRound, Waypoints, Wand2 } from 'lucide-react';
+import { AlertTriangle, Bell, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Rocket, Router as RouterIcon, ScrollText, Server, UsersRound, Waypoints, Wand2, X } from 'lucide-react';
 import { api } from '../api';
-import type { AlertSummary, BackupStatus } from '../types';
+import type { AlertSummary, BackupStatus, UpdateStatus } from '../types';
 import { useMe } from '../me';
 import { useDesktopAlerts } from './NotificationChannels';
 import Logo from './Logo';
@@ -29,12 +29,15 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
   const me = useMe();
   const [summary, setSummary] = useState<AlertSummary | null>(null);
   const [backup, setBackup] = useState<BackupStatus | null>(null);
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState<string | null>(() => sessionStorage.getItem('rubymik.updateDismissed'));
   useDesktopAlerts(); // browser pops for new alerts while the app is open (opt-in)
 
   useEffect(() => {
     const load = () => {
       api.get<AlertSummary>('/api/alerts/summary').then(setSummary).catch(() => {});
       api.get<BackupStatus>('/api/backup/status').then(setBackup).catch(() => {});
+      api.get<UpdateStatus>('/api/update/status').then(setUpdate).catch(() => {});
     };
     load();
     const t = setInterval(() => {
@@ -42,6 +45,8 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
     }, SUMMARY_REFRESH_MS);
     return () => clearInterval(t);
   }, []);
+
+  function dismissUpdate(v: string) { sessionStorage.setItem('rubymik.updateDismissed', v); setUpdateDismissed(v); }
 
   async function logout() {
     await api.post('/api/logout').catch(() => {});
@@ -113,6 +118,22 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span><b>Backups {backup.severity === 'critical' ? 'need attention' : 'warning'}:</b> {backup.reason}</span>
             {me.role === 'admin' && <Link to="/backup" className="ml-auto rounded-md border border-current/40 px-2.5 py-1 text-xs font-semibold hover:bg-black/5">Open backups →</Link>}
+          </div>
+        )}
+        {update?.report?.updateAvailable && updateDismissed !== update.report.latest && (
+          <div className={`mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm ${update.report.belowMinimum ? 'border-warning-line bg-warning-bg text-warning-fg' : 'border-info bg-info-bg text-info-fg'}`}>
+            <Rocket className="h-4 w-4 shrink-0" />
+            <span>
+              <b>RubyMIK {update.report.latest} is available</b> — you're on {update.report.current}.
+              {update.report.belowMinimum && <b> Your version is below the minimum still supported — update soon.</b>}
+              {update.report.breakingAhead.length > 0 && <> Note: breaking changes in {update.report.breakingAhead.join(', ')} — read the changelog first.</>}
+            </span>
+            {update.report.changelogUrl && (
+              <a href={update.report.changelogUrl} target="_blank" rel="noreferrer" className="rounded-md border border-current/40 px-2.5 py-1 text-xs font-semibold hover:bg-black/5">Changelog →</a>
+            )}
+            <code className="rounded-md bg-black/10 px-2 py-1 font-mono text-xs">{update.report.pullCommand}</code>
+            {me.role === 'admin' && <Link to="/account" className="text-xs font-semibold underline decoration-current/40 underline-offset-2 hover:decoration-current">Update settings</Link>}
+            <button onClick={() => dismissUpdate(update.report!.latest!)} title="Dismiss until the next version" className="ml-auto rounded-md p-1 hover:bg-black/5"><X className="h-4 w-4" /></button>
           </div>
         )}
         {me.role === 'viewer' && (

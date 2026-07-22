@@ -31,6 +31,9 @@ export interface Config {
   /** Instance default theme (a user's own choice overrides it). */
   defaultTheme: string;
   defaultAccent: string | null;
+  /** P38: override the version.json URL the update check fetches (else the built-in
+   *  default). The DB config row can also override it per-instance. */
+  updateUrl: string | undefined;
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -93,5 +96,10 @@ export function loadConfig(): Config {
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent };
+  const updateUrl = process.env.RUBYMIK_UPDATE_URL ? process.env.RUBYMIK_UPDATE_URL.trim() : undefined;
+  if (updateUrl !== undefined && !/^https?:\/\//i.test(updateUrl)) {
+    throw new Error('RUBYMIK_UPDATE_URL must be an http(s) URL.');
+  }
+
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl };
 }

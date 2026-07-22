@@ -1,6 +1,6 @@
 {
   "name": "rubymik",
-  "version": "0.1.0",
+  "version": "0.9.1",
   "private": true,
   "description": "Modern, self-hosted monitoring dashboard for MikroTik RouterOS devices",
   "scripts": {
