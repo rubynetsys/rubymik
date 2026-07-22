@@ -24,6 +24,7 @@ export default function UpdatePanel({ deviceId, deviceName, manageable }: { devi
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [fwOpen, setFwOpen] = useState(false);
 
   const load = useCallback(async () => {
     try { setView(await api.get<UpdateView>(`/api/devices/${deviceId}/update`)); setError(null); }
@@ -97,11 +98,74 @@ export default function UpdatePanel({ deviceId, deviceName, manageable }: { devi
               {view.preconditions.blockers.map((b, i) => <li key={i}>• {b}</li>)}
             </ul>
           )}
+
+          {st?.firmwareUpgradeAvailable && (
+            <div className="mt-3 rounded-lg border border-warning-line bg-warning-bg/40 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-warning-fg">
+                  <b>RouterBOARD firmware</b> — {st.firmwareCurrent} → {st.firmwareUpgrade} pending. This is the bootloader, upgraded separately from RouterOS.
+                </div>
+                {manageable && (
+                  <button onClick={() => setFwOpen(true)}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-warning-line px-3 py-1.5 text-xs font-semibold text-warning-fg transition hover:bg-warning-bg">
+                    <ArrowUpCircle className="h-3.5 w-3.5" /> Upgrade firmware &amp; reboot…
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {confirmOpen && st && <InstallModal deviceId={deviceId} deviceName={deviceName} from={st.installed} to={st.latest} onClose={() => { setConfirmOpen(false); void load(); }} />}
+      {fwOpen && st && <FirmwareModal deviceId={deviceId} deviceName={deviceName} from={st.firmwareCurrent} to={st.firmwareUpgrade} onClose={() => { setFwOpen(false); void load(); }} />}
     </section>
+  );
+}
+
+function FirmwareModal({ deviceId, deviceName, from, to, onClose }: { deviceId: number; deviceName: string; from: string | null; to: string | null; onClose: () => void }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const match = text.trim() === deviceName;
+  async function go() {
+    setBusy(true); setResult(null);
+    try {
+      const r = await api.post<{ upgradingFirmware: boolean; until: string; from: string; to: string }>(`/api/devices/${deviceId}/update/firmware`, { confirm: text.trim() });
+      setResult({ ok: true, msg: `Firmware upgrade issued (${r.from ?? from} → ${r.to ?? to}) — expected back by ${new Date(r.until).toLocaleTimeString()}. Watch the status badge: “Rebooting”, then “Up”.` });
+    } catch (e) { setResult({ ok: false, msg: (e as Error).message }); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-warning-fg" /><h3 className="text-base font-bold text-fg-strong">Upgrade RouterBOARD firmware on {deviceName}?</h3></div>
+          <button onClick={onClose} className="rounded-lg p-1 text-fg-faint hover:bg-app"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="mt-3 rounded-lg bg-warning-bg px-3 py-2.5 text-xs text-warning-fg">
+          This flashes the RouterBOARD bootloader <b>{from ?? '?'} → {to ?? '?'}</b> and reboots to apply it — the device is unreachable for a minute or two.
+          A pre-upgrade snapshot is captured and RubyMIK verifies the box returns (serial + uptime reset). <b>There is no rollback of a completed firmware flash.</b>
+        </div>
+        {result ? (
+          <div className={`mt-3 rounded-lg px-3 py-2.5 text-sm ${result.ok ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg-strong'}`}>{result.msg}</div>
+        ) : (
+          <label className="mt-4 block text-xs font-semibold text-fg-dim">Type the device name to confirm
+            <input autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={deviceName}
+              className="mt-1 w-full rounded-lg border border-border-strong bg-app px-3 py-2 text-sm text-fg-body outline-none transition focus:border-warning-line" />
+          </label>
+        )}
+        <div className="mt-5 flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">{result?.ok ? 'Close' : 'Cancel'}</button>
+          {!result?.ok && (
+            <button disabled={!match || busy} onClick={() => void go()}
+              className="inline-flex items-center gap-2 rounded-lg bg-warning px-5 py-2 text-sm font-semibold text-inverse transition hover:opacity-90 disabled:opacity-40">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpCircle className="h-4 w-4" />} Upgrade firmware now
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

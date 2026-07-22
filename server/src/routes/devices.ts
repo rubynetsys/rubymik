@@ -423,6 +423,61 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     res.status(202).json({ updating: true, until, windowSec, from: state.installed, to: state.latest });
   });
 
+  // UPGRADE the RouterBOARD firmware (bootloader) — flashes from the installed
+  // RouterOS's bundled firmware, then reboots to apply it. Same gates + dead-man as
+  // the package install. Only offered when an upgrade is actually pending.
+  router.post('/:id/update/firmware', async (req, res) => {
+    const id = Number(req.params.id);
+    const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    if (!row.write_username_enc || !row.write_password_enc) { res.status(403).json({ error: 'This device is monitor-only. Add a write credential to update it.' }); return; }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const confirm = typeof body.confirm === 'string' ? body.confirm.trim() : '';
+    if (confirm !== row.name) { res.status(400).json({ error: `Type the device name exactly ("${row.name}") to confirm the firmware upgrade + reboot.` }); return; }
+    const windowSec = Math.min(Math.max(Number(body.windowSec) || UPDATE_WINDOW_SEC, 60), 1800);
+    const actor = (req as unknown as { user: SessionUser }).user.username;
+
+    const readT = readTarget(box, row);
+    let baseline: { serial: string | null; uptimeSec: number | null; at: string };
+    let state: ReturnType<typeof parseUpdateState>;
+    try {
+      const conn = await connectDevice('rest', readT);
+      baseline = { serial: conn.info.serialNumber, uptimeSec: parseUptimeSec(conn.info.uptime), at: new Date().toISOString() };
+      state = await readUpdateState(row);
+    } catch (err) { res.status(502).json({ error: `Cannot reach the device to upgrade its firmware: ${(err as Error).message}` }); return; }
+
+    if (state.firmwareUpgradeAvailable !== true) { res.status(409).json({ error: `No RouterBOARD firmware upgrade is available (current ${state.firmwareCurrent ?? '?'}).`, preconditionFailed: true }); return; }
+    const st = db.prepare('SELECT state FROM device_status WHERE device_id = ?').get(id) as { state: string | null } | undefined;
+    if (st?.state === 'rebooting') { res.status(409).json({ error: 'The device is already rebooting — wait for it to return.', preconditionFailed: true }); return; }
+
+    try { await captureForDevice(db, box, id, { trigger: 'pre_write', operation: 'system.firmware' }); }
+    catch (err) { res.status(409).json({ error: `Refusing to upgrade firmware without a pre-upgrade snapshot: ${(err as Error).message}`, snapshotRequired: true }); return; }
+
+    const until = new Date(Date.now() + windowSec * 1000).toISOString();
+    beginReboot(db, id, baseline, until);
+    try {
+      const write = writeTarget(box, row);
+      const transport = await transportFor(row, readT);
+      await restCommand(write, transport, '/system/routerboard/upgrade', {}); // stage the flash
+      await restCommand(write, transport, '/system/reboot', {});               // reboot applies it
+    } catch (err) {
+      const msg = (err as Error).message.toLowerCase();
+      if (/\b(401|403)\b|forbidden|permission|not permitted|no permission|login/.test(msg)) {
+        abortReboot(db, id);
+        res.status(502).json({ error: `Firmware upgrade refused by the router: ${(err as Error).message}` });
+        return;
+      }
+      // connection reset / timeout → the box is rebooting to apply the firmware, as expected
+    }
+    writeAudit(
+      { db, actor, deviceId: id, deviceName: row.name, action: 'system.firmware', targetLabel: `firmware ${state.firmwareCurrent ?? '?'} → ${state.firmwareUpgrade ?? '?'}` },
+      'applied', `RouterBOARD firmware upgrade issued (${state.firmwareCurrent ?? '?'} → ${state.firmwareUpgrade ?? '?'}, return window ${windowSec}s)`,
+      { from: state.firmwareCurrent }, { to: state.firmwareUpgrade, until, baseline },
+      'Firmware upgrade + reboot issued. Expected-outage dead-man armed — the device shows "rebooting" until it returns (serial + uptime verified) or the window expires.',
+    );
+    res.status(202).json({ upgradingFirmware: true, until, windowSec, from: state.firmwareCurrent, to: state.firmwareUpgrade });
+  });
+
   // Live connection test for an UNSAVED device (form values from the add dialog).
   router.post('/test', async (req, res) => {
     const input = parseDeviceInput(req.body, db, { requireName: false, requireCreds: true });
