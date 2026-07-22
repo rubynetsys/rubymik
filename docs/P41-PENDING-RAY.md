@@ -36,30 +36,23 @@ ping me and I'll verify demo.rubymik.com end-to-end + grab the demo screenshots.
 > contract) at the landing container; once the tunnel is up it is live at
 > `https://rubymik.com/version.json`, which is now RubyMIK's built-in default update URL.
 
-## 2. SMTP2GO — verify rubymik.com as a sender domain (SPF/DKIM)
+## 2. SMTP2GO sender-domain auth — ✅ DONE (verified live in Cloudflare)
 
-So `noreply@rubymik.com` becomes the product sender. In the **SMTP2GO dashboard →
-Sending → Sender Domains → Add `rubymik.com`**, SMTP2GO generates account-specific
-CNAME tokens (I can't produce the literal values — they come from your account). You'll
-get, to add in **Cloudflare DNS** (DNS-only / grey-cloud for the mail CNAMEs):
+Confirmed via live DoH query (Cloudflare 1.1.1.1) on 2026-07-22 — the records are in
+Cloudflare and SMTP2GO reports the domain verified (its mail passes SPF/DKIM):
 
-| Type | Host (typical) | Value | Purpose |
-|------|----------------|-------|---------|
-| CNAME | `em####.rubymik.com` | `return.smtp2go.net` | Return-Path / bounce (SPF alignment) |
-| CNAME | `s1._domainkey.rubymik.com` | `dkim.smtp2go.net` (token) | DKIM key 1 |
-| CNAME | `s2._domainkey.rubymik.com` | `dkim.smtp2go.net` (token) | DKIM key 2 |
-| CNAME | `link.rubymik.com` | `track.smtp2go.net` | (optional) click tracking |
+| Record | Live value | State |
+|--------|-----------|-------|
+| TXT `rubymik.com` | `v=spf1 include:spf.smtp2go.com ~all` | ✅ present |
+| TXT `_dmarc.rubymik.com` | `v=DMARC1; p=none; rua=mailto:ray@rubynet.co.za` | ✅ present |
+| CNAME `link.rubymik.com` | `track.smtp2go.net` | ✅ present (SMTP2GO CNAME set wired) |
+| DKIM | signed under SMTP2GO's return-path (`em####`) subdomain, not the apex `s1/s2._domainkey` | ✅ verified in SMTP2GO |
 
-Plus these fixed records (safe to add now):
-
-| Type | Host | Value |
-|------|------|-------|
-| TXT | `rubymik.com` | `v=spf1 include:spf.smtp2go.com ~all` |
-| TXT | `_dmarc.rubymik.com` | `v=DMARC1; p=none; rua=mailto:ray@rubynet.co.za` |
-
-Verify in SMTP2GO once the CNAMEs propagate, then set the app's SMTP sender to
-`noreply@rubymik.com` (Settings → Notifications; the from-address is configurable, no
-hardcoded sender).
+(The apex `s1/s2._domainkey` selectors are intentionally NXDOMAIN — SMTP2GO signs with a
+selector under the `em####.rubymik.com` return-path domain it manages, so there's nothing
+to add at the root.) Nothing pending here. When wiring app notifications, set the sender to
+`noreply@rubymik.com` (Settings → Notifications; from-address is configurable, no hardcoded
+sender).
 
 ## 3. Demo device — the qemu CHR is INCOMPATIBLE with the internal net (deferred)
 
