@@ -19,6 +19,7 @@ import DhcpInfra from '../components/DhcpInfra';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import SnapshotManager from '../components/SnapshotManager';
+import RestoreManager from '../components/RestoreManager';
 import NatManager from '../components/NatManager';
 import QosManager from '../components/QosManager';
 import PppoeManager from '../components/PppoeManager';
@@ -499,8 +500,11 @@ export default function DeviceDetail() {
             <SubBlock title="Config backups" help="A full text export of the router's settings — download it or compare two.">
               <BackupManager deviceId={deviceId} />
             </SubBlock>
-            <SubBlock title="Config snapshots" help="Automatic saves taken before and after every change — view, diff and download (no restore).">
+            <SubBlock title="Config snapshots" help="Automatic saves taken before and after every change — view, diff and download.">
               <SnapshotManager deviceId={deviceId} />
+            </SubBlock>
+            <SubBlock title="Restore from a snapshot" help="Preview a per-section delta, then apply it through the guarded write modules (no whole-config push). Drift preview works read-only.">
+              <RestoreManager deviceId={deviceId} deviceName={dev.name} manageable={dev.manageable} />
             </SubBlock>
           </>
         );

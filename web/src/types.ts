@@ -169,6 +169,15 @@ export interface L2PathView { mgmtIp: string; mgmtInterface: string | null; mgmt
 export interface L2View { manageable: boolean; bridges: L2BridgeView[]; vlans: L2VlanView[]; bridgeVlans: L2BridgeVlan[]; path: L2PathView }
 export interface L2MoveResult { result: 'applied' | 'failed' | 'rejected'; detail: string; auditId: number; newHost?: string; sequence: string[] }
 
+// --- P37: section-scoped snapshot restore ---
+export interface RestoreSectionDef { id: string; label: string; singleton: boolean; order: number }
+export interface RestoreRec { key: string; fields: Record<string, string>; masked?: string[] }
+export interface RestorePlanOp { kind: 'create' | 'edit' | 'delete'; key: string; before?: RestoreRec; after?: RestoreRec; secretChanged?: boolean; blockedNote?: string }
+export interface RestoreSectionPlan { section: string; label: string; ops: RestorePlanOp[]; error?: string }
+export interface RestorePlanView { manageable: boolean; mode: 'additive' | 'exact'; plan: RestoreSectionPlan[]; total: number }
+export interface RestoreOpResult { section: string; kind: string; key: string; result: string; detail: string; auditId?: number }
+export interface RestoreReport { applied: number; halted: boolean; haltReason: string | null; results: RestoreOpResult[]; remaining: Array<{ section: string; kind: string; key: string }> }
+
 export type ApplyResultCode = 'applied' | 'rolled_back' | 'rollback_failed' | 'failed';
 
 export interface ApplyOutcome {
