@@ -1,0 +1,9 @@
+[Unit]
+Description=RubyMIK demo nightly reset (down → wipe → reseed → up)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/rubymik-demo
+ExecStart=/opt/rubymik-demo/scripts/reset-demo.sh

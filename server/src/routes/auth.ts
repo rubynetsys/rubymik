@@ -36,7 +36,7 @@ function validEmailCredentials(email: unknown, password: unknown): { email: stri
 const THEMES = ['ruby-light', 'ruby-dark', 'modern-dark', 'modern-light', 'glass', 'classic'];
 const ACCENTS = ['ruby', 'blue', 'red', 'green', 'purple', 'amber', 'teal'];
 
-export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: string | null }, notifier?: Notifier, publicUrl?: string): Router {
+export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: string | null; demoBanner?: string | null }, notifier?: Notifier, publicUrl?: string): Router {
   const router = Router();
   // P39: brute-force lockout — 5 failures per (IP, username) inside 15 min → locked
   // for 15 min. In-memory (single-process app). Cleared on a successful login.
@@ -56,6 +56,7 @@ export function authRoutes(db: DatabaseSync, defaults: { theme: string; accent: 
       needsSetup: userCount(db) === 0,
       authenticated: getSessionUser(db, req) !== undefined,
       installDefault: { theme: defaults.theme, accent: defaults.accent },
+      demoBanner: defaults.demoBanner ?? null,
     });
   });
 

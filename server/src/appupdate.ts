@@ -18,9 +18,10 @@ import { log } from './log.js';
  *     result; the banner just goes stale, never errors).
  */
 
-// The default location. Rubynet controls this host; the file is served statically.
-// Overridable per-instance (env or the config row) for testing / air-gapped mirrors.
-export const DEFAULT_UPDATE_URL = 'https://get.rubymik.com/version.json';
+// The default location. Rubynet controls this host; the file is served statically
+// from the rubymik.com landing site. Overridable per-instance (env or the config
+// row) for testing / air-gapped mirrors.
+export const DEFAULT_UPDATE_URL = 'https://rubymik.com/version.json';
 
 // ---------------- semver (small, dependency-free) ----------------
 

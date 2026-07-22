@@ -1,0 +1,60 @@
+name: rubymikdemo
+
+# The public demo (demo.rubymik.com) — its OWN project + network, ZERO shared
+# volumes. `demonet` is `internal: true`: the demo app and the CHR it manages have
+# NO route to the LAN, other docker networks, or the internet. That isolated network
+# is the entire blast radius — an attacker who fully owns the demo container reaches
+# the CHR and nothing else.
+services:
+  demo:
+    image: ${RUBYMIK_IMAGE:-ghcr.io/rubynetsys/rubymik:latest}
+    container_name: rubymik-demo
+    restart: unless-stopped
+    environment:
+      RUBYMIK_DEMO_MODE: "1"                 # shows the "resets nightly — no real creds" banner
+      RUBYMIK_POLL_INTERVAL: "30"
+      RUBYMIK_UPDATE_URL: ""                  # isolated net → no update check
+      # Real admin credential is random + set by the seed (held by Ray only). The
+      # published demo login is a VIEWER (demo@rubymik.com), created by the seed.
+    volumes:
+      - demo-data:/data                       # dedicated volume, wiped nightly
+    ports:
+      - "127.0.0.1:8093:8080"                 # localhost only; tunnel reaches it via demonet
+    networks: [demonet]
+
+  chr:
+    # RouterOS CHR (the ONLY device the demo manages), seeded with synthetic zzz-*
+    # config. Runs under qemu — needs /dev/kvm for speed. THIS HOST HAS NO KVM, so it
+    # would run under TCG (slow + CPU-heavy) — PENDING-RAY: decide to run it here with
+    # resource limits, or host the CHR on a KVM-capable box. Start with `--profile chr`.
+    image: evilfreelancer/docker-routeros:7.15
+    container_name: rubymik-demo-chr
+    restart: unless-stopped
+    cap_add: [NET_ADMIN]
+    # devices: ["/dev/kvm"]                   # uncomment on a KVM-capable host
+    deploy:
+      resources:
+        limits: { cpus: "1.5", memory: 640M } # cap TCG so it can't starve other services
+    networks: [demonet]
+    profiles: [chr]
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: rubymik-demo-tunnel
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${RUBYMIK_DEMO_TUNNEL_TOKEN:-}
+      TUNNEL_TRANSPORT_PROTOCOL: http2        # QUIC fails on this host's bridge
+    networks: [demonet, tunnelnet]            # demonet to reach demo:8080, tunnelnet for Cloudflare
+    depends_on: [demo]
+    profiles: [tunnel]
+
+volumes:
+  demo-data:
+
+networks:
+  demonet:
+    internal: true      # the blast radius: no LAN / other-network / internet route
+  tunnelnet:            # only the tunnel touches this (outbound to Cloudflare)
+    profiles: [tunnel]

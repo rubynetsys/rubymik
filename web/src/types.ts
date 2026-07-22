@@ -2,6 +2,7 @@ export interface AppStatus {
   needsSetup: boolean;
   authenticated: boolean;
   installDefault?: { theme: string; accent: string | null };
+  demoBanner?: string | null;
 }
 
 export interface Site {

@@ -1,0 +1,32 @@
+name: rubymikweb
+
+# The rubymik.com landing site — its OWN compose project + network, no shared
+# volumes with any other stack. nginx binds to 127.0.0.1 only (Gate-0 safe); public
+# access is via the Cloudflare tunnel, which reaches nginx over this project's network
+# (no host port needed). The tunnel service only starts with `--profile tunnel` once
+# RUBYMIK_TUNNEL_TOKEN is set (Ray creates the tunnel in Cloudflare — PENDING-RAY).
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: rubymik-web
+    restart: unless-stopped
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+    ports:
+      - "127.0.0.1:8092:80"   # localhost only — for internal checks; the tunnel uses the network
+    networks: [rubymikweb]
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: rubymik-tunnel
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${RUBYMIK_TUNNEL_TOKEN:-}
+      TUNNEL_TRANSPORT_PROTOCOL: http2   # QUIC fails on this host's Docker bridge — use http2
+    depends_on: [web]
+    networks: [rubymikweb]
+    profiles: [tunnel]
+
+networks:
+  rubymikweb:

@@ -85,20 +85,25 @@ export default function App() {
     );
   }
 
-  if (status.needsSetup) return <Setup onDone={refresh} />;
+  // P41: a persistent demo banner (env-flag driven) on EVERY screen, incl. login.
+  const demoBar = status.demoBanner ? <DemoBar text={status.demoBanner} /> : null;
+  const withBar = (el: React.ReactNode) => <>{demoBar}{el}</>;
+
+  if (status.needsSetup) return withBar(<Setup onDone={refresh} />);
   if (!status.authenticated) {
     // Public password-reset link (emailed): /reset-password?token=… works without a session.
     const token = new URLSearchParams(window.location.search).get('token');
     if (window.location.pathname.startsWith('/reset-password') && token) {
-      return <ResetPassword token={token} onDone={() => { window.history.replaceState({}, '', '/'); setPublicView('login'); void refresh(); }} />;
+      return withBar(<ResetPassword token={token} onDone={() => { window.history.replaceState({}, '', '/'); setPublicView('login'); void refresh(); }} />);
     }
-    if (publicView === 'forgot') return <ForgotPassword onBack={() => setPublicView('login')} />;
-    return <Login onDone={refresh} onForgot={() => setPublicView('forgot')} />;
+    if (publicView === 'forgot') return withBar(<ForgotPassword onBack={() => setPublicView('login')} />);
+    return withBar(<Login onDone={refresh} onForgot={() => setPublicView('forgot')} />);
   }
-  if (me?.needsEmailClaim) return <ClaimEmail onDone={refresh} />;
+  if (me?.needsEmailClaim) return withBar(<ClaimEmail onDone={refresh} />);
 
   return (
     <MeContext.Provider value={me ?? { email: null, username: '', needsEmailClaim: false, role: 'admin', twoFactor: false }}>
+    {demoBar}
     <BrowserRouter>
       <Routes>
         {/* Wallboard is full-screen with no app chrome, so it lives OUTSIDE Layout. */}
@@ -129,6 +134,14 @@ export default function App() {
       </Routes>
     </BrowserRouter>
     </MeContext.Provider>
+  );
+}
+
+function DemoBar({ text }: { text: string }) {
+  return (
+    <div className="sticky top-0 z-[100] flex items-center justify-center gap-2 border-b border-warning-line bg-warning-bg px-4 py-2 text-center text-sm font-semibold text-warning-fg">
+      <span aria-hidden>⚠</span> {text}
+    </div>
   );
 }
 

@@ -37,6 +37,21 @@ for a in "$@"; do case "$a" in
 
 echo "== RubyMIK release ${FULLTAG}  (image ${IMAGE}) =="
 
+# ── 0. write version.json into the landing site (served at rubymik.com/version.json) ──
+# Real releases only (no -test suffix). The CHANGELOG top note becomes "notes".
+if [[ -z "$SUFFIX" && -f site/version.json ]]; then
+  CL="https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md"
+  node -e '
+    const fs=require("fs"); const v=process.argv[1];
+    const p="site/version.json"; const j=JSON.parse(fs.readFileSync(p,"utf8"));
+    j.latest=v;
+    fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n");
+    console.log("  version.json -> latest "+v);
+  ' "$VERSION"
+  git add site/version.json 2>/dev/null || true
+  echo "  (commit site/version.json with the release: git commit -m \"release ${VERSION}\")"
+fi
+
 # ── 1. test gate ─────────────────────────────────────────────────────────────
 if ! $SKIP_TESTS; then
   echo "-- test gate: server suite --"

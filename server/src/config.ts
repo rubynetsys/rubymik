@@ -31,6 +31,9 @@ export interface Config {
   /** Instance default theme (a user's own choice overrides it). */
   defaultTheme: string;
   defaultAccent: string | null;
+  /** P41: when set, a persistent banner is shown on every screen (incl. login) —
+   *  used by the public demo ("resets nightly — do not enter real credentials"). */
+  demoBanner: string | null;
   /** P38: override the version.json URL the update check fetches (else the built-in
    *  default). The DB config row can also override it per-instance. */
   updateUrl: string | undefined;
@@ -102,6 +105,10 @@ export function loadConfig(): Config {
 
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
+  // P41: RUBYMIK_DEMO_BANNER sets a custom message; RUBYMIK_DEMO_MODE=1 uses the default.
+  const demoBanner = process.env.RUBYMIK_DEMO_BANNER
+    ? process.env.RUBYMIK_DEMO_BANNER.trim()
+    : (/^(1|true|on|yes)$/i.test(process.env.RUBYMIK_DEMO_MODE ?? '') ? 'Demo instance — resets nightly — do not enter real credentials.' : null);
 
   const updateUrl = process.env.RUBYMIK_UPDATE_URL ? process.env.RUBYMIK_UPDATE_URL.trim() : undefined;
   if (updateUrl !== undefined && !/^https?:\/\//i.test(updateUrl)) {
@@ -115,7 +122,7 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_PUBLIC_URL must be an http(s) URL.');
   }
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, updateUrl, trustProxy, publicUrl };
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, demoBanner, updateUrl, trustProxy, publicUrl };
 }
 
 /** RUBYMIK_TRUST_PROXY: unset/false/0 → off; true/1 → trust the immediate proxy;

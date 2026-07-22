@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RubyMIK — self-hosted MikroTik monitoring &amp; configuration</title>
+<meta name="description" content="RubyMIK is a modern, self-hosted dashboard that monitors and safely configures your MikroTik RouterOS fleet. Free, open-source, your credentials stay on your server.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3l11 8-4 13H9L5 11z' fill='%23e11d63'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0d0b12; --surface:#16131d; --surface2:#1e1a28; --border:#2a2536;
+    --ink:#f4f2f8; --ink-dim:#b7b1c6; --ink-faint:#8a839b;
+    --ruby:#e11d63; --ruby-2:#ff5c8a; --accent-ink:#ff7aa5;
+    --radius:16px; --maxw:1080px;
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -200px,#241528 0,var(--bg) 60%);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent-ink);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  /* header */
+  header{position:sticky;top:0;z-index:10;backdrop-filter:blur(10px);background:rgba(13,11,18,.72);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;gap:16px;height:60px}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.02em}
+  .logo svg{filter:drop-shadow(0 2px 8px rgba(225,29,99,.5))}
+  .logo b{color:var(--ruby-2)}
+  .nav .sp{flex:1}
+  .nav a.navlink{color:var(--ink-dim);font-size:14px;font-weight:600}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:12px;font-weight:700;font-size:14px;border:1px solid transparent}
+  .btn.primary{background:linear-gradient(135deg,var(--ruby),var(--ruby-2));color:#fff}
+  .btn.ghost{border-color:var(--border);color:var(--ink)}
+  .btn:hover{text-decoration:none;filter:brightness(1.08)}
+  /* hero */
+  .hero{padding:76px 0 40px;text-align:center}
+  .badge{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;font-weight:700;color:var(--accent-ink);
+    background:rgba(225,29,99,.12);border:1px solid rgba(225,29,99,.35);padding:5px 12px;border-radius:999px;margin-bottom:22px}
+  h1{font-size:clamp(34px,6vw,60px);line-height:1.05;letter-spacing:-.03em;margin:0 0 18px;font-weight:850;text-wrap:balance}
+  h1 .g{background:linear-gradient(120deg,var(--ruby-2),#ffb199);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(17px,2.4vw,21px);color:var(--ink-dim);max-width:720px;margin:0 auto 30px;text-wrap:balance}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+  .install{max-width:560px;margin:26px auto 0;text-align:left}
+  .install .lbl{font-size:12px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+  pre.cmd{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;overflow:auto;margin:0;color:#e9e6f2}
+  pre.cmd .c{color:#7cd3a0}
+  /* shot */
+  .shotwrap{margin:44px auto 0;max-width:940px}
+  .shot{width:100%;border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 30px 80px -30px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.02)}
+  /* sections */
+  section{padding:56px 0}
+  h2{font-size:clamp(26px,4vw,36px);letter-spacing:-.02em;margin:0 0 10px;font-weight:800;text-wrap:balance}
+  .sub{color:var(--ink-dim);max-width:680px;margin:0 0 30px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px}
+  .card h3{margin:0 0 8px;font-size:17px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .card p{margin:0;color:var(--ink-dim);font-size:14.5px}
+  .ic{width:30px;height:30px;flex:none;border-radius:9px;display:grid;place-items:center;background:rgba(225,29,99,.14);color:var(--ruby-2)}
+  .safety{background:linear-gradient(180deg,var(--surface2),var(--surface));border:1px solid var(--border);border-radius:20px;padding:32px}
+  .safety ul{margin:14px 0 0;padding-left:0;list-style:none;display:grid;gap:10px}
+  .safety li{padding-left:28px;position:relative;color:var(--ink-dim)}
+  .safety li::before{content:"✓";position:absolute;left:0;color:var(--ruby-2);font-weight:800}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .gallery img{width:100%;border-radius:12px;border:1px solid var(--border)}
+  /* story */
+  .story{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:34px}
+  .story p{color:var(--ink-dim)} .story p:first-child{color:var(--ink)}
+  .story .sig{color:var(--ink);font-weight:700;margin-top:18px}
+  /* footer */
+  footer{border-top:1px solid var(--border);padding:40px 0;color:var(--ink-faint);font-size:13.5px}
+  .foot-grid{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+  .disclaimer{margin-top:22px;font-size:12.5px;color:var(--ink-faint);border-top:1px solid var(--border);padding-top:18px;line-height:1.7}
+  .kofi{color:#ff5e5b;font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap nav">
+    <span class="logo"><svg width="24" height="24" viewBox="0 0 32 32"><path d="M16 3l11 8-4 13H9L5 11z" fill="#e11d63"/></svg>Ruby<b>MIK</b></span>
+    <span class="sp"></span>
+    <a class="navlink" href="#features">Features</a>
+    <a class="navlink" href="#safety">Safety</a>
+    <a class="navlink" href="#story">Why</a>
+    <a class="btn ghost" href="https://demo.rubymik.com" rel="noopener">Live demo</a>
+    <a class="btn primary" href="#install">Get started</a>
+  </div>
+</header>
+
+<div class="wrap hero" id="top">
+  <span class="badge">● Self-hosted · open-source · MIT</span>
+  <h1>Your MikroTik fleet,<br><span class="g">monitored and configured</span> — safely.</h1>
+  <p class="lede">RubyMIK is a modern dashboard for MikroTik RouterOS. Health monitoring, live topology, full guarded configuration, config snapshots &amp; restore — and it <b>refuses to let you cut off your own management path</b>. Your router credentials never leave your server.</p>
+  <div class="cta">
+    <a class="btn primary" href="#install">docker&nbsp;compose&nbsp;up&nbsp;-d</a>
+    <a class="btn ghost" href="https://demo.rubymik.com" rel="noopener">Try the live demo →</a>
+  </div>
+  <div class="install" id="install">
+    <div class="lbl">Install (Docker)</div>
+    <pre class="cmd"><span class="c"># one compose file — no external database, no cloud account</span>
+docker compose up -d
+<span class="c"># then open http://your-server:8080 and add a router</span></pre>
+  </div>
+  <div class="shotwrap"><img class="shot" src="img/dashboard.png" alt="RubyMIK fleet dashboard" loading="lazy"></div>
+</div>
+
+<section id="features" class="wrap">
+  <h2>Everything, in one place</h2>
+  <p class="sub">The RouterOS-native depth generic SNMP tools can't cleanly show — for a single box or hundreds across many sites.</p>
+  <div class="grid">
+    <div class="card"><h3><span class="ic">▤</span>Fleet monitoring</h3><p>Status, CPU, memory, uptime, RouterOS version across every site on one screen. Per-interface traffic graphs, DHCP, ARP, routes, wireless, temperature. Auto-refreshing.</p></div>
+    <div class="card"><h3><span class="ic">◈</span>Live topology</h3><p>Auto-discovered from MNDP/LLDP/CDP neighbours, drawn with a clean canvas layout that scales to hundreds of devices with level-of-detail.</p></div>
+    <div class="card"><h3><span class="ic">⚙</span>Full configuration</h3><p>Firewall, NAT, QoS, DHCP, routes, addresses, bridges/VLANs, PPPoE, VPN, wireless — every write guarded and audited.</p></div>
+    <div class="card"><h3><span class="ic">◱</span>Snapshots &amp; restore</h3><p>An automatic config snapshot before and after every change. Diff any change; restore section-by-section — through the same safety guards.</p></div>
+    <div class="card"><h3><span class="ic">◮</span>Alerting</h3><p>Device-down, high CPU/memory/temperature, interface-down — debounced, hysteresis, no flapping. Email, webhook, Telegram, WhatsApp.</p></div>
+    <div class="card"><h3><span class="ic">◆</span>WireGuard remote access</h3><p>Reach behind-NAT sites over a built-in WireGuard overlay — the router generates its own key; RubyMIK never holds it.</p></div>
+  </div>
+</section>
+
+<section class="wrap" id="safety">
+  <div class="safety">
+    <h2>It won't let you lock yourself out</h2>
+    <p class="sub">Every configuration write goes through the same pipeline: snapshot → apply → verify the router is still reachable → auto-rollback if not → audit. On top of that, RubyMIK refuses, up front, any change it can prove would sever its own management path.</p>
+    <ul>
+      <li>A firewall preset can't drop the management-accept rule — it's always emitted first.</li>
+      <li>A default route or a route over the management subnet is refused before it black-holes you.</li>
+      <li>Management IP / L2 changes use add-before-remove: build the new path, verify, then remove the old.</li>
+      <li>A dead-man watches reachability after every change and reverts within seconds if the path is lost.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>See it</h2>
+  <p class="sub">Fleet dashboard, the auto-discovered topology map, and a device's deep view.</p>
+  <div class="gallery">
+    <img src="img/dashboard.png" alt="Dashboard" loading="lazy">
+    <img src="img/topology.png" alt="Topology map" loading="lazy">
+    <img src="img/device-detail.png" alt="Device detail" loading="lazy">
+  </div>
+</section>
+
+<section class="wrap" id="story">
+  <div class="story">
+    <h2>Why I built this</h2>
+    <p>I touch MikroTik routers every single day. I love these boxes — but managing a fleet of them means Winbox windows everywhere, and one wrong bridge or VLAN change on a remote site means a drive or a very awkward phone call.</p>
+    <p>There are other tools out there, and some of them are good. But I never found one that did what I actually needed end to end — full config (firewall, NAT, VPN, queues, PPPoE, bridges/VLANs, DHCP, wireless), automatic config snapshots before and after every change, diffs, restore, updates — and, most importantly, one that refuses to let you cut off your own management path. Every write in RubyMIK goes through guards and a dead-man check, because I've locked myself out of enough routers for one lifetime.</p>
+    <p>So this started as a fun side project to manage my own routers, and it grew into something I now rely on daily. I'm sharing it because it might help you too.</p>
+    <p>Honest disclaimer: this is not a perfect app. It's built for my needs, by one person, and there will be rough edges. But it's free, it's self-hosted (your router credentials stay on your server), and it does what it says.</p>
+    <p>Found a bug? Want a feature? Open to a collab, or just want to tell me it helped? Email me: <a href="mailto:ray@rubynet.co.za">ray@rubynet.co.za</a>. If RubyMIK saved you a site visit and you feel like buying me a coffee, there's a <a class="kofi" href="https://ko-fi.com/rayroberts59815" rel="noopener">link</a> — no pressure.</p>
+    <p class="sig">— Ray</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <span class="logo"><svg width="20" height="20" viewBox="0 0 32 32"><path d="M16 3l11 8-4 13H9L5 11z" fill="#e11d63"/></svg>Ruby<b>MIK</b></span>
+      <span style="display:flex;gap:18px;flex-wrap:wrap">
+        <a href="#features">Features</a>
+        <a href="https://demo.rubymik.com" rel="noopener">Live demo</a>
+        <a href="https://ko-fi.com/rayroberts59815" class="kofi" rel="noopener">☕ Buy me a coffee</a>
+        <span title="Open-sourcing soon" style="opacity:.55;cursor:default">GitHub · soon</span>
+        <a href="mailto:ray@rubynet.co.za">Contact</a>
+      </span>
+    </div>
+    <p class="disclaimer">RubyMIK is an independent, third-party project. It is <b>not affiliated with, authorized, sponsored, endorsed by, or in any way officially connected to SIA Mikrotīkls</b> (the maker of MikroTik and RouterOS). “MikroTik”, “RouterOS”, “WinBox” and “The Dude” are trademarks of SIA Mikrotīkls, used here only nominatively to describe the hardware and software RubyMIK interoperates with. © 2026 Ray Roberts / Rubynet (Pty) Ltd · MIT licensed.</p>
+  </div>
+</footer>
+</body>
+</html>
