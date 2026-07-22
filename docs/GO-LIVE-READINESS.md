@@ -1,7 +1,7 @@
 # RubyMIK — Go-Live Readiness
 
 **Version:** 0.9.1 · **Date:** 2026-07-22 · **Phase:** P39 (go-live gate) ·
-**Repo:** PRIVATE (unchanged) · **Suite:** 252/252 green · **Deps:** 0 vulnerabilities
+**Repo:** PRIVATE (unchanged) · **Suite:** 268/268 green · **Deps:** 0 vulnerabilities
 
 This is the honest readiness assessment that stands between "works on the bench" and
 "a paying MSP installs it." Every item is **GREEN** (ready), **AMBER** (works, with a
@@ -9,9 +9,8 @@ caveat or an on-site step), or **RED** (not ready). Nothing here is a workaround
 RED — a RED stays RED until it's genuinely fixed.
 
 **Overall: GREEN to ship to a first, hand-held pilot MSP** once Ray executes the
-day-of-release checklist (§4). One AMBER (real PPPoE handshake — a 5-minute on-site
-cable step) and the PENDING-RAY business decisions are the only things between here
-and a wider launch.
+day-of-release checklist (§4). With real PPPoE now proven end-to-end (§1a), the
+PENDING-RAY business decisions are the only things between here and a wider launch.
 
 ---
 
@@ -19,7 +18,7 @@ and a wider launch.
 
 | # | Item | Status | Evidence / cause |
 |---|---|---|---|
-| 1a | **Real PPPoE end-to-end** via a RubyMIK-created client | 🟡 **AMBER** | The **write-path is proven on real hardware**: on the bench hEX S (RouterOS 7.23.2) RubyMIK created a `pppoe-client` on an isolated bridge (audit `pppoe.create applied`), enabled it (`pppoe.enable applied`), and it entered a genuine PPP negotiation (status `connecting` — real PADI). Guards behaved (isolated bridge allowed; mgmt on ether1 untouched). **What is unproven:** completion to a *negotiated address*, because a single-box bench cannot present a real PPPoE peer — a server and client on one bridge don't exchange discovery frames, there are no looped spare ports, and the only other RouterOS on the LAN is monitor-only by rule. **Remedy for GREEN:** one physical loopback cable between two bench ports, or a second writable RouterOS / accel-ppp on a real segment — a ~5-minute on-site step for Ray. This is a lab limitation, **not a RubyMIK defect**. |
+| 1a | **Real PPPoE end-to-end** via a RubyMIK-created client | 🟢 **GREEN** | **Proven end-to-end on real hardware (2026-07-22)** via a physical **ether3↔ether4 loopback** on the bench hEX (RouterOS 7.23.2; mgmt 172.16.111.117 on ether1 — untouched throughout). Server side configured directly on the router (`/ppp secret p24test`, a small `/ip pool` + profile with local `10.99.39.1`/remote-from-pool, `/interface pppoe-server` `p39test` on ether4). Then **through RubyMIK** a `pppoe-client` was created on ether3 (audit `pppoe.create applied`; snapshot pre/post bracket) and enabled (`pppoe.enable applied`; pre/post bracket) — it went **`connecting → running` and negotiated an address: local `10.99.39.100`** from the pool (server active session `p24test → 10.99.39.100`, MTU 1492). The RubyMIK PPPoE panel shows the client `over ether3 · running · RUBYMIK · local addr 10.99.39.100` (screenshot on file). Torn down client (via RubyMIK) + server (direct); **bench export verified back to pre-state, 8/8 checks**. The former AMBER (completion to a *negotiated address*) is **closed** — it was always a single-box lab-cable limitation, never a RubyMIK defect. |
 | 1b | **Update-check live** against a real static `version.json` | 🟢 **GREEN** | The 0.9.1 container, pointed at a stand-in static `version.json` (served over HTTP, advertising 0.9.2), fetched it and showed the banner **and** the Account → Software-updates card live (`updateAvailable:true`, `latest:0.9.2`). Nothing but the GET is sent. Production URL swap is **config-only** (`RUBYMIK_UPDATE_URL`), PENDING-RAY domain. |
 | 1c | **P32 leftovers** (inline-edit tunnels/PPP, `.ovpn` export, on-router cert gen) | 🟢 **GREEN** | Already closed in `1431e14`: `EditTunnelForm` (inline edit) and `OvpnExport` ship in `VpnManager.tsx`; on-router certificate generate/delete shipped and was verified live in P32. No open P32 gaps. |
 
