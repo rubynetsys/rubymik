@@ -15,6 +15,7 @@ import StatusBadge from '../components/StatusBadge';
 import TrafficChart from '../components/TrafficChart';
 import MetricChart, { type MetricPoint } from '../components/MetricChart';
 import DhcpManager from '../components/DhcpManager';
+import DhcpInfra from '../components/DhcpInfra';
 import FirewallManager from '../components/FirewallManager';
 import BackupManager from '../components/BackupManager';
 import SnapshotManager from '../components/SnapshotManager';
@@ -469,13 +470,16 @@ export default function DeviceDetail() {
         return <NatManager deviceId={deviceId} interfaces={ifaceNames} />;
 
       case 'dhcp':
-        return d.sections.dhcp.ok && d.sections.dhcp.data.servers.length > 0
-          ? <DhcpManager deviceId={deviceId} />
-          : (
-            <CapabilityBody section={d.sections.dhcp} naText="No DHCP server on this device."
-              render={() => <Unavailable text="No DHCP server configured on this device." />}
-            />
-          );
+        return (
+          <>
+            <DhcpInfra deviceId={deviceId} interfaces={ifaceNames} />
+            {d.sections.dhcp.ok && d.sections.dhcp.data.servers.length > 0 && (
+              <SubBlock title="Static reservations" help="Pin a fixed IP to a device by its MAC, and pin active leases.">
+                <DhcpManager deviceId={deviceId} />
+              </SubBlock>
+            )}
+          </>
+        );
 
       case 'dns':
         return <DnsNtpManager deviceId={deviceId} />;

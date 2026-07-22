@@ -10,8 +10,13 @@ import { readTarget, writeTarget, transportFor } from '../transport.js';
 import {
   addReservation, editReservation, removeReservation, readReservations,
   validateReservation, isValidMac, isValidIpv4, type DhcpContext,
+  readDhcpFull, dhcpMgmtInfo, dhcpMgmtGuard,
+  validateServerInput, validatePoolInput, validateNetworkInput,
+  createServer, setServerEnabled, removeServer, takeOwnershipServer,
+  createPool, removePool, createNetwork, removeNetwork,
+  type DhcpFullContext,
 } from '../dhcp.js';
-import { auditRejected } from '../safeapply.js';
+import { auditRejected, type SafeApplyOutcome } from '../safeapply.js';
 import { log } from '../log.js';
 import { writeErr } from '../snapshothook.js';
 
@@ -27,6 +32,8 @@ interface DeviceRow {
   password_enc: string;
   write_username_enc: string | null;
   write_password_enc: string | null;
+  net_transport?: string | null;
+  tunnel_ip?: string | null;
 }
 
 export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
@@ -160,6 +167,12 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
     if (!m) return;
     const forceRollback = (req.query.forceRollback as string) === '1';
     try {
+      // Own-lease guard: refuse to remove a lease that IS the management address.
+      const { reservations, dynamic } = await readReservations(m.ctx);
+      const lease = [...reservations, ...dynamic].find((l) => l['.id'] === req.params.leaseId);
+      const mgmt = await dhcpMgmtInfo(fullCtx(m));
+      const guard = dhcpMgmtGuard(mgmt, 'delete', 'lease', null, { leaseAddress: lease?.address ?? null });
+      if (guard) { auditRejected(sac(m.row, m.actor, 'dhcp.reservation.remove', req.params.leaseId), 'Remove reservation', `Blocked by DHCP mgmt guard: ${guard}`); res.status(409).json({ error: guard, dhcpMgmtGuard: true }); return; }
       const outcome = await removeReservation(m.ctx, sac(m.row, m.actor, 'dhcp.reservation.remove', req.params.leaseId),
         req.params.leaseId, forceRollback);
       res.json(outcome);
@@ -199,6 +212,120 @@ export function dhcpRoutes(db: DatabaseSync, box: SecretBox): Router {
     } catch (err) {
       writeErr(res, err);
     }
+  });
+
+  // ============ P29 (DHCP): server / pool / network CRUD + dhcpMgmtGuard ============
+
+  const fullCtx = (m: { row: DeviceRow; ctx: DhcpContext }): DhcpFullContext => ({ ...m.ctx, row: m.row as unknown as DhcpFullContext['row'] });
+  const send = (res: import('express').Response, ok: number, o: SafeApplyOutcome) =>
+    res.status(o.result === 'applied' ? ok : o.result === 'rolled_back' ? 409 : 502).json(o);
+  const refuse = (res: import('express').Response, m: { row: DeviceRow; actor: string }, action: string, label: string, msg: string) => {
+    auditRejected(sac(m.row, m.actor, action, label), `DHCP ${action}`, `Blocked by DHCP mgmt guard: ${msg}`);
+    res.status(409).json({ error: msg, dhcpMgmtGuard: true });
+  };
+
+  // Full read (servers with mgmt annotations, pools, networks, leases). Any device.
+  router.get('/:id/dhcp/full', async (req, res) => {
+    const row = loadDevice(Number(req.params.id));
+    if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }
+    const read = readTarget(box, row);
+    try {
+      const transport = await transportFor(row, read);
+      const ctx: DhcpFullContext = { read, write: read, transport, row: row as unknown as DhcpFullContext['row'] };
+      res.json({ manageable: !!(row.write_username_enc && row.write_password_enc), ...(await readDhcpFull(ctx)) });
+    } catch (err) { writeErr(res, err); }
+  });
+
+  // ---- servers ----
+  router.post('/:id/dhcp/servers', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const spec = { name: String(b.name ?? '').trim(), interface: String(b.interface ?? '').trim(), addressPool: typeof b.addressPool === 'string' ? b.addressPool : null, leaseTime: typeof b.leaseTime === 'string' ? b.leaseTime : null, comment: typeof b.comment === 'string' ? b.comment : null, disabled: b.disabled === true };
+    const errs = validateServerInput(spec);
+    if (errs.length) { auditRejected(sac(m.row, m.actor, 'dhcp.server.create', spec.name), 'Add DHCP server', `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
+    try {
+      const guard = dhcpMgmtGuard(await dhcpMgmtInfo(fullCtx(m)), 'create', 'server', { interface: spec.interface }, null);
+      if (guard) return void refuse(res, m, 'dhcp.server.create', spec.name, guard);
+      send(res, 201, await createServer(fullCtx(m), sac(m.row, m.actor, 'dhcp.server.create', spec.name), spec));
+    } catch (err) { writeErr(res, err); }
+  });
+
+  router.post('/:id/dhcp/servers/:sid/enabled', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const disabled = (req.body ?? {}).disabled === true;
+    const view = await readDhcpFull(fullCtx(m));
+    const srv = view.servers.find((x) => x.id === req.params.sid);
+    if (!srv) { res.status(404).json({ error: 'DHCP server not found.' }); return; }
+    if (!srv.managed) { res.status(409).json({ error: 'This DHCP server was created outside RubyMIK. Take ownership first.', ownershipRequired: true }); return; }
+    try {
+      if (disabled) { const guard = dhcpMgmtGuard(view.mgmt, 'disable', 'server', null, { interface: srv.interface }); if (guard) return void refuse(res, m, 'dhcp.server.disable', req.params.sid, guard); }
+      send(res, 200, await setServerEnabled(fullCtx(m), sac(m.row, m.actor, disabled ? 'dhcp.server.disable' : 'dhcp.server.enable', req.params.sid), req.params.sid, disabled));
+    } catch (err) { writeErr(res, err); }
+  });
+
+  router.delete('/:id/dhcp/servers/:sid', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const view = await readDhcpFull(fullCtx(m));
+    const srv = view.servers.find((x) => x.id === req.params.sid);
+    if (!srv) { res.status(404).json({ error: 'DHCP server not found.' }); return; }
+    if (!srv.managed) { res.status(409).json({ error: 'This DHCP server was created outside RubyMIK. Take ownership first.', ownershipRequired: true }); return; }
+    try {
+      const guard = dhcpMgmtGuard(view.mgmt, 'delete', 'server', null, { interface: srv.interface });
+      if (guard) return void refuse(res, m, 'dhcp.server.remove', req.params.sid, guard);
+      send(res, 200, await removeServer(fullCtx(m), sac(m.row, m.actor, 'dhcp.server.remove', req.params.sid), req.params.sid));
+    } catch (err) { writeErr(res, err); }
+  });
+
+  router.post('/:id/dhcp/servers/:sid/take-ownership', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    try { send(res, 200, await takeOwnershipServer(fullCtx(m), sac(m.row, m.actor, 'dhcp.server.take-ownership', req.params.sid), req.params.sid)); }
+    catch (err) { writeErr(res, err); }
+  });
+
+  // ---- pools ----
+  router.post('/:id/dhcp/pools', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const spec = { name: String(b.name ?? '').trim(), ranges: String(b.ranges ?? '').trim(), comment: typeof b.comment === 'string' ? b.comment : null };
+    const errs = validatePoolInput(spec);
+    if (errs.length) { auditRejected(sac(m.row, m.actor, 'dhcp.pool.create', spec.name), 'Add IP pool', `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
+    try { send(res, 201, await createPool(fullCtx(m), sac(m.row, m.actor, 'dhcp.pool.create', spec.name), spec)); }
+    catch (err) { writeErr(res, err); }
+  });
+
+  router.delete('/:id/dhcp/pools/:pid', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const view = await readDhcpFull(fullCtx(m));
+    const pool = view.pools.find((x) => x.id === req.params.pid);
+    if (!pool) { res.status(404).json({ error: 'Pool not found.' }); return; }
+    try {
+      const guard = dhcpMgmtGuard(view.mgmt, 'delete', 'pool', null, { ranges: pool.ranges });
+      if (guard) return void refuse(res, m, 'dhcp.pool.remove', req.params.pid, guard);
+      send(res, 200, await removePool(fullCtx(m), sac(m.row, m.actor, 'dhcp.pool.remove', req.params.pid), req.params.pid));
+    } catch (err) { writeErr(res, err); }
+  });
+
+  // ---- networks ----
+  router.post('/:id/dhcp/networks', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const spec = { address: String(b.address ?? '').trim(), gateway: typeof b.gateway === 'string' ? b.gateway.trim() : null, dnsServer: typeof b.dnsServer === 'string' ? b.dnsServer.trim() : null, domain: typeof b.domain === 'string' ? b.domain.trim() : null, comment: typeof b.comment === 'string' ? b.comment : null };
+    const errs = validateNetworkInput(spec);
+    if (errs.length) { auditRejected(sac(m.row, m.actor, 'dhcp.network.create', spec.address), 'Add DHCP network', `Rejected: ${errs.join(' ')}`); res.status(400).json({ error: errs.join(' ') }); return; }
+    try { send(res, 201, await createNetwork(fullCtx(m), sac(m.row, m.actor, 'dhcp.network.create', spec.address), spec)); }
+    catch (err) { writeErr(res, err); }
+  });
+
+  router.delete('/:id/dhcp/networks/:nid', async (req, res) => {
+    const m = await requireManageable(req, res); if (!m) return;
+    const view = await readDhcpFull(fullCtx(m));
+    const net = view.networks.find((x) => x.id === req.params.nid);
+    if (!net) { res.status(404).json({ error: 'Network not found.' }); return; }
+    try {
+      const guard = dhcpMgmtGuard(view.mgmt, 'delete', 'network', null, { address: net.address });
+      if (guard) return void refuse(res, m, 'dhcp.network.remove', req.params.nid, guard);
+      send(res, 200, await removeNetwork(fullCtx(m), sac(m.row, m.actor, 'dhcp.network.remove', req.params.nid), req.params.nid));
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

@@ -129,6 +129,20 @@ export interface VpnView {
   mgmt: { mgmtIp: string; mgmtInterface: string | null; mgmtPort: number; mgmtScheme: string };
 }
 
+// --- DHCP infrastructure: servers / pools / networks (P29) ---
+export interface DhcpServerView {
+  id: string; name: string; interface: string | null; addressPool: string | null; leaseTime: string | null;
+  disabled: boolean; invalid: boolean; dynamic: boolean; comment: string | null; managed: boolean;
+  isMgmtInterface: boolean; activeLeases: number;
+}
+export interface DhcpPoolView { id: string; name: string; ranges: string | null; comment: string | null; managed: boolean; coversMgmtIp: boolean }
+export interface DhcpNetworkView { id: string; address: string | null; gateway: string | null; dnsServer: string | null; domain: string | null; comment: string | null; managed: boolean; coversMgmtIp: boolean }
+export interface DhcpFullView {
+  manageable: boolean;
+  servers: DhcpServerView[]; pools: DhcpPoolView[]; networks: DhcpNetworkView[];
+  mgmt: { mgmtIp: string; mgmtInterface: string | null; mgmtPorts: string[] };
+}
+
 // --- Interface / address config (P19) ---
 export interface AddrEntry {
   id: string; address: string | null; network: string | null; interface: string | null;
