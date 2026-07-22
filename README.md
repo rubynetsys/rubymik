@@ -1,5 +1,7 @@
 # RubyMIK
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/rayroberts59815) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **Modern, self-hosted monitoring _and configuration_ for MikroTik RouterOS — think "The Dude", reimagined.**
 
 RubyMIK is an open-source dashboard that both **monitors and configures** your MikroTik

@@ -1,6 +1,4 @@
-# RubyMIK funding links. PENDING-RAY: replace the placeholders with the real URLs.
-# GitHub renders a "Sponsor" button from this file at the top of the repo.
-github: # PENDING-RAY: your GitHub Sponsors username, e.g. rayroberts
-custom:
-  # PENDING-RAY: your Buy Me a Coffee / Ko-fi link, e.g. https://buymeacoffee.com/rayroberts
-  - "https://buymeacoffee.com/PENDING-RAY"
+# RubyMIK funding links. GitHub renders a "Sponsor" button from this file at the top
+# of the repo, and the Ko-fi link is also shown in the README.
+# (A paypal.me URL can be added as a second `custom` entry later if Ray supplies one.)
+custom: ["https://ko-fi.com/rayroberts59815"]
