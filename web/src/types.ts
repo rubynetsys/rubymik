@@ -3,6 +3,8 @@ export interface AppStatus {
   authenticated: boolean;
   installDefault?: { theme: string; accent: string | null };
   demoBanner?: string | null;
+  /** P41: demo-mode only — the public read-only viewer login shown on the login card. */
+  demoCredentials?: { email: string; password: string } | null;
 }
 
 export interface Site {

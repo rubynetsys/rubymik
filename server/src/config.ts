@@ -34,6 +34,10 @@ export interface Config {
   /** P41: when set, a persistent banner is shown on every screen (incl. login) —
    *  used by the public demo ("resets nightly — do not enter real credentials"). */
   demoBanner: string | null;
+  /** P41: in demo mode, the read-only VIEWER credentials the login page advertises on a
+   *  "Try the demo" card. MUST match what the demo seed (scripts/reset-demo.sh) creates —
+   *  both read RUBYMIK_DEMO_VIEWER_EMAIL / RUBYMIK_DEMO_VIEWER_PASS. Null when not demo. */
+  demoCredentials: { email: string; password: string } | null;
   /** P38: override the version.json URL the update check fetches (else the built-in
    *  default). The DB config row can also override it per-instance. */
   updateUrl: string | undefined;
@@ -105,10 +109,21 @@ export function loadConfig(): Config {
 
   const defaultTheme = (process.env.RUBYMIK_DEFAULT_THEME || 'ruby-light').trim();
   const defaultAccent = process.env.RUBYMIK_DEFAULT_ACCENT ? process.env.RUBYMIK_DEFAULT_ACCENT.trim() : null;
-  // P41: RUBYMIK_DEMO_BANNER sets a custom message; RUBYMIK_DEMO_MODE=1 uses the default.
+  // P41: RUBYMIK_DEMO_MODE=1 turns on demo mode (the resets-nightly banner AND the login
+  // "Try the demo" credentials card). RUBYMIK_DEMO_BANNER only customizes the banner text.
+  const demoMode = /^(1|true|on|yes)$/i.test(process.env.RUBYMIK_DEMO_MODE ?? '');
   const demoBanner = process.env.RUBYMIK_DEMO_BANNER
     ? process.env.RUBYMIK_DEMO_BANNER.trim()
-    : (/^(1|true|on|yes)$/i.test(process.env.RUBYMIK_DEMO_MODE ?? '') ? 'Demo instance — resets nightly — do not enter real credentials.' : null);
+    : (demoMode ? 'Demo instance — resets nightly — do not enter real credentials.' : null);
+  // The login card advertises the VIEWER login. These MUST match what the demo seed
+  // (scripts/reset-demo.sh) creates — both default to demo@rubymik.com / rubymik-demo and
+  // both read RUBYMIK_DEMO_VIEWER_EMAIL / RUBYMIK_DEMO_VIEWER_PASS (single source: .env).
+  const demoCredentials = demoMode
+    ? {
+        email: (process.env.RUBYMIK_DEMO_VIEWER_EMAIL || 'demo@rubymik.com').trim(),
+        password: process.env.RUBYMIK_DEMO_VIEWER_PASS || 'rubymik-demo',
+      }
+    : null;
 
   const updateUrl = process.env.RUBYMIK_UPDATE_URL ? process.env.RUBYMIK_UPDATE_URL.trim() : undefined;
   if (updateUrl !== undefined && !/^https?:\/\//i.test(updateUrl)) {
@@ -122,7 +137,7 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_PUBLIC_URL must be an http(s) URL.');
   }
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, demoBanner, updateUrl, trustProxy, publicUrl };
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, demoBanner, demoCredentials, updateUrl, trustProxy, publicUrl };
 }
 
 /** RUBYMIK_TRUST_PROXY: unset/false/0 → off; true/1 → trust the immediate proxy;

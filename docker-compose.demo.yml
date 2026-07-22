@@ -11,11 +11,15 @@ services:
     container_name: rubymik-demo
     restart: unless-stopped
     environment:
-      RUBYMIK_DEMO_MODE: "1"                 # shows the "resets nightly — no real creds" banner
+      RUBYMIK_DEMO_MODE: "1"                 # shows the resets-nightly banner + login "Try the demo" card
       RUBYMIK_POLL_INTERVAL: "30"
       RUBYMIK_UPDATE_URL: ""                  # isolated net → no update check
-      # Real admin credential is random + set by the seed (held by Ray only). The
-      # published demo login is a VIEWER (demo@rubymik.com), created by the seed.
+      # The login card advertises the VIEWER login. SINGLE SOURCE = .env: the same two vars
+      # feed both this container (what the card shows) and the seed (scripts/reset-demo.sh,
+      # which sources .env) — so a password change updates both together, never one alone.
+      RUBYMIK_DEMO_VIEWER_EMAIL: ${RUBYMIK_DEMO_VIEWER_EMAIL:-demo@rubymik.com}
+      RUBYMIK_DEMO_VIEWER_PASS: ${RUBYMIK_DEMO_VIEWER_PASS:-rubymik-demo}
+      # Real admin credential is random + set by the seed (held by Ray only).
     volumes:
       - demo-data:/data                       # dedicated volume, wiped nightly
     # No published port: demonet is `internal: true`, so host port-publishing does not

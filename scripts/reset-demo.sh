@@ -12,8 +12,12 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." 2>/dev/null || cd /opt/rubymik-demo
 COMPOSE="docker compose -f docker-compose.demo.yml"
+# SINGLE SOURCE: .env feeds both the app container (the login card) AND this seed, so the
+# advertised viewer login can never drift from the one actually created.
+set -a; [ -f /opt/rubymik-demo/.env ] && . /opt/rubymik-demo/.env; set +a
 ADMIN_PASS="$(cat /opt/rubymik-demo/.admin-pass 2>/dev/null || echo "ChangeMe-fallback")"
-DEMO_VIEWER_PASS="${RUBYMIK_DEMO_VIEWER_PASS:-rubymik-demo}"   # published
+DEMO_VIEWER_EMAIL="${RUBYMIK_DEMO_VIEWER_EMAIL:-demo@rubymik.com}"   # published (matches the card)
+DEMO_VIEWER_PASS="${RUBYMIK_DEMO_VIEWER_PASS:-rubymik-demo}"         # published (matches the card)
 
 echo "[$(date -u +%FT%TZ)] demo reset: recreate + wipe the demo service ONLY (leave the tunnel running)"
 $COMPOSE stop demo >/dev/null 2>&1 || true
@@ -40,9 +44,9 @@ curl -s -c "$J" -o /dev/null -X POST "$BASE/api/setup" -H 'content-type: applica
   -d "{\"email\":\"admin@rubymik.com\",\"password\":\"$ADMIN_PASS\"}"
 curl -s -b "$J" -c "$J" -o /dev/null -X POST "$BASE/api/login" -H 'content-type: application/json' \
   -d "{\"email\":\"admin@rubymik.com\",\"password\":\"$ADMIN_PASS\"}"
-# published VIEWER account
+# published VIEWER account — email+password come from .env, exactly what the login card shows
 curl -s -b "$J" -o /dev/null -X POST "$BASE/api/users" -H 'content-type: application/json' \
-  -d "{\"email\":\"demo@rubymik.com\",\"role\":\"viewer\",\"password\":\"$DEMO_VIEWER_PASS\"}"
+  -d "{\"email\":\"$DEMO_VIEWER_EMAIL\",\"role\":\"viewer\",\"password\":\"$DEMO_VIEWER_PASS\"}"
 # the ONLY managed device: the synthetic responder (http://router:8080). Fabricated data,
 # manages ZERO real devices. read-only creds (no write creds → not manageable in the UI).
 curl -s -b "$J" -o /dev/null -X POST "$BASE/api/devices" -H 'content-type: application/json' \

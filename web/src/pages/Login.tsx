@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { api, ApiError } from '../api';
 import AuthShell, { Field, FormError, SubmitButton } from '../components/AuthShell';
 
-export default function Login({ onDone, onForgot }: { onDone: () => void; onForgot: () => void }) {
+export default function Login({ onDone, onForgot, demoCredentials }: {
+  onDone: () => void;
+  onForgot: () => void;
+  /** P41: demo-mode only — when present, the login page shows a "Try the demo" card. */
+  demoCredentials?: { email: string; password: string } | null;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -53,6 +58,30 @@ export default function Login({ onDone, onForgot }: { onDone: () => void; onForg
         )}
         <SubmitButton busy={busy}>{needsCode ? 'Verify' : 'Sign in'}</SubmitButton>
       </form>
+      {demoCredentials && !needsCode && (
+        <div className="mt-5 rounded-xl border border-accent-border bg-accent-subtle p-3.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent-text">
+            <span aria-hidden>▸</span> Try the demo
+          </div>
+          <dl className="mt-2 space-y-1 text-sm">
+            <div className="flex items-baseline gap-2">
+              <dt className="w-16 shrink-0 text-fg-muted">Email</dt>
+              <dd className="truncate font-mono text-fg-strong">{demoCredentials.email}</dd>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <dt className="w-16 shrink-0 text-fg-muted">Password</dt>
+              <dd className="truncate font-mono text-fg-strong">{demoCredentials.password}</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            onClick={() => { setEmail(demoCredentials.email); setPassword(demoCredentials.password); setError(null); }}
+            className="mt-3 w-full rounded-lg border border-accent-border bg-surface py-2 text-sm font-semibold text-accent-text transition hover:bg-accent-subtle"
+          >
+            Fill demo credentials
+          </button>
+        </div>
+      )}
     </AuthShell>
   );
 }

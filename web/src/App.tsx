@@ -97,7 +97,7 @@ export default function App() {
       return withBar(<ResetPassword token={token} onDone={() => { window.history.replaceState({}, '', '/'); setPublicView('login'); void refresh(); }} />);
     }
     if (publicView === 'forgot') return withBar(<ForgotPassword onBack={() => setPublicView('login')} />);
-    return withBar(<Login onDone={refresh} onForgot={() => setPublicView('forgot')} />);
+    return withBar(<Login onDone={refresh} onForgot={() => setPublicView('forgot')} demoCredentials={status.demoCredentials ?? null} />);
   }
   if (me?.needsEmailClaim) return withBar(<ClaimEmail onDone={refresh} />);
 

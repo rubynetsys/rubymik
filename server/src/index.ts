@@ -121,7 +121,7 @@ app.use(securityHeaders({ scriptHashes: inlineScriptHashes(indexHtml), webfigPor
 // (/webfig, /jsproxy) must receive the RAW request stream to pipe upstream.
 app.use('/api', express.json());
 
-app.use('/api', authRoutes(db, { theme: config.defaultTheme, accent: config.defaultAccent, demoBanner: config.demoBanner }, notifier, config.publicUrl));
+app.use('/api', authRoutes(db, { theme: config.defaultTheme, accent: config.defaultAccent, demoBanner: config.demoBanner, demoCredentials: config.demoCredentials }, notifier, config.publicUrl));
 // P30: server-side role gate. Runs AFTER the self-service auth routes above (login,
 // logout, /me, own theme/password/2FA) so those stay reachable by any role, and
 // BEFORE every protected router below. Viewers are read-only; /api/users is admin-only.
