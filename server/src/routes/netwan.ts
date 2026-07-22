@@ -103,14 +103,23 @@ export function netwanRoutes(db: DatabaseSync, box: SecretBox): Router {
         auditRejected(sac(m.row, m.actor, 'wan.failover.setup', null), 'Set up WAN failover', `Refused (collision): ${analysis.messages.join(' ')}`);
         res.status(409).json({ error: analysis.messages.join(' '), wanCollision: true, analysis }); return;
       }
-      send(res, 201, await applyFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.setup', 'dual-WAN'), resolved));
+      const outcome = await applyFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.setup', 'dual-WAN'), resolved);
+      if (outcome.result === 'applied') {
+        const cfg = { wan1: { interface: resolved.wan1.interface, sourceType: resolved.wan1.sourceType }, wan2: { interface: resolved.wan2.interface, sourceType: resolved.wan2.sourceType } };
+        db.prepare('UPDATE device_status SET wan_config_json = ? WHERE device_id = ?').run(JSON.stringify(cfg), m.row.id);
+      }
+      send(res, 201, outcome);
     } catch (err) { writeErr(res, err); }
   });
 
   // ── teardown: remove only RUBYMIK-WAN objects ──
   router.post('/:id/wan-failover/teardown', async (req, res) => {
     const m = await requireManageable(req, res); if (!m) return;
-    try { send(res, 200, await teardownFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.teardown', 'dual-WAN'))); } catch (err) { writeErr(res, err); }
+    try {
+      const outcome = await teardownFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.teardown', 'dual-WAN'));
+      if (outcome.result === 'applied') db.prepare('UPDATE device_status SET wan_config_json = NULL, wan_state_json = NULL WHERE device_id = ?').run(m.row.id);
+      send(res, 200, outcome);
+    } catch (err) { writeErr(res, err); }
   });
 
   return router;

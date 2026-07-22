@@ -3,9 +3,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { restConnect, restGet } from './routeros/rest.js';
 import type { RouterSystemInfo } from './routeros/types.js';
 import type { SecretBox } from './secretbox.js';
-import { readTarget } from './transport.js';
+import { readTarget, writeTarget } from './transport.js';
 import type { AlertEngine, IfaceState } from './alerts.js';
 import { handleRebootFailure, handleRebootReturn } from './reboot.js';
+import { computeWanState, reconcileDhcp, type WanContext } from './netwan.js';
+import type { WanEngine } from './wanengine.js';
+import type { RawWanState } from './wanstate.js';
 import { log } from './log.js';
 
 /**
@@ -42,11 +45,13 @@ interface PollDeviceRow {
   verify_tls: number;
   username_enc: string;
   password_enc: string;
+  write_username_enc: string | null;
+  write_password_enc: string | null;
   net_transport: string | null;
   tunnel_ip: string | null;
 }
 
-const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc, net_transport, tunnel_ip';
+const DEVICE_COLS = 'id, name, host, port, use_tls, verify_tls, username_enc, password_enc, write_username_enc, write_password_enc, net_transport, tunnel_ip';
 
 export class Poller {
   private timer: NodeJS.Timeout | undefined;
@@ -61,6 +66,7 @@ export class Poller {
     private readonly intervalMs: number,
     private readonly concurrency: number,
     private readonly alerts?: AlertEngine,
+    private readonly wan?: WanEngine,
   ) {}
 
   start(): void {
@@ -89,12 +95,13 @@ export class Poller {
       log.info(`Poll cycle #${cycle} started — ${devices.length} device(s), reason=${reason}`);
       const queue = [...devices];
       const cycleIfaces = new Map<number, IfaceState[]>();
+      const cycleWan = new Map<number, RawWanState>();
       let up = 0;
       let down = 0;
       const worker = async (): Promise<void> => {
         for (let d = queue.shift(); d && !this.stopped; d = queue.shift()) {
           await this.waitForLaunchSlot();
-          if (await this.pollDevice(d, cycleIfaces)) up++;
+          if (await this.pollDevice(d, cycleIfaces, cycleWan)) up++;
           else down++;
         }
       };
@@ -107,6 +114,11 @@ export class Poller {
         } catch (err) {
           log.error(`alert evaluation failed: ${(err as Error).message}`);
         }
+      }
+      // P42: WAN failover state machine + notifications ride the same cycle.
+      if (this.wan) {
+        try { this.wan.evaluateCycle(cycleWan); }
+        catch (err) { log.error(`WAN evaluation failed: ${(err as Error).message}`); }
       }
       log.info(`Poll cycle #${cycle} done in ${((Date.now() - startedAt) / 1000).toFixed(1)}s — ${up} up, ${down} down`);
     } finally {
@@ -128,7 +140,7 @@ export class Poller {
     if (slot > now) await sleep(slot - now);
   }
 
-  private async pollDevice(d: PollDeviceRow, cycleIfaces?: Map<number, IfaceState[]>): Promise<boolean> {
+  private async pollDevice(d: PollDeviceRow, cycleIfaces?: Map<number, IfaceState[]>, cycleWan?: Map<number, RawWanState>): Promise<boolean> {
     const t0 = Date.now();
     log.debug(`→ polling "${d.name}" (${d.host})`);
     try {
@@ -143,6 +155,7 @@ export class Poller {
       }
       await this.sampleInterfaces(d, target, result.scheme, result.port, cycleIfaces);
       await this.sampleNeighbors(d, target, result.scheme, result.port);
+      await this.sampleWanRoutes(d, target, result.scheme, result.port, cycleWan);
       log.debug(`✓ "${d.name}" up in ${Date.now() - t0}ms — cpu ${result.info.cpuLoad}%`);
       return true;
     } catch (err) {
@@ -247,6 +260,52 @@ export class Poller {
         .run(JSON.stringify([...macs]), d.id);
     } catch (err) {
       log.debug(`interface sample skipped for "${d.name}": ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * P42 — read the RUBYMIK-WAN default routes' `active` flags → the failover state the
+   * WanEngine consumes this cycle. Also reconciles a DHCP WAN's route gateways when the
+   * DHCP-learned gateway drifts (a guarded safe-apply, snapshot-bracketed, audited as
+   * `wan.dhcp-reconcile`). Non-fatal — a failure here never marks the device down.
+   */
+  private async sampleWanRoutes(
+    d: PollDeviceRow,
+    target: Parameters<typeof restGet>[0],
+    scheme: 'https' | 'http',
+    port: number,
+    cycleWan?: Map<number, RawWanState>,
+  ): Promise<void> {
+    try {
+      const routes = await restGet(target, scheme, port, '/ip/route') as Array<Record<string, unknown>>;
+      const managed = routes.filter((r) => typeof r['comment'] === 'string' && (r['comment'] as string).startsWith('RUBYMIK-WAN'));
+      const defaults = managed
+        .filter((r) => r['dst-address'] === '0.0.0.0/0' && !String(r['comment']).includes('markroute'))
+        .map((r) => ({ distance: String(r['distance'] ?? ''), active: r['active'] === 'true' }));
+      if (defaults.length === 0) return; // no failover configured on this device
+      cycleWan?.set(d.id, computeWanState(defaults));
+
+      // DHCP reconcile — rewrite the tagged route gateways if a DHCP WAN's learned gw drifted.
+      const cfgRow = this.db.prepare('SELECT wan_config_json FROM device_status WHERE device_id = ?').get(d.id) as { wan_config_json: string | null } | undefined;
+      if (cfgRow?.wan_config_json && d.write_username_enc && d.write_password_enc) {
+        const cfg = JSON.parse(cfgRow.wan_config_json) as { wan1?: { interface: string; sourceType: string }; wan2?: { interface: string; sourceType: string } };
+        const legs: Array<{ wanIndex: 1 | 2; interface: string }> = [];
+        if (cfg.wan1?.sourceType === 'dhcp') legs.push({ wanIndex: 1, interface: cfg.wan1.interface });
+        if (cfg.wan2?.sourceType === 'dhcp') legs.push({ wanIndex: 2, interface: cfg.wan2.interface });
+        if (legs.length) {
+          const clients = await restGet(target, scheme, port, '/ip/dhcp-client') as Array<Record<string, unknown>>;
+          const dhcp = legs
+            .map((l) => ({ wanIndex: l.wanIndex, learnedGw: String(clients.find((c) => c['interface'] === l.interface)?.['gateway'] ?? '') }))
+            .filter((x) => x.learnedGw);
+          if (dhcp.length) {
+            const ctx: WanContext = { read: target, write: writeTarget(this.box, d), transport: { scheme, port }, row: d };
+            const out = await reconcileDhcp(ctx, { db: this.db, actor: 'poller', deviceId: d.id, deviceName: d.name, action: 'wan.dhcp-reconcile', targetLabel: 'dual-WAN' }, dhcp);
+            if (out) log.info(`WAN DHCP-gateway reconcile on "${d.name}": ${out.result} — ${out.detail}`);
+          }
+        }
+      }
+    } catch (err) {
+      log.debug(`WAN route sample skipped for "${d.name}": ${(err as Error).message}`);
     }
   }
 

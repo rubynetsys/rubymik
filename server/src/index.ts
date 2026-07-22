@@ -21,6 +21,7 @@ import { selfbackupRoutes } from './routes/selfbackup.js';
 import { snapshotRoutes } from './routes/snapshots.js';
 import { snaprestoreRoutes } from './routes/snaprestore.js';
 import { AlertEngine } from './alerts.js';
+import { WanEngine } from './wanengine.js';
 import { Notifier } from './notify.js';
 import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
@@ -92,7 +93,8 @@ const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
 installCaptureHook(db, box); // P21: bracket every config write with pre/post snapshots (fail-closed)
 const notifier = new Notifier(db, box);
 const alertEngine = new AlertEngine(db, notifier);
-const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine);
+const wanEngine = new WanEngine(db, notifier);
+const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine, wanEngine);
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);
 const snapshotScheduler = new SnapshotScheduler(db, box, config.snapshotIntervalSec * 1000);
 const wgHub = new WireguardHub(db, box);

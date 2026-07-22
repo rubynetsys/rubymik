@@ -451,6 +451,13 @@ const MIGRATIONS: string[] = [
    );
    CREATE INDEX idx_prt_user ON password_reset_tokens(user_id);
    CREATE INDEX idx_prt_hash ON password_reset_tokens(token_hash)`,
+
+  // P42: dual-WAN failover — per-device NOTIFICATION state-machine persistence
+  // (wan_state_json = WanPersisted) + the WAN leg config (wan_config_json) the poller needs
+  // to reconcile DHCP-learned gateways. Schema 23 = the first schema-changing PUBLIC release;
+  // the P38 boot upgrade-guard takes an automatic pre-migration backup before this runs.
+  `ALTER TABLE device_status ADD COLUMN wan_state_json TEXT;
+   ALTER TABLE device_status ADD COLUMN wan_config_json TEXT`,
 ];
 
 /** The total number of migrations this build knows about — the schema version a

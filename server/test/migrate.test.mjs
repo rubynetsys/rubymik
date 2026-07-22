@@ -89,14 +89,14 @@ test('proof 3 — a simulated v(N-3) DB fixture migrates forward and preserves d
     ensureBootstrap(raw);
     applyMigrations(raw, OLD);
     assert.equal(schemaVer(raw), OLD);
-    assert.equal(hasTable(raw, 'app_update_config'), false, 'the newest table is absent in the old fixture');
+    assert.ok(!raw.prepare('PRAGMA table_info(device_status)').all().some((c) => c.name === 'wan_state_json'), 'a column from the last 3 migrations (P42 wan_state_json) is absent in the old fixture');
     raw.prepare('INSERT INTO users (username, password_hash, created_at) VALUES (?,?,?)').run('olduser', 'oldhash', '2020-01-01T00:00:00Z');
     raw.close();
 
     // Now boot the real path against the old file — it must migrate the last 3.
     const db = openDb(dir, { appVersion: '2.0.0' });
     assert.equal(schemaVer(db), TARGET_SCHEMA, 'migrated forward to target');
-    assert.ok(hasTable(db, 'app_update_config'), 'new table created by the forward migration');
+    assert.ok(db.prepare('PRAGMA table_info(device_status)').all().some((c) => c.name === 'wan_state_json'), 'a column from the last 3 migrations is created by the forward migration');
     assert.equal(db.prepare("SELECT password_hash FROM users WHERE username='olduser'").get().password_hash, 'oldhash', 'old data preserved across the migration');
     assert.equal(getMeta(db, 'app_version'), '2.0.0');
     db.close();
