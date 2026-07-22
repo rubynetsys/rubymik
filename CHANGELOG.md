@@ -10,6 +10,21 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-07-22 (schema 22)
+
+The first **public** release — RubyMIK goes open-source (MIT), with a public landing
+site (rubymik.com), a nightly-reset live demo (demo.rubymik.com), and container images
+published to the public GHCR package.
+
+### Added
+- **Public launch:** open-source repository, landing site, and live demo. The in-app
+  update check reads `rubymik.com/version.json`.
+
+### Verified
+- **Real PPPoE end-to-end on hardware** — a RubyMIK-created `pppoe-client` completes a
+  genuine PPP negotiation to a real address over a bench loopback (the final go-live
+  AMBER in `docs/GO-LIVE-READINESS.md`, now GREEN).
+
 ## [0.9.1] — 2026-07-22 (schema 20)
 
 The Dockerization, migration-chain, and release-pipeline release. This is the

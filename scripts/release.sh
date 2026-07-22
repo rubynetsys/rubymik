@@ -12,12 +12,12 @@
 #   RUBYMIK_TAG_SUFFIX=-test         suffix on the image tag; also suppresses :latest + git tag
 #
 # ─────────────────────────────────────────────────────────────────────────────
-#  PUBLIC RELEASE IS GATED ON RAY'S LICENSING DECISION.
-#  The registry package stays PRIVATE. Flipping to public is a one-line change
-#  (PUBLIC=true below) plus a GHCR package-visibility toggle in GitHub. Do NOT
-#  flip it until Ray gives the go.
+#  PUBLIC RELEASE — cleared by Ray 2026-07-22 (repo + registry are public).
+#  With PUBLIC=true, `--push` publishes vX.Y.Z + latest to the PUBLIC GHCR package.
+#  Requires `docker login ghcr.io` (a PAT with write:packages) AND the GHCR package
+#  set to Public in GitHub.
 # ─────────────────────────────────────────────────────────────────────────────
-PUBLIC=false
+PUBLIC=true
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -73,10 +73,10 @@ if $LOAD; then
   echo "-- build: single-arch (linux/amd64) --load into local docker --"
   docker buildx build --platform linux/amd64 "${REFS[@]}" --load .
 elif $PUSH; then
-  $PUBLIC && { echo "REFUSING: PUBLIC=true — public release is gated on Ray's licensing decision."; exit 3; }
-  echo "-- build: multi-arch (${PLATFORMS}) --push to PRIVATE registry --"
+  REG=$($PUBLIC && echo "PUBLIC" || echo "private")
+  echo "-- build: multi-arch (${PLATFORMS}) --push to the ${REG} registry --"
   docker buildx build --platform "$PLATFORMS" "${REFS[@]}" --push .
-  echo "pushed ${IMAGE}:${FULLTAG}$([[ -z "$SUFFIX" ]] && echo ' + latest') to the PRIVATE registry"
+  echo "pushed ${IMAGE}:${FULLTAG}$([[ -z "$SUFFIX" ]] && echo ' + latest') to the ${REG} registry"
 else
   echo "-- build: verify multi-arch (${PLATFORMS}) cross-builds, no push --"
   docker buildx build --platform "$PLATFORMS" -t "${IMAGE}:${FULLTAG}" -o type=cacheonly .
