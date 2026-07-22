@@ -14,7 +14,7 @@ import { log } from './log.js';
  *   - manageable device  → canonical `/export show-sensitive` (true restore
  *     reference; carries secrets → encrypted at rest, never logged);
  *   - monitor-only device → read-only GET reconstruction (works with a plain read
- *     credential; diffable, no privileged export). Home Lab uses this path.
+ *     credential; diffable, no privileged export). Monitor-only devices use this path.
  * Either way the plaintext is AES-256-GCM encrypted (the SecretBox that protects
  * device credentials) before it touches the database.
  */

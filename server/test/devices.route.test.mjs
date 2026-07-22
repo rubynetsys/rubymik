@@ -70,8 +70,8 @@ test('fleet counts dedupe by host:port; a duplicate worst status wins; rows are 
   const f = fixture();
   try {
     // two entries for the SAME physical router (same host:port), different names
-    const a = await (await req(f.port, 'POST', '/api/devices', { name: 'zzz-a', host: '172.16.9.1', username: 'a', password: 'p' })).json();
-    const b = await (await req(f.port, 'POST', '/api/devices', { name: 'zzz-b', host: '172.16.9.1', username: 'a', password: 'p' })).json();
+    const a = await (await req(f.port, 'POST', '/api/devices', { name: 'zzz-a', host: '192.168.9.1', username: 'a', password: 'p' })).json();
+    const b = await (await req(f.port, 'POST', '/api/devices', { name: 'zzz-b', host: '192.168.9.1', username: 'a', password: 'p' })).json();
     const ins = f.db.prepare('INSERT INTO device_status (device_id, state, updated_at) VALUES (?,?,?)');
     ins.run(a.id, 'up', new Date().toISOString());
     ins.run(b.id, 'down', new Date().toISOString());

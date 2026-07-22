@@ -319,7 +319,7 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
     return parseUpdateState(pkg, rb);
   };
 
-  // READ update state (any device, Home Lab included) — never contacts MikroTik.
+  // READ update state (any device, monitor-only devices included) — never contacts MikroTik.
   router.get('/:id/update', async (req, res) => {
     const id = Number(req.params.id);
     const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;
@@ -337,7 +337,7 @@ export function deviceRoutes(db: DatabaseSync, box: SecretBox, poller: Poller): 
 
   // CHECK for updates — a write-path command that contacts MikroTik's server to
   // refresh latest-version. Non-config-mutating, but a POST to the router, so it
-  // requires a write credential (Home Lab is monitor-only → 403 → never touched).
+  // requires a write credential (it is monitor-only → 403 → never touched).
   router.post('/:id/update/check', async (req, res) => {
     const id = Number(req.params.id);
     const row = db.prepare('SELECT * FROM devices WHERE id = ?').get(id) as unknown as DeviceRow | undefined;

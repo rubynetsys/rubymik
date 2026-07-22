@@ -19,6 +19,7 @@ services:
       # which sources .env) — so a password change updates both together, never one alone.
       RUBYMIK_DEMO_VIEWER_EMAIL: ${RUBYMIK_DEMO_VIEWER_EMAIL:-demo@rubymik.com}
       RUBYMIK_DEMO_VIEWER_PASS: ${RUBYMIK_DEMO_VIEWER_PASS:-rubymik-demo}
+      RUBYMIK_BACKUP_KEY: ${RUBYMIK_BACKUP_KEY:-}   # set in .env → self-backups on (no "backups off" warning)
       # Real admin credential is random + set by the seed (held by Ray only).
     volumes:
       - demo-data:/data                       # dedicated volume, wiped nightly

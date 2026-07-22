@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 import { sameSubnet, validateAddress } from '../dist/netaddr.js';
 
 test('sameSubnet: B must share the current mgmt subnet', () => {
-  assert.ok(sameSubnet('172.16.111.222/24', '172.16.111.117/24'));
+  assert.ok(sameSubnet('192.168.88.222/24', '192.168.88.117/24'));
   assert.ok(sameSubnet('10.9.0.50/24', '10.9.0.9/24'));
-  assert.ok(!sameSubnet('192.168.5.10/24', '172.16.111.117/24'), 'different subnet rejected');
-  assert.ok(!sameSubnet('172.16.112.10/24', '172.16.111.117/24'), 'adjacent /24 rejected');
+  assert.ok(!sameSubnet('192.168.5.10/24', '192.168.88.117/24'), 'different subnet rejected');
+  assert.ok(!sameSubnet('192.168.89.10/24', '192.168.88.117/24'), 'adjacent /24 rejected');
 });
 
 test('validateAddress', () => {
@@ -43,20 +43,20 @@ function runAddBeforeRemove({ A, B, verifyB }) {
 }
 
 test('ADD-BEFORE-REMOVE success: A→B, reachable at every step, endpoint = B', () => {
-  const r = runAddBeforeRemove({ A: '172.16.111.117/24', B: '172.16.111.222/24', verifyB: () => true });
+  const r = runAddBeforeRemove({ A: '192.168.88.117/24', B: '192.168.88.222/24', verifyB: () => true });
   assert.equal(r.result, 'applied');
-  assert.equal(r.endpoint, '172.16.111.222/24');
+  assert.equal(r.endpoint, '192.168.88.222/24');
   for (const s of r.snapshots) assert.ok(s.size >= 1, `reachable set empty at "${s.label}" — a partition!`);
   // the old address is only removed AFTER B is present
   const addedB = r.snapshots.find((s) => s.label === 'added B');
-  assert.ok(addedB.set.has('172.16.111.117/24') && addedB.set.has('172.16.111.222/24'), 'both present before removing A');
+  assert.ok(addedB.set.has('192.168.88.117/24') && addedB.set.has('192.168.88.222/24'), 'both present before removing A');
 });
 
 test('ADD-BEFORE-REMOVE failure: B not verified → B removed, A kept, no partition', () => {
-  const r = runAddBeforeRemove({ A: '172.16.111.117/24', B: '172.16.111.9/24', verifyB: () => false });
+  const r = runAddBeforeRemove({ A: '192.168.88.117/24', B: '192.168.88.9/24', verifyB: () => false });
   assert.equal(r.result, 'failed');
-  assert.equal(r.endpoint, '172.16.111.117/24', 'endpoint unchanged — still A');
+  assert.equal(r.endpoint, '192.168.88.117/24', 'endpoint unchanged — still A');
   for (const s of r.snapshots) assert.ok(s.size >= 1, `reachable set empty at "${s.label}" — a partition!`);
   const end = r.snapshots.at(-1);
-  assert.ok(end.set.has('172.16.111.117/24') && !end.set.has('172.16.111.9/24'), 'ends exactly as it began: only A');
+  assert.ok(end.set.has('192.168.88.117/24') && !end.set.has('192.168.88.9/24'), 'ends exactly as it began: only A');
 });

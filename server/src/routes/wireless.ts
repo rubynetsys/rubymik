@@ -40,7 +40,7 @@ export function wirelessRoutes(db: DatabaseSync, box: SecretBox): Router {
     return { read, write, transport, mgmtHost: resolveEndpoint(row).host };
   }
 
-  // ---- READ (allowed on any device — reads are safe; Home Lab included) ----
+  // ---- READ (allowed on any device — reads are safe; monitor-only devices included) ----
   router.get('/:id/wireless', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }

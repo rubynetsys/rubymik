@@ -66,7 +66,7 @@ export function snapshotRoutes(db: DatabaseSync, box: SecretBox, scheduler: Snap
   });
 
   // Manual capture — READ-ONLY on the router, so allowed on monitor-only devices
-  // (Home Lab) too. Never a write path.
+  // (monitor-only devices) too. Never a write path.
   router.post('/:id/snapshots', async (req, res) => {
     const d = loadDevice(Number(req.params.id));
     if (!d) { res.status(404).json({ error: 'Device not found.' }); return; }

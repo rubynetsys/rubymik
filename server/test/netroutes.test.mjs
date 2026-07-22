@@ -16,8 +16,8 @@ import { runSafeApply } from '../dist/safeapply.js';
 test('ipToInt / isValidIpv4', () => {
   assert.equal(ipToInt('0.0.0.0'), 0);
   assert.equal(ipToInt('255.255.255.255'), 0xffffffff);
-  assert.ok(isValidIpv4('172.16.111.117'));
-  assert.ok(!isValidIpv4('172.16.111.256'));
+  assert.ok(isValidIpv4('192.168.88.117'));
+  assert.ok(!isValidIpv4('192.168.88.256'));
   assert.equal(ipToInt('1.2.3'), null);
 });
 
@@ -29,15 +29,15 @@ test('isValidCidr', () => {
 });
 
 test('cidrsOverlap', () => {
-  assert.ok(cidrsOverlap('172.16.111.0/24', '172.16.111.128/25'), 'super/sub overlap');
-  assert.ok(cidrsOverlap('172.16.111.105/32', '172.16.111.0/24'), 'host inside subnet');
+  assert.ok(cidrsOverlap('192.168.88.0/24', '192.168.88.128/25'), 'super/sub overlap');
+  assert.ok(cidrsOverlap('192.168.88.105/32', '192.168.88.0/24'), 'host inside subnet');
   assert.ok(cidrsOverlap('10.0.0.0/8', '10.9.0.0/24'));
-  assert.ok(!cidrsOverlap('10.99.99.0/24', '172.16.111.0/24'), 'disjoint');
-  assert.ok(!cidrsOverlap('192.168.90.0/24', '172.16.111.0/24'));
+  assert.ok(!cidrsOverlap('10.99.99.0/24', '192.168.88.0/24'), 'disjoint');
+  assert.ok(!cidrsOverlap('192.168.90.0/24', '192.168.88.0/24'));
 });
 
 test('isValidGateway', () => {
-  assert.ok(isValidGateway('172.16.111.1'));
+  assert.ok(isValidGateway('192.168.88.1'));
   assert.ok(isValidGateway('ether1'));
   assert.ok(isValidGateway('bridge-lan'));
   assert.ok(!isValidGateway(''));
@@ -45,23 +45,23 @@ test('isValidGateway', () => {
 });
 
 test('validateRouteInput', () => {
-  assert.deepEqual(validateRouteInput({ dst: '10.20.0.0/24', gateway: '172.16.111.1', distance: 1 }), []);
-  assert.ok(validateRouteInput({ dst: 'nope', gateway: '172.16.111.1', distance: 1 }).length);
+  assert.deepEqual(validateRouteInput({ dst: '10.20.0.0/24', gateway: '192.168.88.1', distance: 1 }), []);
+  assert.ok(validateRouteInput({ dst: 'nope', gateway: '192.168.88.1', distance: 1 }).length);
   assert.ok(validateRouteInput({ dst: '10.20.0.0/24', gateway: '', distance: 1 }).length);
-  assert.ok(validateRouteInput({ dst: '10.20.0.0/24', gateway: '172.16.111.1', distance: 999 }).length);
+  assert.ok(validateRouteInput({ dst: '10.20.0.0/24', gateway: '192.168.88.1', distance: 999 }).length);
 });
 
 // ---------------- MGMT-PATH GUARD (transport-aware → proves C + G) ----------------
 
 test('mgmt-path guard refuses the default route', () => {
-  assert.ok(mgmtGuardError('0.0.0.0/0', ['172.16.111.0/24'], 'direct'));
+  assert.ok(mgmtGuardError('0.0.0.0/0', ['192.168.88.0/24'], 'direct'));
 });
 
 test('mgmt-path guard refuses a route overlapping the DIRECT management subnet', () => {
-  const e = mgmtGuardError('172.16.111.0/25', ['172.16.111.0/24'], 'direct');
+  const e = mgmtGuardError('192.168.88.0/25', ['192.168.88.0/24'], 'direct');
   assert.ok(e && /management subnet/i.test(e), e);
   // a host route to RubyMIK-side source is also caught
-  assert.ok(mgmtGuardError('172.16.111.105/32', ['172.16.111.0/24'], 'direct'));
+  assert.ok(mgmtGuardError('192.168.88.105/32', ['192.168.88.0/24'], 'direct'));
 });
 
 test('mgmt-path guard is TRANSPORT-AWARE: a tunnel device protects its OVERLAY subnet (G)', () => {
@@ -72,8 +72,8 @@ test('mgmt-path guard is TRANSPORT-AWARE: a tunnel device protects its OVERLAY s
 });
 
 test('mgmt-path guard ALLOWS a benign route that does not touch mgmt', () => {
-  assert.equal(mgmtGuardError('10.99.99.0/24', ['172.16.111.0/24'], 'direct'), null);
-  assert.equal(mgmtGuardError('192.168.50.0/24', ['172.16.111.0/24'], 'direct'), null);
+  assert.equal(mgmtGuardError('10.99.99.0/24', ['192.168.88.0/24'], 'direct'), null);
+  assert.equal(mgmtGuardError('192.168.50.0/24', ['192.168.88.0/24'], 'direct'), null);
 });
 
 // ---------------- dead-man on a routing lockout (proves D, framework level) ----------------

@@ -5,7 +5,7 @@ import { api } from '../api';
 /**
  * P34 — single-device RouterOS update. Read state is available for any device;
  * "Check for updates" and "Install" require a write credential (monitor-only /
- * Home Lab → 403). The install downloads + reboots + installs behind the P29
+ * a monitor-only device → 403). The install downloads + reboots + installs behind the P29
  * expected-outage dead-man; it is gated by preconditions + a name-confirm and is
  * never automatic.
  */

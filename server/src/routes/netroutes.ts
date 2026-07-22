@@ -40,7 +40,7 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     return { read, write, transport, row };
   }
 
-  // READ — allowed on any device (Home Lab included; reads are safe).
+  // READ — allowed on any device (monitor-only devices included; reads are safe).
   router.get('/:id/routes', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }

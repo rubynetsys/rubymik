@@ -9,7 +9,7 @@ import { planRestore, executeRestore, SECTIONS, type RestoreCtx, type RestoreMod
 
 /**
  * P37 — section-scoped snapshot restore + drift. `/plan` (drift) is READ-ONLY and
- * allowed on any device incl. monitor-only Home Lab. `/restore` is a WRITE — it
+ * allowed on any device incl. a monitor-only device. `/restore` is a WRITE — it
  * runs the delta through the guarded write modules and so is refused (403) on a
  * monitor-only device, requires a typed confirm, and never pushes a whole .rsc.
  */

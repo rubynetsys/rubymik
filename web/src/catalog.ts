@@ -46,7 +46,7 @@ export const CATALOG: CatalogModel[] = [
   m('hEX S (RB760iGS)', 'router', { ether: 5, sfp: 1 }),
   m('hEX PoE (RB960PGS)', 'router', { ether: 5, sfp: 1 }),
   m('hEX refresh (RB750Gr3)', 'router', { ether: 5 }),
-  m('E60 / RB E60iUGS (bench)', 'router', { ether: 5 }),
+  m('E60 / RB E60iUGS', 'router', { ether: 5 }),
   m('L009UiGS-RM', 'router', { ether: 8, sfp: 1 }),
   m('RB2011UiAS-RM', 'router', { ether: 10, sfp: 1 }),
   m('RB3011UiAS-RM', 'router', { ether: 10, sfp: 1 }),

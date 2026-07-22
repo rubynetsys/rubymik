@@ -67,7 +67,7 @@ export function netvpnRoutes(db: DatabaseSync, box: SecretBox): Router {
     res.status(409).json({ error: msg, vpnMgmtGuard: true });
   };
 
-  // READ (any device; Home Lab included).
+  // READ (any device; monitor-only devices included).
   router.get('/:id/vpn', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }

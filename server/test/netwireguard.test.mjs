@@ -12,7 +12,7 @@ import {
 } from '../dist/netwireguard.js';
 import { runSafeApply } from '../dist/safeapply.js';
 
-const direct = { host: '172.16.111.117', net_transport: 'direct', tunnel_ip: null };
+const direct = { host: '192.168.88.117', net_transport: 'direct', tunnel_ip: null };
 const tunnel = { host: 'x', net_transport: 'tunnel', tunnel_ip: '10.9.0.2' };
 
 // ---------------- validation ----------------

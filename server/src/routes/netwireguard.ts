@@ -41,7 +41,7 @@ export function netwireguardRoutes(db: DatabaseSync, box: SecretBox): Router {
     return { read, write, transport, row };
   }
 
-  // READ (any device; Home Lab included).
+  // READ (any device; monitor-only devices included).
   router.get('/:id/wireguard', async (req, res) => {
     const row = loadDevice(Number(req.params.id));
     if (!row) { res.status(404).json({ error: 'Device not found.' }); return; }

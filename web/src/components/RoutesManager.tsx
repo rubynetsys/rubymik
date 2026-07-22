@@ -128,7 +128,7 @@ function AddForm({ deviceId, onDone, onCancel, onOutcome }: { deviceId: number; 
       {err && <div className="mb-2 flex items-start gap-2 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />{err}</div>}
       <div className="flex flex-wrap items-end gap-2">
         <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Destination (CIDR)</span><input className={`${inputCls} w-44`} value={dst} onChange={(e) => setDst(e.target.value)} placeholder="10.20.0.0/24" /></label>
-        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Gateway</span><input className={`${inputCls} w-40`} value={gateway} onChange={(e) => setGateway(e.target.value)} placeholder="172.16.111.1" /></label>
+        <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Gateway</span><input className={`${inputCls} w-40`} value={gateway} onChange={(e) => setGateway(e.target.value)} placeholder="192.168.88.1" /></label>
         <label><span className="mb-1 block text-xs font-semibold text-fg-dim">Distance</span><input className={`${inputCls} w-20`} value={distance} onChange={(e) => setDistance(e.target.value)} /></label>
         <label className="flex-1"><span className="mb-1 block text-xs font-semibold text-fg-dim">Comment (optional)</span><input className={inputCls} value={comment} onChange={(e) => setComment(e.target.value)} /></label>
       </div>

@@ -7,7 +7,7 @@ import { log } from './log.js';
 /**
  * Scheduled config snapshots (P21). A low-frequency, staggered timer — separate
  * from the metrics poller and the P7 backup scheduler. Capture is a READ, so
- * EVERY device is included (monitor-only devices too, e.g. Home Lab). Skips a
+ * EVERY device is included (monitor-only devices too). Skips a
  * router that already has a snapshot within the last 20h, so a daily run and
  * the pre/post write captures don't pile up redundant snapshots. This daily
  * capture is what catches out-of-band changes made directly in WebFig.

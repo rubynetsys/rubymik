@@ -186,7 +186,7 @@ export default function FirewallManager({ deviceId }: { deviceId: number }) {
               <Trash2 className="h-4 w-4" /> Remove all RubyMIK rules
             </button>
             <button onClick={() => void lockoutTest()} disabled={busy !== null || view.config.mgmtSources.length === 0}
-              title={view.config.mgmtSources.length === 0 ? 'Apply a firewall config first' : 'Deliberately self-lockout to prove the dead-man (bench)'}
+              title={view.config.mgmtSources.length === 0 ? 'Apply a firewall config first' : 'Deliberately self-lockout to prove the dead-man'}
               className="ml-auto inline-flex items-center gap-2 rounded-lg border border-warning-line bg-warning-bg px-4 py-2 text-sm font-semibold text-warning-fg transition hover:bg-warning-bg disabled:opacity-50">
               {busy === 'lockout' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
               Test self-lockout recovery

@@ -98,7 +98,7 @@ export function fleetRoutes(db: DatabaseSync, poller: Poller, pollIntervalSec: n
 
     const emptyCounts = () => ({ total: 0, up: 0, warning: 0, down: 0, pending: 0 });
     // P27: counts dedupe by host:port, so one physical router entered twice (e.g. the
-    // 172.16.111.1 pair) is counted once. A duplicate's worst *known* status wins
+    // 192.168.88.1 pair) is counted once. A duplicate's worst *known* status wins
     // (down > warning > up > pending) so a real problem is never masked by a copy.
     const STATUS_RANK: Record<string, number> = { down: 3, warning: 2, up: 1, pending: 0 };
     const dedupeCounts = (list: Array<{ host: string; port: number | null; status: string }>) => {

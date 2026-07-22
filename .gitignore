@@ -23,3 +23,6 @@ npm-debug.log*
 *.log
 .DS_Store
 Thumbs.db
+
+# Internal ops notes (host IPs, admin-cred handling) — NOT for the public repo
+docs/P41-PENDING-RAY.md
