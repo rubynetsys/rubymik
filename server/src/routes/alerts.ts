@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 import { allSites, siteScope, scopeFilter, type AccessScope } from '../scope.js';
 import { RULE_META } from '../alerts.js';
 import type { Notifier } from '../notify.js';
@@ -170,28 +170,32 @@ export function alertRoutes(db: DatabaseSync, notifier: Notifier): Router {
     res.json({ ok: true });
   });
 
-  router.get('/notifications', (_req, res) => {
-    const s = notifier.getSettings();
-    res.json({ webhookEnabled: s.webhookEnabled, webhookUrl: s.webhookUrl });
+  // Channel config is admin-only (a settings surface); secrets are never returned.
+  router.get('/notifications', requireRole('admin'), (_req, res) => {
+    res.json(notifier.getMasked());
   });
 
-  router.put('/notifications', (req, res) => {
-    const b = (req.body ?? {}) as Record<string, unknown>;
-    const url = typeof b.webhookUrl === 'string' ? b.webhookUrl.trim() : '';
-    if (url && !/^https?:\/\//.test(url)) {
-      res.status(400).json({ error: 'Webhook URL must start with http:// or https://.' });
-      return;
+  router.put('/notifications', requireRole('admin'), (req, res) => {
+    try {
+      notifier.saveConfig((req.body ?? {}) as Record<string, unknown>);
+      log.info('Notification channel settings updated');
+      res.json(notifier.getMasked());
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
     }
-    const enabled = b.webhookEnabled === true && url !== '';
-    db.prepare('UPDATE notification_settings SET webhook_enabled = ?, webhook_url = ?, updated_at = ? WHERE id = 1')
-      .run(enabled ? 1 : 0, url || null, new Date().toISOString());
-    log.info(`Notification settings updated (webhook ${enabled ? 'enabled' : 'disabled'})`);
-    res.json({ webhookEnabled: enabled, webhookUrl: url || null });
   });
 
-  router.post('/notifications/test', async (_req, res) => {
-    const result = await notifier.sendTest();
+  const CHANNELS = ['webhook', 'smtp', 'telegram', 'whatsapp'];
+  router.post('/notifications/test', requireRole('admin'), async (req, res) => {
+    const channel = String((req.body as { channel?: unknown } | undefined)?.channel ?? 'webhook');
+    if (!CHANNELS.includes(channel)) { res.status(400).json({ error: 'Unknown channel.' }); return; }
+    const result = await notifier.sendTest(channel as 'webhook' | 'smtp' | 'telegram' | 'whatsapp');
     res.status(result.ok ? 200 : 502).json(result);
+  });
+
+  // The delivery log is readable by any authenticated user (no secrets in it).
+  router.get('/notifications/log', (req, res) => {
+    res.json(notifier.readLog(Number((req.query as Record<string, string>).limit) || 100));
   });
 
   return router;

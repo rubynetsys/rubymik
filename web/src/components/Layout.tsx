@@ -4,6 +4,7 @@ import { Bell, Building2, Eye, LayoutDashboard, LogOut, RadioTower, Router as Ro
 import { api } from '../api';
 import type { AlertSummary } from '../types';
 import { useMe } from '../me';
+import { useDesktopAlerts } from './NotificationChannels';
 import Logo from './Logo';
 import ThemePicker from './ThemePicker';
 
@@ -25,6 +26,7 @@ const SUMMARY_REFRESH_MS = 15_000;
 export default function Layout({ onLogout }: { onLogout: () => void }) {
   const me = useMe();
   const [summary, setSummary] = useState<AlertSummary | null>(null);
+  useDesktopAlerts(); // browser pops for new alerts while the app is open (opt-in)
 
   useEffect(() => {
     const loadSummary = () => {

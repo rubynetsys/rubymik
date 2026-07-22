@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BellRing, CheckCircle2, CircleCheck, History, Send, Settings2, ShieldAlert, TriangleAlert,
+  BellRing, CircleCheck, History, ScrollText, Settings2, ShieldAlert, TriangleAlert,
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import NotificationChannels from '../components/NotificationChannels';
 import {
   fmtAgo, fmtDuration,
-  type Alert, type AlertRule, type AlertSeverity, type NotificationSettings, type Site,
+  type Alert, type AlertRule, type AlertSeverity, type NotificationLogEntry, type Site,
 } from '../types';
 
 const REFRESH_MS = 10_000;
@@ -18,7 +19,7 @@ const SEV: Record<AlertSeverity, { label: string; chip: string; Icon: typeof Shi
   info: { label: 'Info', chip: 'bg-info-bg text-info-fg', Icon: BellRing },
 };
 
-type Tab = 'active' | 'history' | 'settings';
+type Tab = 'active' | 'history' | 'log' | 'settings';
 
 export default function Alerts() {
   const [tab, setTab] = useState<Tab>('active');
@@ -68,6 +69,7 @@ export default function Alerts() {
         {([
           ['active', 'Active', BellRing, active?.length ?? 0],
           ['history', 'History', History, null],
+          ['log', 'Notification log', ScrollText, null],
           ['settings', 'Settings', Settings2, null],
         ] as Array<[Tab, string, typeof BellRing, number | null]>).map(([key, label, Icon, count]) => (
           <button
@@ -90,6 +92,7 @@ export default function Alerts() {
       <div className="mt-5">
         {tab === 'active' && <ActiveTab alerts={active} />}
         {tab === 'history' && <HistoryTab alerts={history} />}
+        {tab === 'log' && <LogTab />}
         {tab === 'settings' && <SettingsTab />}
       </div>
     </div>
@@ -199,23 +202,10 @@ function HistoryTab({ alerts }: { alerts: Alert[] | null }) {
 
 function SettingsTab() {
   const [rules, setRules] = useState<AlertRule[] | null>(null);
-  const [notif, setNotif] = useState<NotificationSettings | null>(null);
-  const [webhookUrl, setWebhookUrl] = useState('');
-  const [webhookEnabled, setWebhookEnabled] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try {
-      setRules(await api.get<AlertRule[]>('/api/alerts/rules'));
-      const n = await api.get<NotificationSettings>('/api/alerts/notifications');
-      setNotif(n);
-      setWebhookUrl(n.webhookUrl ?? '');
-      setWebhookEnabled(n.webhookEnabled);
-    } catch {
-      /* shown as loading */
-    }
+    try { setRules(await api.get<AlertRule[]>('/api/alerts/rules')); } catch { /* shown as loading */ }
   }, []);
 
   useEffect(() => {
@@ -234,35 +224,6 @@ function SettingsTab() {
     }
   }
 
-  async function saveNotifications() {
-    setSaving(true);
-    setTestResult(null);
-    try {
-      const saved = await api.put<NotificationSettings>('/api/alerts/notifications', { webhookUrl, webhookEnabled });
-      setNotif(saved);
-      setWebhookEnabled(saved.webhookEnabled);
-      setFlash('Notification settings saved');
-      setTimeout(() => setFlash(null), 2500);
-    } catch (err) {
-      setFlash((err as Error).message);
-      setTimeout(() => setFlash(null), 4000);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function sendTest() {
-    setTestResult('sending…');
-    try {
-      await api.post('/api/alerts/notifications/test');
-      setTestResult('Delivered — check your endpoint.');
-    } catch (err) {
-      setTestResult(`Failed: ${(err as Error).message}`);
-    }
-  }
-
-  const inputCls =
-    'w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
   const numCls = 'w-20 rounded-lg border border-border-strong px-2 py-1.5 text-sm text-fg-strong outline-none transition focus:border-accent-border-strong';
 
   if (!rules) return <div className="h-40 animate-pulse rounded-2xl border border-border bg-surface" />;
@@ -340,43 +301,43 @@ function SettingsTab() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-fg-body">Notifications</h2>
-        <p className="mt-1 text-xs text-fg-dim">
-          Off by default. RubyMIK sends alerts ONLY to endpoints you configure here — nothing phones
-          home, ever. The webhook posts JSON on fire and resolve; it feeds ntfy, Gotify, Discord,
-          Slack, Telegram bridges, Home Assistant, n8n… SMTP email is on the roadmap.
-        </p>
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="min-w-72 flex-1">
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-fg-dim">Webhook URL</span>
-            <input className={inputCls} value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://ntfy.example.com/rubymik  ·  http://192.168.1.10:8123/api/webhook/…" />
-          </label>
-          <label className="flex items-center gap-2 pb-2 text-sm font-medium text-fg-body">
-            <input type="checkbox" checked={webhookEnabled} onChange={(e) => setWebhookEnabled(e.target.checked)}
-              className="h-4 w-4 accent-accent" />
-            Enabled
-          </label>
-          <button onClick={() => void saveNotifications()} disabled={saving}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse transition hover:bg-accent-hover disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button onClick={() => void sendTest()} disabled={!notif?.webhookEnabled}
-            title={notif?.webhookEnabled ? 'POST a test payload' : 'Save an enabled webhook first'}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50">
-            <Send className="h-3.5 w-3.5" /> Send test
-          </button>
-        </div>
-        {testResult && (
-          <div className={`mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ${
-            testResult.startsWith('Failed') ? 'bg-danger-bg text-danger-fg' : 'bg-success-bg text-success-fg'
-          }`}>
-            {testResult.startsWith('Failed') ? <TriangleAlert className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            {testResult}
-          </div>
-        )}
-      </section>
+      <NotificationChannels />
+    </div>
+  );
+}
+
+function LogTab() {
+  const [rows, setRows] = useState<NotificationLogEntry[] | null>(null);
+  useEffect(() => {
+    const load = () => api.get<NotificationLogEntry[]>('/api/alerts/notifications/log').then(setRows).catch(() => {});
+    load();
+    const t = setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+    return () => clearInterval(t);
+  }, []);
+  if (!rows) return <div className="h-32 animate-pulse rounded-2xl border border-border bg-surface" />;
+  const chip = (s: string) => s === 'sent' ? 'bg-success-bg text-success-fg' : s === 'failed' ? 'bg-danger-bg text-danger-fg' : s === 'mocked' ? 'bg-info-bg text-info-fg' : 'bg-app text-fg-muted';
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <p className="border-b border-border-subtle px-5 py-3 text-xs text-fg-dim">Every delivery attempt across all channels — a failure here never blocks polling or writes.</p>
+      {rows.length === 0 ? <div className="p-8 text-center text-sm text-fg-dim">No notifications sent yet.</div> : (
+        <table className="w-full text-sm">
+          <thead><tr className="border-b border-border-subtle bg-sunken text-left text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
+            <th className="px-4 py-2.5">When</th><th className="px-3 py-2.5">Channel</th><th className="px-3 py-2.5">Event</th><th className="px-3 py-2.5">Target</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Detail</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} className="border-b border-border-subtle text-fg-body">
+                <td className="px-4 py-2 whitespace-nowrap text-fg-dim">{fmtAgo(r.ts)}</td>
+                <td className="px-3 py-2 font-medium capitalize text-fg">{r.channel}</td>
+                <td className="px-3 py-2 text-fg-dim">{r.event}</td>
+                <td className="px-3 py-2 text-fg-dim">{r.target ?? '—'}</td>
+                <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${chip(r.status)}`}>{r.status}</span></td>
+                <td className="px-3 py-2 text-xs text-fg-faint">{r.detail ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

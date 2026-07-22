@@ -46,7 +46,7 @@ setLogLevel(config.logLevel);
 const db = openDb(config.dataDir);
 const box = SecretBox.load(config.dataDir, config.encryptionKeyHex);
 installCaptureHook(db, box); // P21: bracket every config write with pre/post snapshots (fail-closed)
-const notifier = new Notifier(db);
+const notifier = new Notifier(db, box);
 const alertEngine = new AlertEngine(db, notifier);
 const poller = new Poller(db, box, config.pollIntervalSec * 1000, config.pollConcurrency, alertEngine);
 const backupScheduler = new BackupScheduler(db, box, config.backupIntervalSec * 1000, config.backupKeep);

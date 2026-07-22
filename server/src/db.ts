@@ -354,6 +354,34 @@ const MIGRATIONS: string[] = [
      used_at TEXT
    );
    CREATE INDEX idx_recovery_codes_user ON recovery_codes(user_id)`,
+
+  // P31: notification channels + a delivery log. Secrets (*_enc) are AES-GCM at
+  // rest and masked on read as *Set booleans, never returned plaintext. Desktop
+  // notifications are client-side (no server config).
+  `ALTER TABLE notification_settings ADD COLUMN smtp_enabled INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE notification_settings ADD COLUMN smtp_host TEXT;
+   ALTER TABLE notification_settings ADD COLUMN smtp_port INTEGER;
+   ALTER TABLE notification_settings ADD COLUMN smtp_secure TEXT;
+   ALTER TABLE notification_settings ADD COLUMN smtp_user TEXT;
+   ALTER TABLE notification_settings ADD COLUMN smtp_pass_enc TEXT;
+   ALTER TABLE notification_settings ADD COLUMN smtp_from TEXT;
+   ALTER TABLE notification_settings ADD COLUMN smtp_to TEXT;
+   ALTER TABLE notification_settings ADD COLUMN telegram_enabled INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE notification_settings ADD COLUMN telegram_token_enc TEXT;
+   ALTER TABLE notification_settings ADD COLUMN telegram_chat_id TEXT;
+   ALTER TABLE notification_settings ADD COLUMN whatsapp_enabled INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE notification_settings ADD COLUMN whatsapp_provider TEXT;
+   ALTER TABLE notification_settings ADD COLUMN whatsapp_config_enc TEXT;
+   CREATE TABLE notification_log (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     ts TEXT NOT NULL,
+     channel TEXT NOT NULL,
+     event TEXT NOT NULL,
+     target TEXT,
+     status TEXT NOT NULL,
+     detail TEXT
+   );
+   CREATE INDEX idx_notification_log_ts ON notification_log(ts)`,
 ];
 
 export function openDb(dataDir: string): DatabaseSync {

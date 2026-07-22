@@ -622,8 +622,14 @@ export interface AlertRule {
 }
 
 export interface NotificationSettings {
-  webhookEnabled: boolean;
-  webhookUrl: string | null;
+  webhook: { enabled: boolean; url: string };
+  smtp: { enabled: boolean; host: string; port: number; secure: string; user: string; from: string; to: string; passSet: boolean };
+  telegram: { enabled: boolean; chatId: string; tokenSet: boolean };
+  whatsapp: { enabled: boolean; provider: string; to: string; wabaBaseUrl: string; wabaPhoneId: string; configSet: boolean };
+}
+
+export interface NotificationLogEntry {
+  id: number; ts: string; channel: string; event: string; target: string | null; status: string; detail: string | null;
 }
 
 export function fmtDuration(sec: number): string {
