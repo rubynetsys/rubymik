@@ -18,11 +18,15 @@ import Provision from './pages/Provision';
 import AddDevice from './pages/AddDevice';
 import Dashboard from './pages/Dashboard';
 import Wallboard from './pages/Wallboard';
+import Users from './pages/Users';
+import Account from './pages/Account';
 import Audit from './pages/Audit';
 import { applyTheme } from './theme';
+import { MeContext, type Me } from './me';
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -35,10 +39,12 @@ export default function App() {
       const def = st.installDefault ?? { theme: 'ruby-light', accent: null };
       if (st.authenticated) {
         try {
-          const me = await api.get<{ theme: string | null; accent: string | null }>('/api/me');
-          applyTheme(me.theme ?? def.theme, me.accent ?? def.accent);
-        } catch { applyTheme(def.theme, def.accent); }
+          const meRes = await api.get<{ username: string; role: Me['role']; twoFactor: boolean; theme: string | null; accent: string | null }>('/api/me');
+          setMe({ username: meRes.username, role: meRes.role ?? 'admin', twoFactor: !!meRes.twoFactor });
+          applyTheme(meRes.theme ?? def.theme, meRes.accent ?? def.accent);
+        } catch { setMe(null); applyTheme(def.theme, def.accent); }
       } else {
+        setMe(null);
         applyTheme(def.theme, def.accent);
       }
     } catch (err) {
@@ -76,6 +82,7 @@ export default function App() {
   if (!status.authenticated) return <Login onDone={refresh} />;
 
   return (
+    <MeContext.Provider value={me ?? { username: '', role: 'admin', twoFactor: false }}>
     <BrowserRouter>
       <Routes>
         {/* Wallboard is full-screen with no app chrome, so it lives OUTSIDE Layout. */}
@@ -95,11 +102,14 @@ export default function App() {
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/account" element={<Account onChanged={refresh} />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
+    </MeContext.Provider>
   );
 }
 

@@ -8,6 +8,7 @@ import { api } from '../api';
 import { fmtBytes, type Device, type RouterSystemInfo, type Site, type TestResult } from '../types';
 import Select from '../components/Select';
 import { CATEGORY_META, type DeviceCategory, effectiveCategory } from '../catalog';
+import { useMe } from '../me';
 
 const dupKey = (d: { host: string; port: number | null }) => `${d.host}:${d.port ?? ''}`;
 const catOf = (d: Device): DeviceCategory => effectiveCategory(d.category as DeviceCategory | null, d.model);
@@ -18,6 +19,7 @@ export default function Devices() {
   const [modal, setModal] = useState<{ mode: 'add' } | { mode: 'edit'; device: Device } | null>(null);
   const [tests, setTests] = useState<Record<number, { state: 'busy' } | { state: 'ok'; result: TestResult } | { state: 'fail'; error: string }>>({});
   const [catFilter, setCatFilter] = useState<DeviceCategory | 'all'>('all');
+  const readOnly = useMe().role === 'viewer';
 
   const reload = useCallback(() => {
     api.get<Device[]>('/api/devices').then(setDevices).catch(() => {});
@@ -58,12 +60,14 @@ export default function Devices() {
           <h1 className="text-2xl font-bold tracking-tight text-fg-strong">Devices</h1>
           <p className="mt-1 text-sm text-fg-dim">MikroTik devices RubyMIK polls on this network.</p>
         </div>
-        <Link
-          to="/add-device"
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover"
-        >
-          <Plus className="h-4 w-4" /> Add device
-        </Link>
+        {!readOnly && (
+          <Link
+            to="/add-device"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-inverse transition hover:bg-accent-hover"
+          >
+            <Plus className="h-4 w-4" /> Add device
+          </Link>
+        )}
       </div>
 
       {devices.length > 0 && (
@@ -137,30 +141,34 @@ export default function Devices() {
                 </div>
                 {t?.state === 'ok' && <CheckCircle2 className="h-5 w-5 text-success-strong" />}
                 {t?.state === 'fail' && <XCircle className="h-5 w-5 text-danger" />}
-                <button
-                  onClick={() => void testDevice(d.id)}
-                  disabled={t?.state === 'busy'}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
-                >
-                  {t?.state === 'busy'
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <RefreshCw className="h-3.5 w-3.5" />}
-                  Test
-                </button>
-                <button
-                  onClick={() => setModal({ mode: 'edit', device: d })}
-                  title="Edit device"
-                  className="rounded-lg p-2 text-fg-faint transition hover:bg-app hover:text-fg-body"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => void removeDevice(d.id)}
-                  title="Remove device"
-                  className="rounded-lg p-2 text-fg-faint transition hover:bg-accent-subtle hover:text-accent-text"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {!readOnly && (
+                  <>
+                    <button
+                      onClick={() => void testDevice(d.id)}
+                      disabled={t?.state === 'busy'}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body transition hover:border-accent-border hover:text-accent-text disabled:opacity-50"
+                    >
+                      {t?.state === 'busy'
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <RefreshCw className="h-3.5 w-3.5" />}
+                      Test
+                    </button>
+                    <button
+                      onClick={() => setModal({ mode: 'edit', device: d })}
+                      title="Edit device"
+                      className="rounded-lg p-2 text-fg-faint transition hover:bg-app hover:text-fg-body"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => void removeDevice(d.id)}
+                      title="Remove device"
+                      className="rounded-lg p-2 text-fg-faint transition hover:bg-accent-subtle hover:text-accent-text"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
               </div>
               {t?.state === 'ok' && (
                 <div className="border-t border-border-subtle px-5 py-4">
