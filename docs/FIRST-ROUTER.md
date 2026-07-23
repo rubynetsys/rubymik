@@ -101,6 +101,7 @@ clear refusal (HTTP 409) rather than a lockout. The common ones:
 |---|---|
 | Put a PPPoE/DHCP client, or disable, the interface RubyMIK manages the router on | it would sever the management path (a total partition RubyMIK couldn't undo) |
 | Add a default route / a route over RubyMIK's own subnet or WireGuard overlay | it would black-hole the management path |
+| Delete or disable the only default route that's currently verified reachable (e.g. during dual-WAN failover, when no other WAN's default is active) | it would black-hole all egress and strand any management riding that WAN. **No flag combination allows deleting the only verified-reachable internet path — the anti-strand check runs before the pre-existing/`force` check** |
 | Delete/disable the management bridge or VLAN, or enable vlan-filtering on the mgmt bridge without carrying the mgmt VLAN | the classic RouterOS self-lock, below the IP layer |
 | A firewall preset without a management-accept rule | RubyMIK always emits the mgmt-accept rule **first** so a preset can't lock it out |
 | A QoS queue that would strangle the mgmt IP/interface (or 0.0.0.0/0 under 1 Mbps) | it would throttle management to death |
