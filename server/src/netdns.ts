@@ -1,6 +1,6 @@
-// P43.2 — router-side DNS-filtering enforcement (pure rule-set core). Mirrors netnat/netwan:
-// this module produces the exact RouterOS object set for forcing LAN clients through the
-// filtering resolver, so it's fixture-diffable. All I/O (apply/teardown) is elsewhere.
+// P43.2 — router-side DNS-filtering enforcement. Mirrors netnat/netwan: a pure, fixture-diffable
+// rule-set builder (buildEnforcementPlan) + the safe-apply I/O (applyEnforcement/teardownEnforcement)
+// that forces LAN clients through the filtering resolver.
 //
 // Design note (redirect target): we redirect client :53 to the ROUTER's own DNS (action=redirect)
 // and point /ip/dns at the resolver — NOT a dst-nat straight to the resolver IP. That's the only
@@ -9,7 +9,10 @@
 // (resolver dead → no DNS). The resolver IP is the /ip/dns upstream (same-LAN or over the WG
 // tunnel-back). Everything is RUBYMIK-DNS-tagged; teardown restores the prior /ip/dns verbatim.
 
-import type { NatMgmtInfo } from './netnat.js';
+import { restGet } from './routeros/rest.js';
+import { restAdd, restRemove, restCommand } from './routeros/write.js';
+import { runSafeApply, type SafeApplyContext, type SafeApplyOutcome } from './safeapply.js';
+import { mgmtInfo, type NatContext, type NatMgmtInfo } from './netnat.js';
 
 export const TAG = 'RUBYMIK-DNS';
 export const EXEMPT_LIST = 'RUBYMIK-DNS-exempt';
@@ -36,6 +39,7 @@ export interface DnsEnforceSpec {
   resolverIp: string;         // the filtering resolver (/ip/dns upstream): same-LAN IP or tunnel IP
   resolverNet: 'direct' | 'tunnel';
   lanInterfaces: string[];    // LAN client interfaces to enforce on (NEVER the mgmt/tunnel path)
+  wanInterfaces: string[];    // WAN/uplink interfaces — REQUIRED so we can close the open resolver
   exemptions: string[];       // client IPs that skip the redirect + blocks
   failMode: FailMode;         // open (fallback upstream kept) | closed (resolver-only)
   fallbackUpstream: string;   // used only in fail-open
@@ -48,6 +52,7 @@ export interface EnforcePlan {
   dns: DnsSettingsPatch;   // PATCH /ip/dns (fail-mode lives here)
   redirects: PlanObject[]; // dst-nat redirect udp+tcp :53 → router DNS, per LAN interface
   filters: PlanObject[];   // DoT (853) drop + optional DoH (443 to DOH_LIST) drop, per LAN interface
+  wanDnsDrop: PlanObject[];// OPEN-RESOLVER GUARD: input-chain :53 drop from every WAN (see note)
   lists: PlanObject[];     // address-list entries: exemptions + DoH endpoints
   all: PlanObject[];       // every tagged firewall/list object (NOT the /ip/dns patch)
 }
@@ -59,6 +64,8 @@ export function validateEnforceInput(spec: DnsEnforceSpec): string[] {
   if (!isIpv4(spec.resolverIp)) e.push('Resolver IP must be a valid IPv4 address.');
   if (!spec.lanInterfaces.length) e.push('At least one LAN interface is required.');
   for (const i of spec.lanInterfaces) if (!i || /\s/.test(i)) e.push(`Invalid LAN interface "${i}".`);
+  if (!spec.wanInterfaces.length) e.push('At least one WAN interface is required — routing DNS via the router needs a WAN 53 drop so the router is not left an open resolver.');
+  for (const i of spec.wanInterfaces) if (!i || /\s/.test(i)) e.push(`Invalid WAN interface "${i}".`);
   for (const ip of spec.exemptions) if (!isIpv4(ip)) e.push(`Exemption "${ip}" is not a valid IPv4 address.`);
   if (spec.failMode === 'open' && !isIpv4(spec.fallbackUpstream)) e.push('Fail-open needs a valid fallback upstream IP.');
   if (spec.failMode !== 'open' && spec.failMode !== 'closed') e.push('Fail mode must be open or closed.');
@@ -94,14 +101,26 @@ export function buildEnforcementPlan(spec: DnsEnforceSpec): EnforcePlan {
       } });
     }
   }
+  // OPEN-RESOLVER GUARD (security-critical): allow-remote-requests=yes turns the router into a
+  // resolver on EVERY interface, including WAN → a DNS-amplification reflector. Drop :53 on input
+  // from every WAN so the router only answers LAN clients. Always present when we set /ip/dns.
+  const wanDnsDrop: PlanObject[] = [];
+  for (const wan of spec.wanInterfaces) {
+    for (const proto of ['udp', 'tcp'] as const) {
+      wanDnsDrop.push({ menu: '/ip/firewall/filter', body: {
+        chain: 'input', 'in-interface': wan, protocol: proto, 'dst-port': '53',
+        action: 'drop', comment: tag(`block-wan-dns-${proto}-${wan}`),
+      } });
+    }
+  }
   for (const ip of spec.exemptions) lists.push({ menu: '/ip/firewall/address-list', body: { list: EXEMPT_LIST, address: ip, comment: tag('exempt') } });
   if (spec.blockDoh) for (const ip of DOH_ENDPOINTS) lists.push({ menu: '/ip/firewall/address-list', body: { list: DOH_LIST, address: ip, comment: tag('doh-endpoint') } });
 
   const servers = spec.failMode === 'open' ? `${spec.resolverIp},${spec.fallbackUpstream}` : spec.resolverIp;
   return {
     dns: { servers, 'allow-remote-requests': 'yes' },
-    redirects, filters, lists,
-    all: [...redirects, ...filters, ...lists],
+    redirects, filters, wanDnsDrop, lists,
+    all: [...redirects, ...filters, ...wanDnsDrop, ...lists],
   };
 }
 
@@ -136,4 +155,106 @@ export function enforcementIsMgmtSafe(plan: EnforcePlan, mgmt: NatMgmtInfo): { s
     if (touchesMgmt(iface, mgmt)) problems.push(`${o.body.comment}: matches the mgmt path (${iface})`);
   }
   return { safe: problems.length === 0, problems };
+}
+
+// ── read + write (safe-apply + P21-snapshot-bracketed) ──
+export type DnsContext = NatContext;
+type Dict = Record<string, unknown>;
+type Sac = Omit<SafeApplyContext, 'target' | 'transport' | 'probe'>;
+const ctxFull = (ctx: DnsContext, sac: Sac): SafeApplyContext => ({ ...sac, target: ctx.read, transport: ctx.transport });
+const g = (ctx: DnsContext, path: string) => restGet(ctx.read, ctx.transport.scheme, ctx.transport.port, path) as Promise<Dict[]>;
+const s = (v: unknown): string => (typeof v === 'string' ? v : '');
+const isManaged = (c: unknown) => typeof c === 'string' && c.startsWith(TAG);
+const MENUS = ['/ip/firewall/nat', '/ip/firewall/filter', '/ip/firewall/address-list'] as const;
+type IdSet = Record<string, string[]>;
+const setDns = (ctx: DnsContext, patch: DnsSettingsPatch) => restCommand(ctx.write, ctx.transport, '/ip/dns/set', patch as unknown as Record<string, unknown>);
+const flushDns = (ctx: DnsContext) => restCommand(ctx.write, ctx.transport, '/ip/dns/cache/flush', {});
+
+/** The static /ip/dns settings we PATCH — captured before apply so teardown restores them verbatim. */
+async function readDnsSettings(ctx: DnsContext): Promise<DnsSettingsPatch> {
+  const rows = await g(ctx, '/ip/dns');
+  const r = rows[0] ?? {};
+  return { servers: s(r.servers), 'allow-remote-requests': s(r['allow-remote-requests']) || 'no' };
+}
+async function allIds(ctx: DnsContext): Promise<IdSet> {
+  const out: IdSet = {};
+  for (const m of MENUS) out[m] = (await g(ctx, m)).map((r) => s(r['.id']));
+  return out;
+}
+
+export interface DnsEnforceView {
+  configured: boolean; manageable: boolean;
+  redirects: number; dotBlocks: number; dohBlocks: number; wanDrops: number; exemptions: number;
+  dnsServers: string; allowRemoteRequests: string; mgmt: NatMgmtInfo;
+}
+export async function readEnforcement(ctx: DnsContext): Promise<DnsEnforceView> {
+  const [nat, filter, alist, dns, mgmt] = await Promise.all([
+    g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/filter'), g(ctx, '/ip/firewall/address-list'), g(ctx, '/ip/dns'), mgmtInfo(ctx),
+  ]);
+  const has = (rows: Dict[], sub: string) => rows.filter((r) => isManaged(r.comment) && s(r.comment).includes(sub));
+  const d = dns[0] ?? {};
+  const redirects = has(nat, 'redirect');
+  return {
+    configured: redirects.length > 0,
+    manageable: !!(ctx.row.write_username_enc && ctx.row.write_password_enc),
+    redirects: redirects.length,
+    dotBlocks: has(filter, 'block-dot').length,
+    dohBlocks: has(filter, 'block-doh').length,
+    wanDrops: has(filter, 'block-wan-dns').length,
+    exemptions: alist.filter((r) => isManaged(r.comment) && s(r.list) === EXEMPT_LIST).length,
+    dnsServers: s(d.servers), allowRemoteRequests: s(d['allow-remote-requests']) || 'no', mgmt,
+  };
+}
+
+/** Apply enforcement as ONE snapshot-bracketed op: add every RUBYMIK-DNS object, point /ip/dns at
+ *  the resolver, then FLUSH the router DNS cache (so a rule change doesn't keep serving a stale
+ *  0.0.0.0). Rollback removes what we added AND restores the prior /ip/dns (servers +
+ *  allow-remote-requests) verbatim. after.priorDns is returned so the API can persist it for teardown. */
+export async function applyEnforcement(ctx: DnsContext, sac: Sac, spec: DnsEnforceSpec): Promise<SafeApplyOutcome> {
+  const plan = buildEnforcementPlan(spec);
+  let before: IdSet = {};
+  let priorDns: DnsSettingsPatch = { servers: '', 'allow-remote-requests': 'no' };
+  return runSafeApply<{ before: IdSet; priorDns: DnsSettingsPatch }>(ctxFull(ctx, sac), {
+    snapshot: async () => { before = await allIds(ctx); priorDns = await readDnsSettings(ctx); return { before, priorDns }; },
+    summary: () => `Enforce DNS filtering (${spec.failMode}): +${plan.all.length} RUBYMIK-DNS objects, /ip/dns → ${plan.dns.servers}, flush cache`,
+    apply: async () => {
+      for (const o of plan.all) await restAdd(ctx.write, ctx.transport, o.menu, o.body);
+      await setDns(ctx, plan.dns);
+      await flushDns(ctx); // don't serve stale blocked/allowed answers
+    },
+    verifyTook: async () => {
+      const v = await readEnforcement(ctx);
+      const ok = v.redirects >= 1 && v.wanDrops >= 1 && v.dnsServers.startsWith(spec.resolverIp) && v.allowRemoteRequests === 'yes';
+      return { ok, after: { redirects: v.redirects, wanDrops: v.wanDrops, dnsServers: v.dnsServers, priorDns } };
+    },
+    rollback: async (b) => {
+      const now = await allIds(ctx);
+      for (const m of [...MENUS].reverse()) for (const id of (now[m] ?? []).filter((x) => !(b.before[m] ?? []).includes(x))) await restRemove(ctx.write, ctx.transport, m, id);
+      await setDns(ctx, b.priorDns); // restore prior servers + allow-remote-requests
+      await flushDns(ctx);
+    },
+  });
+}
+
+/** Teardown — remove ONLY RUBYMIK-DNS objects, restore the prior /ip/dns verbatim, flush cache.
+ *  Pass the prior /ip/dns captured at apply time (persisted in dns_enforcement.prior_dns_json). */
+export async function teardownEnforcement(ctx: DnsContext, sac: Sac, priorDns: DnsSettingsPatch): Promise<SafeApplyOutcome> {
+  return runSafeApply<{ count: number }>(ctxFull(ctx, sac), {
+    snapshot: async () => {
+      let count = 0;
+      for (const m of MENUS) count += (await g(ctx, m)).filter((r) => isManaged(r.comment)).length;
+      return { count };
+    },
+    summary: (b) => `Tear down DNS filtering (${b.count} RUBYMIK-DNS objects, restore /ip/dns → ${priorDns.servers || '(none)'})`,
+    apply: async () => {
+      for (const m of [...MENUS].reverse()) {
+        const rows = await g(ctx, m);
+        for (const r of rows.filter((x) => isManaged(x.comment))) await restRemove(ctx.write, ctx.transport, m, s(r['.id']));
+      }
+      await setDns(ctx, priorDns);
+      await flushDns(ctx);
+    },
+    verifyTook: async () => { const v = await readEnforcement(ctx); return { ok: v.redirects === 0 && v.wanDrops === 0, after: { dnsServers: v.dnsServers } }; },
+    rollback: async () => { /* removal+restore; the P21 pre-snapshot is the restore point */ },
+  });
 }
