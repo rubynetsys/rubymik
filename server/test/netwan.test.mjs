@@ -18,6 +18,14 @@ const STATIC = {
 
 test('buildFailoverPlan — exact static/static object set (fixture diff)', () => {
   const plan = buildFailoverPlan(STATIC);
+  // RouterOS 7: the routing tables must exist (and be applied) before any routing-mark refs them.
+  assert.deepEqual(plan.tables.map((o) => o.body), [
+    { name: 'RUBYMIK-to-wan1', fib: 'yes', comment: 'RUBYMIK-WAN table-wan1' },
+    { name: 'RUBYMIK-to-wan2', fib: 'yes', comment: 'RUBYMIK-WAN table-wan2' },
+  ]);
+  // …and they come first in the applied order, ahead of the markroute routes and mangle.
+  assert.equal(plan.all[0].menu, '/routing/table');
+  assert.ok(plan.all.findIndex((o) => o.menu === '/routing/table') < plan.all.findIndex((o) => o.body['routing-mark']));
   assert.deepEqual(plan.routes.map((o) => o.body), [
     { 'dst-address': '1.0.0.1/32', gateway: '192.168.88.1', scope: '10', comment: 'RUBYMIK-WAN wan1-probe' },
     { 'dst-address': '8.8.4.4/32', gateway: '192.168.89.1', scope: '10', comment: 'RUBYMIK-WAN wan2-probe' },

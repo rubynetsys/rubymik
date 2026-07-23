@@ -37,12 +37,12 @@ export interface FailoverSpec {
   mode?: FailoverMode;            // default 'fresh'
 }
 
-export type PlanKind = 'route' | 'nat' | 'mangle';
+export type PlanKind = 'table' | 'route' | 'nat' | 'mangle';
 export interface PlanObject { kind: PlanKind; menu: string; body: Record<string, string>; }
 /** A PATCH to a pre-existing object (amendment 5: pppoe add-default-route=no — the wizard
  *  owns the defaults, the pppoe-client must not add its own). Matched by `where`. */
 export interface PlanPatch { menu: string; where: Record<string, string>; body: Record<string, string>; note: string; }
-export interface FailoverPlan { routes: PlanObject[]; nat: PlanObject[]; mangle: PlanObject[]; patches: PlanPatch[]; all: PlanObject[]; }
+export interface FailoverPlan { tables: PlanObject[]; routes: PlanObject[]; nat: PlanObject[]; mangle: PlanObject[]; patches: PlanPatch[]; all: PlanObject[]; }
 
 const tag = (note: string) => `${TAG} ${note}`;
 const obj = (kind: PlanKind, menu: string, body: Record<string, string>): PlanObject => ({ kind, menu, body });
@@ -59,10 +59,17 @@ const routeMark = (n: number) => `RUBYMIK-to-wan${n}`;
  */
 export function buildFailoverPlan(spec: FailoverSpec): FailoverPlan {
   const legs = [spec.wan1, spec.wan2];
+  const tables: PlanObject[] = [];
   const routes: PlanObject[] = [];
   const nat: PlanObject[] = [];
   const mangle: PlanObject[] = [];
   const patches: PlanPatch[] = [];
+
+  // 0. routing tables — RouterOS 7 requires a routing table to EXIST before any route or
+  //    mangle rule may reference it via routing-mark/new-routing-mark (v6 auto-created them).
+  legs.forEach((_leg, i) => {
+    tables.push(obj('table', '/routing/table', { name: routeMark(i + 1), fib: 'yes', comment: tag(`table-wan${i + 1}`) }));
+  });
 
   // 1. probe host-routes — recursive resolvers (scope 10 ≤ defaults' target-scope 10)
   legs.forEach((leg, i) => {
@@ -109,7 +116,8 @@ export function buildFailoverPlan(spec: FailoverSpec): FailoverPlan {
     }
   });
 
-  return { routes, nat, mangle, patches, all: [...routes, ...nat, ...mangle] };
+  // tables FIRST in `all` — they must exist before the markroute routes / mangle reference them.
+  return { tables, routes, nat, mangle, patches, all: [...tables, ...routes, ...nat, ...mangle] };
 }
 
 // ── validation ──
@@ -290,10 +298,10 @@ export function wanRouteGuard(
 // ── write ops (safe-apply + P21-snapshot-bracketed) ──
 type Sac = Omit<SafeApplyContext, 'target' | 'transport' | 'probe'>;
 const ctxFull = (ctx: WanContext, sac: Sac): SafeApplyContext => ({ ...sac, target: ctx.read, transport: ctx.transport });
-type IdSet = { route: string[]; nat: string[]; mangle: string[] };
+type IdSet = { route: string[]; nat: string[]; mangle: string[]; table: string[] };
 const allIds = async (ctx: WanContext): Promise<IdSet> => {
-  const [rt, nat, mg] = await Promise.all([g(ctx, '/ip/route'), g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/mangle')]);
-  return { route: rt.map((r) => s(r['.id'])), nat: nat.map((r) => s(r['.id'])), mangle: mg.map((r) => s(r['.id'])) };
+  const [rt, nat, mg, tb] = await Promise.all([g(ctx, '/ip/route'), g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/mangle'), g(ctx, '/routing/table')]);
+  return { route: rt.map((r) => s(r['.id'])), nat: nat.map((r) => s(r['.id'])), mangle: mg.map((r) => s(r['.id'])), table: tb.map((r) => s(r['.id'])) };
 };
 
 /**
@@ -344,7 +352,7 @@ async function waitPrimaryActive(ctx: WanContext, attempts = 5, delayMs = 2000):
 export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpec): Promise<SafeApplyOutcome> {
   const plan = buildFailoverPlan(spec);
   const mode: FailoverMode = spec.mode ?? 'fresh';
-  let before: IdSet = { route: [], nat: [], mangle: [] };
+  let before: IdSet = { route: [], nat: [], mangle: [], table: [] };
   let removed: Record<string, string>[] = [];
   return runSafeApply<{ before: IdSet; removed: Record<string, string>[] }>(ctxFull(ctx, sac), {
     snapshot: async () => {
@@ -380,7 +388,8 @@ export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpe
     },
     rollback: async (b) => {
       const now = await allIds(ctx);
-      for (const [k, menu] of [['mangle', '/ip/firewall/mangle'], ['nat', '/ip/firewall/nat'], ['route', '/ip/route']] as const) {
+      // route/mangle before table — a table can't be removed while a route still references it.
+      for (const [k, menu] of [['mangle', '/ip/firewall/mangle'], ['nat', '/ip/firewall/nat'], ['route', '/ip/route'], ['table', '/routing/table']] as const) {
         for (const id of now[k].filter((x) => !b.before[k].includes(x))) await restRemove(ctx.write, ctx.transport, menu, id);
       }
       // CRITICAL: hand back the default(s) we retired — no partition on rollback.
@@ -395,12 +404,13 @@ export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpe
 export async function teardownFailover(ctx: WanContext, sac: Sac, originalDefaults: Record<string, string>[] = []): Promise<SafeApplyOutcome> {
   return runSafeApply<{ count: number }>(ctxFull(ctx, sac), {
     snapshot: async () => {
-      const [rt, nat, mg] = await Promise.all([g(ctx, '/ip/route'), g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/mangle')]);
-      return { count: [...rt, ...nat, ...mg].filter((r) => isManaged(r.comment)).length };
+      const [rt, nat, mg, tb] = await Promise.all([g(ctx, '/ip/route'), g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/mangle'), g(ctx, '/routing/table')]);
+      return { count: [...rt, ...nat, ...mg, ...tb].filter((r) => isManaged(r.comment)).length };
     },
     summary: (b) => `Tear down dual-WAN failover (${b.count} RUBYMIK-WAN objects${originalDefaults.length ? `, restore ${originalDefaults.length} original default` : ''})`,
     apply: async () => {
-      for (const menu of ['/ip/firewall/mangle', '/ip/firewall/nat', '/ip/route']) {
+      // routes/mangle before /routing/table — a table can't be removed while a route references it.
+      for (const menu of ['/ip/firewall/mangle', '/ip/firewall/nat', '/ip/route', '/routing/table']) {
         const rows = await g(ctx, menu);
         for (const r of rows.filter((x) => isManaged(x.comment))) await restRemove(ctx.write, ctx.transport, menu, s(r['.id']));
       }
