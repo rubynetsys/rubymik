@@ -13,6 +13,7 @@ import { SelfBackupScheduler } from '../dist/selfbackupscheduler.js';
 import { backupHealth, writeOffhostConfig } from '../dist/selfbackup.js';
 
 const bkKey = Buffer.from('c'.repeat(64), 'hex');
+const ks = { get: () => bkKey, configured: () => true }; // P44: the scheduler takes a key store, not a Buffer
 function fx() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rmk-al-'));
   const db = openDb(dir);
@@ -25,7 +26,7 @@ test('a FAILED backup run alerts + logs failed + health goes critical', async ()
   const f = fx();
   try {
     const notif = fakeNotifier();
-    const sched = new SelfBackupScheduler(f.db, bkKey, f.dir, 21600000, 28, notif, 8);
+    const sched = new SelfBackupScheduler(f.db, ks, f.dir, 21600000, 28, notif, 8);
     // INJECT: make the backups dir a FILE so the backup can't write → run throws.
     fs.writeFileSync(path.join(f.dir, 'self-backups'), 'blocked');
     const out = await sched.run('scheduled');
@@ -41,7 +42,7 @@ test('a FAILED off-host copy alerts, but the local backup still succeeds', async
   const f = fx();
   try {
     const notif = fakeNotifier();
-    const sched = new SelfBackupScheduler(f.db, bkKey, f.dir, 21600000, 28, notif, 8);
+    const sched = new SelfBackupScheduler(f.db, ks, f.dir, 21600000, 28, notif, 8);
     // INJECT: enable off-host to an UNWRITABLE path (a file, not a dir).
     const badPath = path.join(f.dir, 'not-a-dir');
     fs.writeFileSync(badPath, 'x');
@@ -60,7 +61,7 @@ test('watchdog: NO successful backup within the gap fires ONE gap alert', () => 
   const f = fx();
   try {
     const notif = fakeNotifier();
-    const sched = new SelfBackupScheduler(f.db, bkKey, f.dir, 21600000, 28, notif, 8);
+    const sched = new SelfBackupScheduler(f.db, ks, f.dir, 21600000, 28, notif, 8);
     // INJECT: an "ok" backup 9h ago and nothing since.
     const nineHAgo = new Date(Date.now() - 9 * 3_600_000).toISOString();
     f.db.prepare("INSERT INTO self_backup_log (ts, kind, status) VALUES (?, 'scheduled', 'ok')").run(nineHAgo);
@@ -82,7 +83,7 @@ test('health: not-configured is critical; a fresh ok is healthy (banner clears o
     assert.match(noKey.reason, /OFF|no backup key/i);
     // a real successful run → healthy, banner clears
     const notif = fakeNotifier();
-    const sched = new SelfBackupScheduler(f.db, bkKey, f.dir, 21600000, 28, notif, 8);
+    const sched = new SelfBackupScheduler(f.db, ks, f.dir, 21600000, 28, notif, 8);
     const out = await sched.run('manual');
     assert.ok(out.ok);
     const h = backupHealth(f.db, { configured: true, gapHours: 8 });

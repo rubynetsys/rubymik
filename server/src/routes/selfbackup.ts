@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
@@ -6,73 +5,104 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireAuth, verifyPassword, type SessionUser } from '../auth.js';
 import type { SecretBox } from '../secretbox.js';
 import type { SelfBackupScheduler } from '../selfbackupscheduler.js';
+import type { BackupKeyStore } from '../backupkey.js';
 import {
   listSelfBackups, recentSelfBackupLog, backupHealth, restoreDrill,
   readOffhostConfig, writeOffhostConfig,
 } from '../selfbackup.js';
 
 /**
- * P36 — the RubyMIK self-backup control surface. Admin-only. `/api/backup` is a
- * free mount path (router-config backups live under `/api/devices`), so no
- * collision. `/status` is polled by the app to drive the red banner.
+ * P36/P44 — the RubyMIK self-backup control surface. Admin-only. The backup key is managed here,
+ * fully in-UI (one-click enable, download, strict off-server mode) — no compose editing. `/status`
+ * is polled by the app to drive the banner.
  */
 export function selfbackupRoutes(
-  db: DatabaseSync, backupKey: Buffer | null, dataDir: string, box: SecretBox,
+  db: DatabaseSync, keyStore: BackupKeyStore, dataDir: string, box: SecretBox,
   scheduler: SelfBackupScheduler, gapHours: number,
 ): Router {
   const router = Router();
   router.use(requireAuth(db));
 
-  const configured = backupKey !== null;
   function requireAdmin(req: Request, res: Response): boolean {
     const role = (req as unknown as { user: SessionUser & { role?: string } }).user.role;
     if (role !== 'admin') { res.status(403).json({ error: 'Admin only.' }); return false; }
     return true;
   }
+  const guarded = (req: Request, res: Response, fn: () => void) => {
+    if (!requireAdmin(req, res)) return;
+    try { fn(); } catch (err) { res.status(400).json({ error: (err as Error).message }); }
+  };
 
-  // Health for the banner + the page header. Any authenticated user can read it.
+  // Health + key state for the banner + the page. Any authenticated user can read it.
   router.get('/status', (_req, res) => {
-    res.json({ ...backupHealth(db, { configured, gapHours }), keyConfigured: configured, gapHours });
+    const st = keyStore.status();
+    res.json({ ...backupHealth(db, { configured: st.enabled, gapHours }), keyConfigured: st.enabled, gapHours, key: st });
   });
 
-  // Full list + recent run log (admin).
   router.get('/list', (req, res) => {
     if (!requireAdmin(req, res)) return;
     const backups = listSelfBackups(dataDir).map((b) => ({ name: b.name, createdAt: b.createdAt, sizeBytes: b.sizeBytes, manifest: b.manifest }));
-    res.json({ backups, log: recentSelfBackupLog(db, 50), keyConfigured: configured });
+    res.json({ backups, log: recentSelfBackupLog(db, 50), keyConfigured: keyStore.configured() });
   });
 
-  // Force a watchdog re-evaluation now (admin) — fires the gap alert if we're past
-  // the no-successful-backup window. Also useful operationally to re-check health.
   router.post('/watchdog-check', (req, res) => {
     if (!requireAdmin(req, res)) return;
     scheduler.checkWatchdog();
-    res.json(backupHealth(db, { configured, gapHours }));
+    res.json(backupHealth(db, { configured: keyStore.configured(), gapHours }));
   });
 
-  // On-demand backup (admin).
   router.post('/run', async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    if (!configured) { res.status(409).json({ error: 'No backup key configured — set RUBYMIK_BACKUP_KEY first.', keyMissing: true }); return; }
+    if (!keyStore.configured()) { res.status(409).json({ error: 'Backups are not enabled — enable them first.', keyMissing: true }); return; }
     const out = await scheduler.run('manual');
     res.status(out.ok ? 200 : 502).json(out);
   });
 
-  // Shown-once key generation for setup. The app NEVER persists this — the operator
-  // stores it OFF this machine and puts it in .env (then restarts). Returned once.
-  router.post('/genkey', (req, res) => {
+  // ── P44 key management (all admin) ──
+
+  // One-click enable: generate + persist to /data, back up immediately.
+  router.post('/enable', (req, res) => guarded(req, res, () => {
+    keyStore.enable();
+    scheduler.kick();
+    res.json({ ok: true, key: keyStore.status() });
+  }));
+
+  // Download the recovery key (for off-server safekeeping / strict mode).
+  router.get('/recovery-key', (req, res) => {
     if (!requireAdmin(req, res)) return;
-    const key = crypto.randomBytes(32).toString('hex');
-    res.json({
-      key,
-      instructions: [
-        'Store this key somewhere safe and OFF this machine (a password manager) — a backup is unreadable without it.',
-        'Add it to the app\'s .env as:  RUBYMIK_BACKUP_KEY=' + key,
-        'Restart RubyMIK. Keep the key and your backups apart — together they are plaintext-equivalent.',
-      ],
-      warning: 'This key is shown ONCE and is not stored by the app. If you lose it, existing backups cannot be restored.',
-    });
+    const hex = keyStore.recoveryHex();
+    if (!hex) { res.status(409).json({ error: 'No backup key to download — enable backups first.' }); return; }
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="rubymik-recovery-key.txt"');
+    res.send([
+      'RubyMIK — backup recovery key', '',
+      'Keep this OFF the server, in a password manager. Without it, your backups cannot be',
+      'restored. Together with a backup file it is plaintext-equivalent, so store them apart.', '',
+      hex, '',
+    ].join('\n'));
   });
+
+  // Toggle strict off-server mode: strict=true removes the key from /data (memory only, re-prompt
+  // on restart); strict=false stores it back on the server (convenience).
+  router.post('/strict', (req, res) => guarded(req, res, () => {
+    const strict = ((req.body ?? {}) as { strict?: boolean }).strict === true;
+    if (strict) keyStore.goStrict(); else keyStore.goConvenience();
+    res.json({ ok: true, key: keyStore.status() });
+  }));
+
+  // Provide the key at runtime (strict restart, or a migrated host). Paste or uploaded-file text.
+  router.post('/provide-key', (req, res) => guarded(req, res, () => {
+    const key = ((req.body ?? {}) as { key?: string }).key ?? '';
+    keyStore.provide(key);
+    scheduler.kick();
+    res.json({ ok: true, key: keyStore.status() });
+  }));
+
+  // Turn backups off entirely (remove the key).
+  router.post('/disable', (req, res) => guarded(req, res, () => {
+    keyStore.disable();
+    res.json({ ok: true, key: keyStore.status() });
+  }));
 
   // Off-host config (admin).
   router.get('/config', (req, res) => {
@@ -89,7 +119,6 @@ export function selfbackupRoutes(
     res.json({ ...writeOffhostConfig(db, patch), pendingRay: true });
   });
 
-  // Test the off-host destination without a full backup (admin).
   router.post('/config/test', (req, res) => {
     if (!requireAdmin(req, res)) return;
     const cfg = readOffhostConfig(db);
@@ -103,13 +132,14 @@ export function selfbackupRoutes(
     } catch (err) { res.status(502).json({ ok: false, error: `Off-host target unwritable: ${(err as Error).message}` }); }
   });
 
-  // Restore DRILL against the latest backup (admin). Runs in a scratch dir; the
-  // live instance is never touched. No password is verified here (no known pw) —
-  // the login check confirms user rows + hashes restored; the full password-verify
-  // drill runs in tests + the scripted live drill.
+  // Restore DRILL against the latest backup (admin). Scratch dir; live instance untouched. In
+  // strict/migrated cases the key can be supplied for this drill via { key } (hex).
   router.post('/restore-drill', async (req, res) => {
     if (!requireAdmin(req, res)) return;
-    if (!backupKey) { res.status(409).json({ error: 'No backup key configured.' }); return; }
+    const provided = ((req.body ?? {}) as { key?: string }).key?.trim();
+    let backupKey = keyStore.get();
+    if (provided) { if (!/^[0-9a-fA-F]{64}$/.test(provided)) { res.status(400).json({ error: 'The key must be 64 hex characters.' }); return; } backupKey = Buffer.from(provided, 'hex'); }
+    if (!backupKey) { res.status(409).json({ error: 'No backup key available — enable backups or provide a recovery key.' }); return; }
     const list = listSelfBackups(dataDir);
     const target = list[0];
     if (!target) { res.status(409).json({ error: 'No backup to drill — run a backup first.' }); return; }

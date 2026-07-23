@@ -18,6 +18,7 @@ import { installCaptureHook } from './snapshothook.js';
 import { SnapshotScheduler } from './snapshotscheduler.js';
 import { SelfBackupScheduler } from './selfbackupscheduler.js';
 import { selfbackupRoutes } from './routes/selfbackup.js';
+import { BackupKeyStore } from './backupkey.js';
 import { snapshotRoutes } from './routes/snapshots.js';
 import { snaprestoreRoutes } from './routes/snaprestore.js';
 import { AlertEngine } from './alerts.js';
@@ -59,20 +60,31 @@ import { webfigSessionRoutes, webfigProxyApp } from './routes/webfig.js';
 const config = loadConfig();
 setLogLevel(config.logLevel);
 
-// P36: RubyMIK's OWN DB self-backup key (dedicated; disabled until RUBYMIK_BACKUP_KEY
-// is set). P38 reuses it for the pre-migration backup below.
-const backupKey = config.backupKeyHex ? Buffer.from(config.backupKeyHex, 'hex') : null;
+// P44: RubyMIK's OWN DB self-backup key — managed in-app. env (RUBYMIK_BACKUP_KEY) still wins;
+// otherwise a /data/backup.key file (one-click enabled) or strict in-memory. A mutable store so
+// the key can be enabled/provided at runtime. P38 reuses it for the pre-migration backup below.
+const backupKeys = new BackupKeyStore(config.dataDir, config.backupKeyHex);
 
 // P38 boot upgrade-guard: when the schema OR the app version has moved, take a
 // fail-closed pre-migration backup BEFORE any migration is applied. A REQUIRED
 // backup that cannot be taken aborts startup — RubyMIK never migrates real data
 // without a safety net. (Rollback = restore that backup + pin the old image tag.)
 function preMigrateBackup(status: MigrationStatus, mdb: DatabaseSync): void {
-  const plan = preMigratePlan(status, { backupConfigured: !!backupKey });
+  let plan = preMigratePlan(status, { backupConfigured: backupKeys.configured() });
   if (plan.action === 'skip') { log.info(`Boot upgrade-guard: ${plan.reason}`); return; }
-  if (plan.action === 'refuse') throw new BootError(plan.reason);
+  // P44: a pending migration with no key no longer REFUSES — we auto-generate the convenience key
+  // so the required pre-upgrade backup can run (a migration must never need compose surgery). The
+  // ONE exception is strict mode (key deliberately off-server): we can't back up without it.
+  if (plan.action === 'refuse') {
+    if (backupKeys.isStrict()) {
+      throw new BootError('A schema upgrade needs a pre-upgrade backup, but this install is in STRICT backup mode (key held off-server) and the key is not available at boot. Provide the recovery key from the Backup page first, or set RUBYMIK_BACKUP_KEY for this upgrade.');
+    }
+    backupKeys.enable(); // auto-generate the convenience key so the required backup can run
+    log.warn('Boot upgrade-guard: no backup key was configured — auto-generated one at /data/backup.key so the required pre-upgrade backup could run. Download it from the Backup page for off-server safety.');
+    plan = { ...plan, action: 'backup-required' };
+  }
   try {
-    const res = runSelfBackup(mdb, backupKey!, config.dataDir, 'pre-upgrade');
+    const res = runSelfBackup(mdb, backupKeys.get()!, config.dataDir, 'pre-upgrade');
     try { writeSelfBackupLog(mdb, { kind: 'startup', status: 'ok', filename: res.name, manifest: res.manifest, detail: `pre-upgrade backup (schema ${status.prevSchema}→${status.targetSchema}, app ${status.prevAppVersion ?? '—'}→${status.appVersion})` }); } catch { /* log table predates this DB */ }
     log.info(`Boot upgrade-guard: pre-upgrade backup written (${res.file}).`);
   } catch (err) {
@@ -103,7 +115,7 @@ const snapshotScheduler = new SnapshotScheduler(db, box, config.snapshotInterval
 const wgHub = new WireguardHub(db, box);
 let updateChecker: { stop: () => void } = { stop: () => {} }; // P38: replaced once the server is listening
 const SELFBACKUP_GAP_HOURS = 8;
-const selfBackupScheduler = new SelfBackupScheduler(db, backupKey, config.dataDir, config.selfBackupIntervalSec * 1000, config.selfBackupKeep, notifier, SELFBACKUP_GAP_HOURS);
+const selfBackupScheduler = new SelfBackupScheduler(db, backupKeys, config.dataDir, config.selfBackupIntervalSec * 1000, config.selfBackupKeep, notifier, SELFBACKUP_GAP_HOURS);
 // P43: watch the (single, global) filtering resolver — a dead resolver on a fail-open site is
 // silent no-filtering. Only when filtering is deployed. Boot writes a default config if none
 // exists yet, so the resolver container has something to start from.
@@ -159,7 +171,7 @@ app.use('/api/devices', netwanRoutes(db, box));
 app.use('/api/dns-filter', dnsFilterRoutes(db, config));
 app.use('/api/devices', dnsEnforceRoutes(db, box));
 app.use('/api/devices', netvpnRoutes(db, box));
-app.use('/api/backup', selfbackupRoutes(db, backupKey, config.dataDir, box, selfBackupScheduler, SELFBACKUP_GAP_HOURS));
+app.use('/api/backup', selfbackupRoutes(db, backupKeys, config.dataDir, box, selfBackupScheduler, SELFBACKUP_GAP_HOURS));
 app.use('/api/devices', snapshotRoutes(db, box, snapshotScheduler));
 app.use('/api/devices', snaprestoreRoutes(db, box));
 app.use('/api/remote-access', remoteAccessRoutes(db, box, wgHub));

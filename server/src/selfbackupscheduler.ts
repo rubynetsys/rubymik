@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { Notifier } from './notify.js';
+import type { BackupKeyStore } from './backupkey.js';
 import { log } from './log.js';
 import {
   runSelfBackup, pruneSelfBackups, offhostCopy, writeSelfBackupLog,
@@ -21,7 +22,7 @@ export class SelfBackupScheduler {
 
   constructor(
     private readonly db: DatabaseSync,
-    private readonly backupKey: Buffer | null,
+    private readonly keyStore: BackupKeyStore,
     private readonly dataDir: string,
     private readonly intervalMs: number,
     private readonly keepN: number,
@@ -29,31 +30,33 @@ export class SelfBackupScheduler {
     private readonly gapHours = 8,
   ) {}
 
-  get enabled(): boolean { return this.backupKey !== null; }
+  get enabled(): boolean { return this.keyStore.configured(); }
 
   start(): void {
-    if (!this.backupKey) {
-      log.warn('Self-backup DISABLED — RUBYMIK_BACKUP_KEY is not set. Set it up from the Backup page (a backup key is shown once).');
-      return; // nothing to schedule or watch until a key exists
-    }
-    log.info(`Self-backup scheduler started — every ${Math.round(this.intervalMs / 1000)}s, keep ${this.keepN}, watchdog ${this.gapHours}h`);
+    // P44: the timer + watchdog ALWAYS run — the key can be enabled from the UI at runtime, and
+    // run()/checkWatchdog() no-op until one exists. (Was one-shot-at-boot, gated on the env key.)
+    log.info(`Self-backup scheduler started — every ${Math.round(this.intervalMs / 1000)}s, keep ${this.keepN}, watchdog ${this.gapHours}h${this.enabled ? '' : ' (waiting for a key — enable from the Backup page)'}`);
     setTimeout(() => void this.run('startup'), 12000).unref();
     this.timer = setInterval(() => void this.run('scheduled'), this.intervalMs);
     this.watchdogTimer = setInterval(() => this.checkWatchdog(), 30 * 60 * 1000); // every 30 min
     this.watchdogTimer.unref?.();
   }
 
+  /** Kick off a backup immediately once a key has just been enabled/provided from the UI. */
+  kick(): void { void this.run('enabled'); }
+
   stop(): void { if (this.timer) clearInterval(this.timer); if (this.watchdogTimer) clearInterval(this.watchdogTimer); }
 
   /** Run one backup: VACUUM+encrypt+manifest → prune → off-host → log → (alert on failure). */
   async run(kind: string): Promise<{ ok: boolean; result?: BackupResult; detail: string }> {
-    if (!this.backupKey) return { ok: false, detail: 'No backup key configured.' };
+    const key = this.keyStore.get();
+    if (!key) return { ok: false, detail: 'No backup key configured.' };
     if (this.running) { log.warn('Self-backup skipped — a run is already in progress'); return { ok: false, detail: 'A backup is already running.' }; }
     this.running = true;
     try {
       let result: BackupResult;
       try {
-        result = runSelfBackup(this.db, this.backupKey, this.dataDir, kind);
+        result = runSelfBackup(this.db, key, this.dataDir, kind);
         pruneSelfBackups(this.dataDir, this.keepN);
       } catch (err) {
         const detail = `RubyMIK self-backup FAILED (${kind}): ${(err as Error).message}`;
@@ -86,7 +89,7 @@ export class SelfBackupScheduler {
 
   /** The 67h-outage guard: no successful backup within the gap → alert once. */
   checkWatchdog(): void {
-    if (!this.backupKey) return;
+    if (!this.keyStore.configured()) return;
     const lastOk = lastOkSelfBackup(this.db);
     const ageMs = lastOk ? Date.now() - Date.parse(lastOk.ts) : Infinity;
     if (ageMs > this.gapHours * 3_600_000) {

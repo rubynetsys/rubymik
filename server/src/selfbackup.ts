@@ -290,7 +290,7 @@ export function backupHealth(db: DatabaseSync, opts: { configured: boolean; gapH
   const offhost = { enabled: off.enabled, lastStatus: lastRunRow?.offhost_status ?? null };
 
   if (!opts.configured) {
-    return { configured: false, healthy: false, severity: 'critical', reason: 'Self-backups are OFF — no backup key is configured (set RUBYMIK_BACKUP_KEY).', lastOkAt: null, ageHours: null, lastRun, offhost };
+    return { configured: false, healthy: false, severity: 'critical', reason: 'Self-backups are OFF — enable them in one click from the Backup page.', lastOkAt: null, ageHours: null, lastRun, offhost };
   }
   const lastOk = lastOkSelfBackup(db);
   const ageHours = lastOk ? (Date.now() - Date.parse(lastOk.ts)) / 3_600_000 : null;
