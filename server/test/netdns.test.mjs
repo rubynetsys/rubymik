@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildEnforcementPlan, validateEnforceInput, dnsMgmtGuard, enforcementIsMgmtSafe,
-  DOH_ENDPOINTS, EXEMPT_LIST,
+  buildTeardownOps, DOH_ENDPOINTS, EXEMPT_LIST,
 } from '../dist/netdns.js';
 
 const MGMT = { mgmtIp: '192.168.88.1', mgmtInterface: 'ether1', mgmtPorts: ['ether1'], mgmtPort: 80, mgmtScheme: 'http' };
@@ -67,6 +67,15 @@ test('enforcementIsMgmtSafe — clean LAN passes; a mgmt-matching plan is flagge
   const bad = enforcementIsMgmtSafe(buildEnforcementPlan({ ...localClosed, lanInterfaces: ['ether1'] }), MGMT);
   assert.equal(bad.safe, false);
   assert.ok(bad.problems.some((p) => /mgmt path/.test(p)));
+});
+
+test('TEARDOWN ORDERING — restore /ip/dns (close the resolver) strictly BEFORE removing the WAN drop', () => {
+  const ops = buildTeardownOps({ servers: '', 'allow-remote-requests': 'no' });
+  const restoreIdx = ops.findIndex((o) => o.kind === 'restore-dns');
+  const removeIdx = ops.findIndex((o) => o.kind === 'remove-tagged');
+  assert.ok(restoreIdx >= 0 && removeIdx >= 0, 'both steps present');
+  assert.ok(restoreIdx < removeIdx, 'allow-remote-requests is restored before the RUBYMIK-DNS objects (incl. the WAN 53 drop) are removed — teardown can never leave an open resolver');
+  assert.equal(ops[restoreIdx].patch['allow-remote-requests'], 'no');
 });
 
 test('validateEnforceInput — resolver IP, empty LAN, bad exemption, fail-open needs fallback', () => {

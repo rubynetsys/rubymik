@@ -157,6 +157,21 @@ export function enforcementIsMgmtSafe(plan: EnforcePlan, mgmt: NatMgmtInfo): { s
   return { safe: problems.length === 0, problems };
 }
 
+export type TeardownOp =
+  | { kind: 'restore-dns'; patch: DnsSettingsPatch }
+  | { kind: 'flush-dns' }
+  | { kind: 'remove-tagged' };
+/**
+ * Teardown ORDER (open-resolver safety, same class as P42's add-verify-remove): restore the prior
+ * /ip/dns — CLOSING the resolver (allow-remote-requests → prior, usually 'no') — BEFORE removing
+ * the RUBYMIK-DNS objects, which include the WAN :53 input-drop. Removing that drop while the
+ * resolver is still open (even briefly, and permanently if a later step fails) would leave the
+ * router an open DNS reflector — the worst possible teardown residue.
+ */
+export function buildTeardownOps(priorDns: DnsSettingsPatch): TeardownOp[] {
+  return [{ kind: 'restore-dns', patch: priorDns }, { kind: 'flush-dns' }, { kind: 'remove-tagged' }, { kind: 'flush-dns' }];
+}
+
 // ── read + write (safe-apply + P21-snapshot-bracketed) ──
 export type DnsContext = NatContext;
 type Dict = Record<string, unknown>;
@@ -228,9 +243,10 @@ export async function applyEnforcement(ctx: DnsContext, sac: Sac, spec: DnsEnfor
       return { ok, after: { redirects: v.redirects, wanDrops: v.wanDrops, dnsServers: v.dnsServers, priorDns } };
     },
     rollback: async (b) => {
+      await setDns(ctx, b.priorDns); // CLOSE the resolver FIRST (restore allow-remote-requests) …
+      await flushDns(ctx);
       const now = await allIds(ctx);
-      for (const m of [...MENUS].reverse()) for (const id of (now[m] ?? []).filter((x) => !(b.before[m] ?? []).includes(x))) await restRemove(ctx.write, ctx.transport, m, id);
-      await setDns(ctx, b.priorDns); // restore prior servers + allow-remote-requests
+      for (const m of [...MENUS].reverse()) for (const id of (now[m] ?? []).filter((x) => !(b.before[m] ?? []).includes(x))) await restRemove(ctx.write, ctx.transport, m, id); // … THEN drop the WAN-53 rule etc.
       await flushDns(ctx);
     },
   });
@@ -247,12 +263,15 @@ export async function teardownEnforcement(ctx: DnsContext, sac: Sac, priorDns: D
     },
     summary: (b) => `Tear down DNS filtering (${b.count} RUBYMIK-DNS objects, restore /ip/dns → ${priorDns.servers || '(none)'})`,
     apply: async () => {
-      for (const m of [...MENUS].reverse()) {
-        const rows = await g(ctx, m);
-        for (const r of rows.filter((x) => isManaged(x.comment))) await restRemove(ctx.write, ctx.transport, m, s(r['.id']));
+      // Ordered so the resolver is closed BEFORE the WAN-53 drop is removed (buildTeardownOps).
+      for (const op of buildTeardownOps(priorDns)) {
+        if (op.kind === 'restore-dns') await setDns(ctx, op.patch);
+        else if (op.kind === 'flush-dns') await flushDns(ctx);
+        else for (const m of [...MENUS].reverse()) {
+          const rows = await g(ctx, m);
+          for (const r of rows.filter((x) => isManaged(x.comment))) await restRemove(ctx.write, ctx.transport, m, s(r['.id']));
+        }
       }
-      await setDns(ctx, priorDns);
-      await flushDns(ctx);
     },
     verifyTook: async () => { const v = await readEnforcement(ctx); return { ok: v.redirects === 0 && v.wanDrops === 0, after: { dnsServers: v.dnsServers } }; },
     rollback: async () => { /* removal+restore; the P21 pre-snapshot is the restore point */ },
