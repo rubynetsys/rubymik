@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Activity, AppWindow, Archive, ArrowLeft, ArrowLeftRight, ChevronDown, Clock, Cpu, FileText, Gauge, Globe, KeyRound, LayoutGrid, Loader2,
   MemoryStick, Network, RefreshCw, Route as RouteIcon, Router as RouterIcon,
-  Plug, ScrollText, Shield, Thermometer, Waypoints, Wifi,
+  Plug, ScrollText, Shield, Split, Thermometer, Waypoints, Wifi,
 } from 'lucide-react';
 import { api } from '../api';
 import {
@@ -26,6 +26,7 @@ import PppoeManager from '../components/PppoeManager';
 import DnsNtpManager from '../components/DnsNtpManager';
 import WirelessManager from '../components/WirelessManager';
 import RoutesManager from '../components/RoutesManager';
+import WanFailoverManager from '../components/WanFailoverManager';
 import VpnManager from '../components/VpnManager';
 import AddressManager from '../components/AddressManager';
 import L2Manager from '../components/L2Manager';
@@ -50,7 +51,7 @@ const CHART_REFRESH_MS = 30_000;
 type GroupId = 'overview' | 'network' | 'security' | 'services' | 'system';
 type SectionId =
   | 'glance' | 'sysinfo'
-  | 'interfaces' | 'addresses' | 'routes' | 'wireless' | 'switch' | 'arp'
+  | 'interfaces' | 'addresses' | 'routes' | 'wanfailover' | 'wireless' | 'switch' | 'arp'
   | 'firewall' | 'nat'
   | 'dhcp' | 'dns' | 'qos' | 'pppoe' | 'vpn'
   | 'backups' | 'logs' | 'admin';
@@ -67,6 +68,7 @@ const GROUPS: Group[] = [
     { id: 'interfaces', label: 'Interfaces', icon: Network },
     { id: 'addresses', label: 'Addresses & L2', icon: RouteIcon },
     { id: 'routes', label: 'Routes', icon: Waypoints },
+    { id: 'wanfailover', label: 'WAN Failover', icon: Split },
     { id: 'wireless', label: 'Wireless', icon: Wifi },
     { id: 'switch', label: 'Switch ports', icon: Gauge },
     { id: 'arp', label: 'ARP', icon: Network },
@@ -120,6 +122,7 @@ const SECTION_HELP: Record<SectionId, string> = {
   interfaces: 'The ports and links on this router, and how much traffic each is carrying.',
   addresses: "The router's IP addresses, plus its bridges and VLANs — how the ports are grouped together.",
   routes: 'Static routes — telling the router which path to send traffic down to reach other networks.',
+  wanfailover: 'Two internet connections — a primary and a backup — so if the main line drops, the router switches to the spare on its own.',
   wireless: "Your Wi-Fi network name, password and radio settings — and who's connected.",
   switch: 'The built-in switch chip and its ports (view only).',
   arp: 'The address book that maps IP addresses to the devices on your network (view only).',
@@ -140,6 +143,7 @@ const SECTION_TECH: Partial<Record<SectionId, string>> = {
   interfaces: 'Physical & virtual interfaces · rates derived from counters (read-only)',
   addresses: 'Per-interface addresses + bridges/VLANs · the mgmt address/interface are protected · mgmt-IP changes use add-before-remove (never an unreachable moment)',
   routes: 'Static routes only · RUBYMIK-tagged, reversible · management-path guarded · reachable-then-commit with auto-revert on lockout',
+  wanfailover: 'Recursive-route dual-WAN (check-gateway does the failover, ~20-30s) · preview the exact routes/NAT/mangle · typed-confirm apply · the only verified-reachable default can’t be cut · timers gate alerts only · snapshot → verify → auto-rollback → audit',
   wireless: 'SSID · security · band/channel · stack auto-detected (modern wifi vs legacy) · snapshot → verify → auto-rollback → audit; passphrases are never shown or logged',
   switch: 'Read-only · switch-chip ports over REST · link speed needs the RouterOS monitor command (write-path) — not shown by design',
   arp: 'Read-only · IP↔MAC neighbour table',
@@ -466,6 +470,9 @@ export default function DeviceDetail() {
 
       case 'firewall':
         return <FirewallManager deviceId={deviceId} />;
+
+      case 'wanfailover':
+        return <WanFailoverManager deviceId={deviceId} deviceName={dev.name} interfaces={ifaceNames} />;
 
       case 'nat':
         return <NatManager deviceId={deviceId} interfaces={ifaceNames} />;

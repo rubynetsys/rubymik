@@ -289,6 +289,32 @@ export interface NatRule {
 }
 export interface NatMgmtInfo { mgmtIp: string; mgmtInterface: string | null; mgmtPorts: string[]; mgmtPort: number; mgmtScheme: string }
 export interface NatView { manageable: boolean; rules: NatRule[]; mgmt: NatMgmtInfo }
+
+// ── P42: dual-WAN failover ──
+export type WanState = 'primary' | 'failover' | 'both-down' | 'none';
+export interface WanRouteRow { id: string; comment: string; dst: string; gateway: string; distance: string; active: boolean; checkGateway: string }
+export interface WanFailoverView {
+  configured: boolean;
+  state: WanState;
+  manageable: boolean;
+  routes: WanRouteRow[];
+  nat: { comment: string; outInterface: string; action: string }[];
+  mangle: { comment: string; chain: string; action: string }[];
+  mgmt: NatMgmtInfo;
+}
+export interface WanPlanObject { kind: string; menu: string; body: Record<string, string> }
+export interface WanPlanPatch { menu: string; where: Record<string, string>; body: Record<string, string>; note: string }
+export interface WanFailoverPlan { tables: WanPlanObject[]; routes: WanPlanObject[]; nat: WanPlanObject[]; mangle: WanPlanObject[]; patches: WanPlanPatch[]; all: WanPlanObject[] }
+export interface WanCollisionReport {
+  ok: boolean; requiresModeChoice: boolean;
+  existingDefaults: { id: string; distance: string; comment: string; managed: boolean }[];
+  masqueradeOnlyWan1: boolean; markNameCollisions: string[]; messages: string[];
+}
+export interface WanDnsCollision { wan: 'wan1' | 'wan2'; probe: string }
+export interface WanPreview { plan: WanFailoverPlan; analysis: WanCollisionReport; dnsCollisions: WanDnsCollision[]; current: WanFailoverView }
+export type WanSourceType = 'static' | 'dhcp' | 'pppoe';
+export interface WanLegInput { interface: string; sourceType: WanSourceType; gateway: string; probeTarget: string }
+export interface WanFailoverSpec { wan1: WanLegInput; wan2: WanLegInput; mode: 'fresh' | 'adopt' | 'replace'; markRouterTraffic: boolean }
 export interface NatMoveResult { result: 'applied' | 'rolled_back' | 'rollback_failed' | 'failed'; auditId: number; detail: string }
 
 // --- automatic config snapshots (P21) — capture + view + diff (no restore) ---
