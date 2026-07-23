@@ -458,6 +458,25 @@ const MIGRATIONS: string[] = [
   // the P38 boot upgrade-guard takes an automatic pre-migration backup before this runs.
   `ALTER TABLE device_status ADD COLUMN wan_state_json TEXT;
    ALTER TABLE device_status ADD COLUMN wan_config_json TEXT`,
+
+  // P43: DNS content filtering. A single global resolver-settings row (categories/custom/
+  // exemptions the Blocky config is generated from); per-device enforcement config (with the
+  // prior /ip/dns captured verbatim for teardown); and a per-cycle stats ring buffer (blob per
+  // device per poll, pruned like interface_traffic). Schema 24.
+  `CREATE TABLE dns_filter (
+     id INTEGER PRIMARY KEY CHECK (id = 1),
+     categories_json TEXT NOT NULL, custom_block_json TEXT NOT NULL, custom_allow_json TEXT NOT NULL,
+     client_exemptions_json TEXT NOT NULL, upstreams_json TEXT NOT NULL, block_type TEXT NOT NULL,
+     updated_at TEXT NOT NULL);
+   CREATE TABLE dns_enforcement (
+     device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+     enabled INTEGER NOT NULL DEFAULT 0, resolver_ip TEXT, resolver_net TEXT,
+     lan_interfaces_json TEXT, exemptions_json TEXT, fail_mode TEXT, fallback_upstream TEXT,
+     block_doh INTEGER NOT NULL DEFAULT 1, prior_dns_json TEXT, updated_at TEXT NOT NULL);
+   CREATE TABLE dns_filter_stats (
+     device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+     ts TEXT NOT NULL, data TEXT NOT NULL);
+   CREATE INDEX idx_dns_stats_dev_ts ON dns_filter_stats(device_id, ts)`,
 ];
 
 /** The total number of migrations this build knows about — the schema version a
