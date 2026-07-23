@@ -48,6 +48,17 @@ export interface Config {
   /** P40: the externally-reachable base URL (e.g. https://rubymik.example.com), used
    *  to build password-reset links. Falls back to the request's own host. */
   publicUrl: string | undefined;
+  /** P43: DNS content filtering. Enabled only by the opt-in docker-compose.filtering.yml,
+   *  which also mounts the Blocky config volume + the Docker socket RubyMIK uses to restart
+   *  the resolver on "Save & apply". When disabled the filtering UI is read-only/off. */
+  dnsFilter: {
+    enabled: boolean;
+    configPath: string;       // where RubyMIK writes the Blocky config (shared volume)
+    blockyContainer: string;  // container name RubyMIK restarts via the Docker socket
+    dnsHost: string;          // host:port RubyMIK probes to verify the resolver after reload
+    dnsPort: number;
+    dockerSock: string;
+  };
 }
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error'];
@@ -137,7 +148,16 @@ export function loadConfig(): Config {
     throw new Error('RUBYMIK_PUBLIC_URL must be an http(s) URL.');
   }
 
-  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, demoBanner, demoCredentials, updateUrl, trustProxy, publicUrl };
+  const dnsFilter = {
+    enabled: /^(1|true|on|yes)$/i.test(process.env.RUBYMIK_DNSFILTER_ENABLED ?? ''),
+    configPath: process.env.RUBYMIK_DNSFILTER_CONFIG || '/dnsfilter/config.yml',
+    blockyContainer: process.env.RUBYMIK_BLOCKY_CONTAINER || 'rubymik-blocky',
+    dnsHost: process.env.RUBYMIK_BLOCKY_DNS_HOST || 'rubymik-blocky',
+    dnsPort: intEnv('RUBYMIK_BLOCKY_DNS_PORT', 53, 1, 65535),
+    dockerSock: process.env.RUBYMIK_DOCKER_SOCK || '/var/run/docker.sock',
+  };
+
+  return { port, dataDir, logLevel, encryptionKeyHex, backupKeyHex, selfBackupIntervalSec, selfBackupKeep, pollIntervalSec, pollConcurrency, webfigPort, backupIntervalSec, backupKeep, snapshotIntervalSec, defaultTheme, defaultAccent, demoBanner, demoCredentials, updateUrl, trustProxy, publicUrl, dnsFilter };
 }
 
 /** RUBYMIK_TRUST_PROXY: unset/false/0 → off; true/1 → trust the immediate proxy;

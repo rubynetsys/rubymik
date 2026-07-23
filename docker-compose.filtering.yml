@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# OPT-IN: DNS content filtering (P43). Apply ALONGSIDE the base file:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.filtering.yml up -d
+#
+# This adds the Blocky resolver AND grants RubyMIK read/write on the Docker socket so
+# "Save & apply" can restart the resolver after regenerating its config. The socket is a
+# powerful grant (host-root-equivalent) — it is deliberately scoped to THIS override so base
+# deployments never mount it. Enable filtering only if you accept that tradeoff. RubyMIK uses
+# the socket for exactly one thing: restarting the `rubymik-blocky` container (resolver.ts).
+#
+# The resolver publishes DNS on the host so LAN routers can redirect clients to it. If the host
+# already runs a resolver on :53 (e.g. systemd-resolved), set RUBYMIK_DNS_PORT to a free port
+# and point the router redirect at host:that-port.
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  rubymik:
+    environment:
+      RUBYMIK_DNSFILTER_ENABLED: "1"
+      RUBYMIK_DNSFILTER_CONFIG: /dnsfilter/config.yml
+      RUBYMIK_BLOCKY_CONTAINER: rubymik-blocky
+      RUBYMIK_BLOCKY_DNS_HOST: rubymik-blocky
+      RUBYMIK_BLOCKY_DNS_PORT: "53"
+      RUBYMIK_DOCKER_SOCK: /var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # restart the resolver on Save & apply (see header)
+      - rubymik-dnsfilter:/dnsfilter                 # shared: RubyMIK writes config.yml here, Blocky reads it
+
+  blocky:
+    image: ghcr.io/0xerr0r/blocky:v0.26
+    container_name: rubymik-blocky
+    restart: unless-stopped                          # self-heals: keeps restarting until RubyMIK writes the first config
+    depends_on:
+      - rubymik
+    ports:
+      - "${RUBYMIK_DNS_PORT:-53}:53/udp"
+      - "${RUBYMIK_DNS_PORT:-53}:53/tcp"
+    volumes:
+      - rubymik-dnsfilter:/dnsfilter:ro              # read-only: only RubyMIK writes the config
+      - rubymik-dnsfilter-logs:/logs                 # query log (CSV) → RubyMIK reads it for stats
+    command: ["--config", "/dnsfilter/config.yml"]
+
+volumes:
+  rubymik-dnsfilter:
+  rubymik-dnsfilter-logs:
