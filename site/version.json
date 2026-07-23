@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.1",
+  "latest": "1.1.2",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.1 — patch: fixes the provision wizard's remote-site baseline (no more silent HTTP 400 at Apply). The Review step now catches a missing Remote-Access prerequisite, and API errors surface their reason. No migration (schema unchanged). See the changelog."
+  "notes": "1.1.2 — patch: Remote Access now pre-checks the NET_ADMIN capability at page load and shows a copy-paste setup card (complete Portainer stack, CLI override, or plain-language explainer) instead of an Enable button that fails with a raw kernel error. Enable appears automatically once the container is recreated with the capability. No migration (schema unchanged). See the changelog."
 }
