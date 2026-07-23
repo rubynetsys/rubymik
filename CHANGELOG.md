@@ -10,6 +10,39 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-07-23 (schema 24)
+
+> **This release includes a database migration.** On first boot after upgrading, RubyMIK takes an
+> automatic encrypted pre-migration backup — enabling backups for you if needed, so no
+> configuration is required. **Strict-mode installs: have your recovery key ready before
+> upgrading** — the boot-backup waits for you to provide it.
+
+### Added
+- **Dual-WAN failover (P42).** Recursive-route primary/backup WANs, with the router's own
+  `check-gateway` doing the failover (~20–30s). A wizard previews the exact routes / NAT / mangle /
+  routing-tables before a typed-confirm apply; the only verified-reachable default route can't be
+  cut; per-device notifications (engaged / restored / both-down) with confirm-delay, hold-down and
+  flap suppression. Timers gate ALERTS only — the router fails over on its own timing.
+- **DNS content filtering (P43).** An optional Blocky resolver (deploy with one extra
+  `-f docker-compose.filtering.yml`) with category toggles, custom block/allow rules and per-client
+  exemptions, applied via a reload-verify. Per-device router enforcement forces LAN clients through
+  the resolver — dst-nat `:53` → router DNS, DoT/DoH blocks, and a **raw-table WAN `:53` drop so the
+  router is never left an open resolver** — guarded to match LAN client interfaces only, with
+  fail-open / fail-closed and a resolver-health watchdog (a dead resolver alerts loudly).
+
+### Changed
+- **Backups now enable in one click from the UI; no configuration required.** RubyMIK generates the
+  key, stores it in `/data`, and starts backing up immediately. The `RUBYMIK_BACKUP_KEY` env var is
+  now advanced/optional (it still wins if set). Optional **strict mode** keeps the key off the
+  server (in memory only). A schema upgrade auto-enables backups so a migration never needs compose
+  surgery.
+
+### Fixed
+- **safe-apply now rolls back correctly when an apply step throws mid-operation.** Previously a
+  multi-object change that failed part-way could leave partial writes on the device. The framework
+  now restores the pre-change state on any mid-apply failure — this hardens every guarded write path
+  (existing since the framework was introduced).
+
 ## [1.0.1] — 2026-07-22 (schema 22)
 
 ### Fixed

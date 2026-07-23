@@ -37,20 +37,9 @@ for a in "$@"; do case "$a" in
 
 echo "== RubyMIK release ${FULLTAG}  (image ${IMAGE}) =="
 
-# ── 0. write version.json into the landing site (served at rubymik.com/version.json) ──
-# Real releases only (no -test suffix). The CHANGELOG top note becomes "notes".
-if [[ -z "$SUFFIX" && -f site/version.json ]]; then
-  CL="https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md"
-  node -e '
-    const fs=require("fs"); const v=process.argv[1];
-    const p="site/version.json"; const j=JSON.parse(fs.readFileSync(p,"utf8"));
-    j.latest=v;
-    fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n");
-    console.log("  version.json -> latest "+v);
-  ' "$VERSION"
-  git add site/version.json 2>/dev/null || true
-  echo "  (commit site/version.json with the release: git commit -m \"release ${VERSION}\")"
-fi
+# NOTE: version.json (which advertises "latest" to every running instance) is written LAST —
+# only AFTER a successful --push — so we never point instances at a version that isn't actually
+# in the registry. See step 4.
 
 # ── 1. test gate ─────────────────────────────────────────────────────────────
 if ! $SKIP_TESTS; then
@@ -91,5 +80,20 @@ if [[ -z "$SUFFIX" ]]; then
     git tag -a "v${VERSION}" -m "RubyMIK v${VERSION}"
     echo "tagged v${VERSION} (publish with: git push origin v${VERSION})"
   fi
+fi
+
+# ── 4. version.json — ONLY after a successful --push (never advertise an unpushed version) ────
+# Running instances poll this to show an update banner. Writing it before the push means a failed
+# push leaves every instance pointing at an image that doesn't exist. So it comes LAST, gated on
+# an actual push. Commit + publish it live only after you've verified an anonymous pull of the tag.
+if $PUSH && [[ -z "$SUFFIX" && -f site/version.json ]]; then
+  node -e '
+    const fs=require("fs"); const v=process.argv[1];
+    const p="site/version.json"; const j=JSON.parse(fs.readFileSync(p,"utf8"));
+    j.latest=v; fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n");
+    console.log("  version.json -> latest "+v+" (written AFTER the push succeeded)");
+  ' "$VERSION"
+  git add site/version.json 2>/dev/null || true
+  echo "  NEXT: verify an anonymous pull of ${IMAGE}:${VERSION}, THEN commit + publish site/version.json live."
 fi
 echo "== done: ${FULLTAG} =="
