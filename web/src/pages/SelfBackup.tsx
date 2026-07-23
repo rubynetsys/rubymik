@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Copy, DatabaseBackup, HardDriveDownload, KeyRound, Loader2, Play, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, HardDriveDownload, Loader2, Lock, Play, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
 import { api } from '../api';
 import type { BackupStatus, BackupEntryView, BackupLogRow, OffhostConfig, DrillResult } from '../types';
 
@@ -14,7 +14,7 @@ export default function SelfBackup() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [drill, setDrill] = useState<DrillResult | null>(null);
-  const [genKey, setGenKey] = useState<{ key: string; instructions: string[]; warning: string } | null>(null);
+  const [provideVal, setProvideVal] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -36,17 +36,21 @@ export default function SelfBackup() {
     try { setDrill(await api.post<DrillResult>('/api/backup/restore-drill', {})); await load(); }
     catch (err) { setError((err as Error).message); } finally { setBusy(null); }
   }
-  async function generateKey() {
-    setBusy('genkey'); setError(null);
-    try { setGenKey(await api.post<{ key: string; instructions: string[]; warning: string }>('/api/backup/genkey', {})); }
+  async function keyAction(name: string, fn: () => Promise<unknown>) {
+    setBusy(name); setError(null);
+    try { await fn(); await load(); }
     catch (err) { setError((err as Error).message); } finally { setBusy(null); }
   }
+  const enableBackups = () => keyAction('enable', () => api.post('/api/backup/enable', {}));
+  const toggleStrict = (strict: boolean) => keyAction('strict', () => api.post('/api/backup/strict', { strict }));
+  const provideKey = () => keyAction('provide', async () => { await api.post('/api/backup/provide-key', { key: provideVal.trim() }); setProvideVal(''); });
 
   if (error && !status) return <div className="rounded-xl bg-danger-bg px-4 py-3 text-sm text-danger-fg-strong">Could not load backup status: {error}</div>;
   if (!status) return <div className="h-40 animate-pulse rounded-2xl bg-surface" />;
 
   const sev = status.severity;
   const sevCls = sev === 'ok' ? 'bg-success-bg text-success-fg-strong' : sev === 'warn' ? 'bg-warning-bg text-warning-fg' : 'bg-danger-bg text-danger-fg-strong';
+  const key = status.key ?? { enabled: status.keyConfigured, source: (status.keyConfigured ? 'file' : 'none') as 'file' | 'none', tier: (status.keyConfigured ? 'convenience' : 'none') as 'convenience' | 'none', needsKey: false };
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -81,24 +85,42 @@ export default function SelfBackup() {
         </dl>
       </section>
 
-      {/* key setup (shown when no backup key is configured) */}
-      {!status.keyConfigured && (
+      {/* P44 — key management: one-click enable · protection tier · download · strict off-server */}
+      {key.needsKey ? (
         <section className="rounded-2xl border border-warning-line bg-warning-bg/40 p-5">
-          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-warning-fg"><KeyRound className="h-4 w-4" /> Backups are OFF — set up a backup key</h2>
-          <p className="mt-1 text-sm text-warning-fg">Self-backups use a <b>dedicated</b> key (separate from the field-encryption key), because a backup protects the whole database — including data that isn't field-encrypted. Generate one, store it <b>off this machine</b>, add it to <code>.env</code> as <code>RUBYMIK_BACKUP_KEY</code>, and restart. A backup is unreadable without it.</p>
-          {!genKey ? (
-            <button disabled={busy !== null} onClick={() => void generateKey()} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">{busy === 'genkey' ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Generate backup key</button>
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-warning-fg"><Lock className="h-4 w-4" /> Strict mode — provide your recovery key</h2>
+          <p className="mt-1 text-sm text-warning-fg">This install keeps the backup key <b>off the server</b> (strict mode). Paste your recovery key (the contents of <code>rubymik-recovery-key.txt</code>) to resume backups — it's held in memory only.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input value={provideVal} onChange={(e) => setProvideVal(e.target.value)} placeholder="64 hex characters" className={`${inputCls} flex-1 font-mono`} />
+            <button disabled={busy !== null || provideVal.trim().length < 64} onClick={() => void provideKey()} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">{busy === 'provide' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Provide key'}</button>
+          </div>
+        </section>
+      ) : !key.enabled ? (
+        <section className="rounded-2xl border border-warning-line bg-warning-bg/40 p-5">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-warning-fg"><ShieldOff className="h-4 w-4" /> Backups are OFF</h2>
+          <p className="mt-1 text-sm text-warning-fg">Turn on encrypted database backups. RubyMIK generates the key, stores it in <code>/data</code>, and starts backing up immediately — no configuration.</p>
+          <button disabled={busy !== null} onClick={() => void enableBackups()} className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">{busy === 'enable' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Enable backups</button>
+        </section>
+      ) : key.source === 'env' ? (
+        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-fg-body"><Lock className="h-4 w-4" /> Key protection — environment (advanced)</h2>
+          <p className="mt-1 text-sm text-fg-dim">The backup key is set via <code>RUBYMIK_BACKUP_KEY</code> (advanced). Manage it in your environment — the in-app controls are disabled while it's set.</p>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-fg-body">{key.tier === 'strict' ? <Lock className="h-4 w-4 text-success-fg" /> : <ShieldCheck className="h-4 w-4 text-success-fg" />} Key protection — {key.tier === 'strict' ? 'strict (off server)' : 'protected'}</h2>
+          {key.tier === 'strict' ? (
+            <p className="mt-1 text-sm text-fg-dim">The key is held <b>in memory only</b> — never stored beside the database. On restart you'll be asked to provide it again. Maximum protection.</p>
           ) : (
-            <div className="mt-3 rounded-xl border border-danger-line bg-surface p-4">
-              <div className="text-xs font-bold uppercase tracking-wide text-danger-fg-strong">Shown once — copy it now</div>
-              <div className="mt-2 flex items-center gap-2">
-                <code className="flex-1 break-all rounded-lg bg-app px-3 py-2 font-mono text-xs text-fg-strong">{genKey.key}</code>
-                <button onClick={() => void navigator.clipboard?.writeText(genKey.key)} className="rounded-lg border border-border-strong p-2 hover:bg-app" title="Copy"><Copy className="h-4 w-4" /></button>
-              </div>
-              <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-fg-dim">{genKey.instructions.map((s, i) => <li key={i}>{s}</li>)}</ol>
-              <p className="mt-2 text-xs font-semibold text-danger-fg-strong">{genKey.warning}</p>
-            </div>
+            <p className="mt-1 text-sm text-fg-dim"><b className="text-fg-body">Protected.</b> Backups are encrypted with a key in <code>/data</code> — this guards against partial leaks and off-host copy interception, but the key sits beside the database, so it does <b>not</b> protect against full-volume theft. <b className="text-fg-body">For maximum protection, download your recovery key</b> and switch to strict mode.</p>
           )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <a href="/api/backup/recovery-key" download className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:border-accent-border"><Download className="h-4 w-4" /> Download recovery key</a>
+            {key.tier === 'strict'
+              ? <button disabled={busy !== null} onClick={() => void toggleStrict(false)} className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app disabled:opacity-50">{busy === 'strict' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Store key on server</button>
+              : <button disabled={busy !== null} onClick={() => void toggleStrict(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong px-3.5 py-2 text-sm font-semibold text-fg-body hover:bg-app disabled:opacity-50">{busy === 'strict' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Remove key from server (strict)</button>}
+          </div>
+          {key.tier !== 'strict' && <p className="mt-2 text-xs text-fg-faint">Strict mode holds the key in memory only — you'll re-enter it here after every restart. <b>Download it first</b>, or you'll be locked out of your backups.</p>}
         </section>
       )}
 

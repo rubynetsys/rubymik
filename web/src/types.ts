@@ -717,6 +717,7 @@ export interface BackupStatus {
   lastRun: { ts: string; status: string; detail: string | null } | null;
   offhost: { enabled: boolean; lastStatus: string | null };
   keyConfigured: boolean; gapHours: number;
+  key?: { enabled: boolean; source: 'env' | 'file' | 'memory' | 'none'; tier: 'env' | 'convenience' | 'strict' | 'none' | 'needs-key'; needsKey: boolean };
 }
 // P38 — in-app update check (never applies; just surfaces + tells you the command).
 export interface UpdateReport {

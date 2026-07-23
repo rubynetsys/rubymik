@@ -29,9 +29,10 @@ services:
       # first run (persisted in the volume). Set it to manage the key yourself.
       # Read from the environment (a gitignored .env or the shell) — NEVER baked in.
       RUBYMIK_ENCRYPTION_KEY: ${RUBYMIK_ENCRYPTION_KEY:-}
-      # P36 DB self-backup key — dedicated, NEVER hardcoded here; read from a
-      # gitignored .env (or the shell). Unset ⇒ self-backups disabled AND a schema
-      # upgrade refuses to run (P38 fail-closed: no backup, no migration).
+      # ADVANCED (optional) — the DB self-backup key. Leave this UNSET: RubyMIK now enables
+      # backups in ONE CLICK from the Backup page (it generates + stores the key in /data, and
+      # a schema upgrade auto-enables it so a migration never needs compose surgery). Set this
+      # only to manage the key via the environment yourself — if present it wins.
       RUBYMIK_BACKUP_KEY: ${RUBYMIK_BACKUP_KEY:-}
       RUBYMIK_SELFBACKUP_INTERVAL: ${RUBYMIK_SELFBACKUP_INTERVAL:-21600}
       RUBYMIK_SELFBACKUP_KEEP: ${RUBYMIK_SELFBACKUP_KEEP:-28}
