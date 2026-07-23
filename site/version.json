@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.2",
+  "latest": "1.1.3",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.2 — patch: Remote Access now pre-checks the NET_ADMIN capability at page load and shows a copy-paste setup card (complete Portainer stack, CLI override, or plain-language explainer) instead of an Enable button that fails with a raw kernel error. Enable appears automatically once the container is recreated with the capability. No migration (schema unchanged). See the changelog."
+  "notes": "1.1.3 — patch: Copy buttons now work over plain HTTP (most self-hosted LAN installs), not just HTTPS/localhost — fixed at one shared utility with a hidden-textarea fallback and always-on feedback (Copied / Press Ctrl+C). Large blocks (compose file, .rsc scripts, 2FA codes) also gained a Download button. No migration (schema unchanged). See the changelog."
 }
