@@ -380,29 +380,25 @@ export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpe
     },
     summary: () => `Set up dual-WAN failover (${mode}): +${plan.all.length} RUBYMIK-WAN objects, ${plan.patches.length} pppoe patch${removed.length ? `, retire ${removed.length} existing default (add-before-remove)` : ''}`,
     apply: async () => {
-      try {
-        const ops = buildApplyOps(plan, removed.map((r) => s(r['.id'])), mode);
-        let primaryUp = true;
-        for (const op of ops) {
-          if (op.kind === 'patch') {
-            const rows = await g(ctx, op.menu);
-            const hit = rows.find((r) => Object.entries(op.where).every(([k, v]) => s(r[k]) === v));
-            if (hit) await restSet(ctx.write, ctx.transport, op.menu, s(hit['.id']), op.body);
-          } else if (op.kind === 'add') {
-            await restAdd(ctx.write, ctx.transport, op.menu, op.body);
-          } else if (op.kind === 'verify-primary-active') {
-            // P19 gate: the new recursive primary must be verified active BEFORE we retire the
-            // old default. If it never comes up we do NOT throw — we simply skip the removal and
-            // let verifyTook fail, so the framework rolls back the adds with the old default intact.
-            primaryUp = await waitPrimaryActive(ctx);
-          } else if (op.kind === 'remove-old-default') {
-            if (primaryUp) await restRemove(ctx.write, ctx.transport, '/ip/route', op.id);
-          }
+      // A throw here is caught by runSafeApply, which runs rollback() below (removeAdded +
+      // restoreRemoved) — so we don't self-clean here (that would double-restore the old default).
+      const ops = buildApplyOps(plan, removed.map((r) => s(r['.id'])), mode);
+      let primaryUp = true;
+      for (const op of ops) {
+        if (op.kind === 'patch') {
+          const rows = await g(ctx, op.menu);
+          const hit = rows.find((r) => Object.entries(op.where).every(([k, v]) => s(r[k]) === v));
+          if (hit) await restSet(ctx.write, ctx.transport, op.menu, s(hit['.id']), op.body);
+        } else if (op.kind === 'add') {
+          await restAdd(ctx.write, ctx.transport, op.menu, op.body);
+        } else if (op.kind === 'verify-primary-active') {
+          // P19 gate: the new recursive primary must be verified active BEFORE we retire the old
+          // default. If it never comes up we do NOT throw — we skip the removal and let verifyTook
+          // fail, so the framework rolls back the adds with the old default left intact.
+          primaryUp = await waitPrimaryActive(ctx);
+        } else if (op.kind === 'remove-old-default') {
+          if (primaryUp) await restRemove(ctx.write, ctx.transport, '/ip/route', op.id);
         }
-      } catch (err) {
-        // Never orphan a partial apply: undo our own writes, then re-throw for the audit trail.
-        try { await removeAdded(); await restoreRemoved(); } catch { /* best-effort */ }
-        throw err;
       }
     },
     verifyTook: async () => {

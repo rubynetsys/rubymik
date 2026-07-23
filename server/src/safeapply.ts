@@ -122,15 +122,28 @@ async function runSafeApplyInner<B>(ctx: SafeApplyContext, steps: SafeApplySteps
   // P23: baseline the management latency BEFORE the change (queue ops only).
   const baseline = ctx.latency ? await medianLatency(ctx, ctx.latency.samples) : 0;
 
-  // 1. Apply
+  // 1. Apply — if a step throws mid-operation we must roll back. A multi-object apply can leave
+  //    partial writes committed before it threw, so we restore the pre-change snapshot rather than
+  //    trusting that "a throw means nothing changed" (the old behaviour, which silently orphaned
+  //    partial state on every caller since P5).
   try {
     log.info(`[safe-apply] ${ctx.action} on "${ctx.deviceName}" by ${ctx.actor}: applying — ${summary}`);
     await steps.apply();
   } catch (err) {
-    const detail = `Apply failed before any change could be verified: ${(err as Error).message}`;
-    const id = audit(ctx, 'failed', summary, before, null, detail);
-    log.warn(`[safe-apply] ${ctx.action} FAILED on "${ctx.deviceName}": ${detail}`);
-    return { result: 'failed', auditId: id, detail, before, after: null };
+    const applyDetail = `Apply failed mid-operation: ${(err as Error).message}`;
+    log.warn(`[safe-apply] ${ctx.action} FAILED on "${ctx.deviceName}": ${applyDetail} — rolling back`);
+    try {
+      await steps.rollback(before);
+    } catch (rbErr) {
+      const detail = `${applyDetail} Rollback ALSO failed: ${(rbErr as Error).message}`;
+      const id = audit(ctx, 'rollback_failed', summary, before, null, detail);
+      log.error(`[safe-apply] ${ctx.action} ROLLBACK FAILED on "${ctx.deviceName}": ${detail}`);
+      return { result: 'rollback_failed', auditId: id, detail, before, after: null };
+    }
+    const detail = `${applyDetail} Auto-rolled back to the pre-change snapshot.`;
+    const id = audit(ctx, 'rolled_back', summary, before, null, detail);
+    log.info(`[safe-apply] ${ctx.action} ROLLED BACK on "${ctx.deviceName}" after a mid-apply failure`);
+    return { result: 'rolled_back', auditId: id, detail, before, after: null };
   }
 
   // 2. Verify — reachability first (did we lose management?), then change-took.

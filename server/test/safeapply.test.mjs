@@ -104,19 +104,45 @@ test('change did not take → rollback', async () => {
   assert.match(out.detail, /not found on re-read/i);
 });
 
-test('apply itself throws → failed, rollback NOT run (nothing to undo)', async () => {
+test('apply throws mid-operation → rollback RUNS and restores pre-state (framework regression)', async () => {
+  // Any safe-apply caller that commits objects incrementally can throw after some writes landed.
+  // The framework must roll back to the pre-change snapshot, not leave the partial writes orphaned.
+  // Model a device with mutable state: apply commits two objects then throws on the third; rollback
+  // (delta vs the snapshot) must remove what was committed and leave the device exactly as captured.
   const db = freshDb();
+  const device = new Set(['pre-A', 'pre-B']);            // pre-existing state
   const calls = [];
+  const out = await runSafeApply(ctxFor(db, async () => true), {
+    snapshot: async () => { calls.push('snapshot'); return { ids: [...device] }; },
+    summary: () => 's',
+    apply: async () => {
+      device.add('new-1'); device.add('new-2');          // two writes committed …
+      throw new Error('device said no on the third write'); // … then the op throws
+    },
+    verifyTook: async () => ({ ok: true }),
+    rollback: async (before) => {
+      calls.push('rollback');
+      for (const id of [...device]) if (!before.ids.includes(id)) device.delete(id); // remove the delta
+    },
+  });
+  assert.equal(out.result, 'rolled_back', 'a mid-apply throw rolls back (was silently "failed" pre-fix)');
+  assert.deepEqual(calls, ['snapshot', 'rollback'], 'rollback ran after the throw');
+  assert.deepEqual([...device].sort(), ['pre-A', 'pre-B'], 'device restored to the exact pre-change state — no orphans');
+  assert.match(lastAudit(db).detail, /device said no|rolled back/i);
+});
+
+test('apply throws AND rollback throws → rollback_failed (loudest signal, partial state flagged)', async () => {
+  const db = freshDb();
   const out = await runSafeApply(ctxFor(db, async () => true), {
     snapshot: async () => ({}),
     summary: () => 's',
-    apply: async () => { throw new Error('device said no'); },
+    apply: async () => { throw new Error('half-applied'); },
     verifyTook: async () => ({ ok: true }),
-    rollback: async () => { calls.push('rollback'); },
+    rollback: async () => { throw new Error('undo exploded'); },
   });
-  assert.equal(out.result, 'failed');
-  assert.deepEqual(calls, [], 'no rollback when apply never succeeded');
-  assert.match(lastAudit(db).detail, /device said no/i);
+  assert.equal(out.result, 'rollback_failed');
+  assert.match(out.detail, /half-applied/i);
+  assert.match(out.detail, /rollback also failed/i);
 });
 
 test('rollback ALSO fails → rollback_failed (loudest signal)', async () => {
