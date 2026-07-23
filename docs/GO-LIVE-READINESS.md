@@ -103,6 +103,19 @@ Execute top to bottom. Each step gates the next.
 
 ## 6. Known gaps (backlog — not go-live blockers)
 
+- **PRINCIPLE (established P45, enforced going forward): any feature that needs a
+  host-level privilege must PRE-CHECK the capability and INSTRUCT the operator BEFORE
+  offering the action — never fail raw.** A clickable control that produces a kernel
+  error (e.g. `RTNETLINK ... operation not permitted`) is a bug, not an error message.
+  The pattern: (1) detect the capability at load without a side effect that itself fails
+  (read `/proc/self/status` for caps; only live-probe when the cap is present); (2) if
+  it's missing, replace the action with a setup card that makes the one irreducible
+  server-side step copy-paste trivial for *every* deployment method (a complete,
+  ready-to-paste Portainer stack; the CLI override; a plain-language "what/why"); (3) a
+  belt-and-suspenders server guard returns the honest reason, not the raw error, if the
+  action is somehow invoked anyway; (4) name the boundary truthfully — it's Docker's
+  security model, not ours. First applied to Remote Access (WireGuard hub / NET_ADMIN);
+  applies to anything similar (raw sockets, privileged ports, kernel modules).
 - **DNS filtering end-to-end (P43) — unproven as one chain.** The full path *client →
   router `:53` redirect → filtering resolver → blocked answer* has never run start-to-finish
   on real hardware. Each layer is proven independently — the redirect/enforcement rule-set is

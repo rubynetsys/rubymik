@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Globe, Loader2, Lock, Plus, RadioTower, ShieldCheck, X, Copy, CheckCircle2,
-  AlertTriangle, Link2, Clock,
+  Globe, Loader2, Plus, RadioTower, ShieldCheck, X, Copy, CheckCircle2,
+  AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw,
 } from 'lucide-react';
 import { api } from '../api';
-import type { RemoteAccessView, PeerView } from '../types';
+import type { RemoteAccessView, PeerView, HubCapability, HubStatus } from '../types';
+import { phaseFor } from '../lib/hubphase';
 
 const inputCls = 'w-full rounded-lg border border-border-strong px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
 const REFRESH_MS = 5000;
 
 export default function RemoteAccess() {
   const [view, setView] = useState<RemoteAccessView | null>(null);
+  const [cap, setCap] = useState<HubCapability | null>(null);
+  const [capErr, setCapErr] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [bootstrapFor, setBootstrapFor] = useState<{ peer: PeerView; bootstrap: string } | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -19,15 +23,23 @@ export default function RemoteAccess() {
     try { setView(await api.get<RemoteAccessView>('/api/remote-access')); setErr(null); }
     catch (e) { setErr((e as Error).message); }
   }, []);
+  // Capability is checked at page LOAD (and on demand), not on the status poll —
+  // it's a per-boot fact, and its live probe shouldn't run every few seconds.
+  const checkCapability = useCallback(async () => {
+    setChecking(true);
+    try { setCap(await api.get<HubCapability>('/api/remote-access/capability')); setCapErr(null); }
+    catch (e) { setCapErr((e as Error).message); } finally { setChecking(false); }
+  }, []);
   useEffect(() => {
-    void load();
+    void load(); void checkCapability();
     timer.current = setInterval(() => { if (!document.hidden) void load(); }, REFRESH_MS);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [load]);
+  }, [load, checkCapability]);
 
   if (err && !view) return <div className="rounded-lg bg-danger-bg px-4 py-3 text-sm text-danger-fg-strong">Could not load remote access: {err}</div>;
-  if (!view) return <div className="h-40 animate-pulse rounded-xl bg-border" />;
+  if (!view || !cap) return <div className="h-40 animate-pulse rounded-xl bg-border" />;
   const hub = view.hub;
+  const phase = phaseFor(cap.capable, hub.enabled);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -39,12 +51,25 @@ export default function RemoteAccess() {
             outbound WireGuard tunnel into RubyMIK. Your same-LAN devices don't need any of this.
           </p>
         </div>
-        {hub.configured && <EnableToggle enabled={hub.enabled} onChange={load} />}
+        {/* Enable is offered ONLY when the container is actually capable. */}
+        {phase !== 'setup' && hub.configured && <EnableToggle enabled={hub.enabled} onChange={load} />}
       </header>
 
-      {!hub.configured ? (
-        <HubConfigCard onSaved={load} first />
-      ) : (
+      {phase === 'setup' && <SetupCard cap={cap} hub={hub} checking={checking} onRecheck={checkCapability} capErr={capErr} />}
+
+      {phase === 'ready' && (
+        <>
+          <CapabilityReady />
+          {!hub.configured
+            ? <HubConfigCard onSaved={load} first />
+            : <>
+                <HubStatusCard view={view} />
+                <HubConfigCard onSaved={load} initial={{ endpoint: hub.endpoint ?? '', listenPort: hub.listenPort, overlayCidr: hub.overlayCidr }} />
+              </>}
+        </>
+      )}
+
+      {phase === 'running' && (
         <>
           <HubStatusCard view={view} />
           <HubConfigCard onSaved={load} initial={{ endpoint: hub.endpoint ?? '', listenPort: hub.listenPort, overlayCidr: hub.overlayCidr }} />
@@ -52,14 +77,119 @@ export default function RemoteAccess() {
         </>
       )}
 
-      <DockerNote />
-
       {bootstrapFor && (
         <BootstrapModal
           peer={bootstrapFor.peer} bootstrap={bootstrapFor.bootstrap}
           onClose={() => setBootstrapFor(null)} reload={load}
         />
       )}
+    </div>
+  );
+}
+
+function CapabilityReady() {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-success-line bg-success-bg/50 px-4 py-2.5 text-sm text-success-fg">
+      <CheckCircle2 className="h-4 w-4 shrink-0" /> This container can run the WireGuard hub (NET_ADMIN + WireGuard detected). Configure the endpoint, then Enable.
+    </div>
+  );
+}
+
+function CapPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${ok ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg-strong'}`}>
+      {ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} {label}
+    </span>
+  );
+}
+
+function CodeBlock({ code, label, oneLine }: { code: string; label?: string; oneLine?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex items-center justify-between bg-app px-3 py-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">{label ?? 'file'}</span>
+        <button onClick={async () => { try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } }}
+          className="inline-flex items-center gap-1 rounded-md bg-sidebar px-2.5 py-1 text-xs font-semibold text-inverse hover:bg-fg-body">
+          {copied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
+        </button>
+      </div>
+      <pre className={`overflow-auto bg-sidebar p-3 text-[11px] leading-relaxed text-inverse ${oneLine ? '' : 'max-h-80'}`}><code>{code}</code></pre>
+    </div>
+  );
+}
+
+function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapability; hub: HubStatus; checking: boolean; onRecheck: () => Promise<void>; capErr: string | null }) {
+  const [tab, setTab] = useState<'portainer' | 'cli' | 'about'>('portainer');
+  const tabs = [
+    { id: 'portainer', label: 'Portainer / single stack', Icon: Boxes },
+    { id: 'cli', label: 'docker compose CLI', Icon: Terminal },
+    { id: 'about', label: 'What is this?', Icon: HelpCircle },
+  ] as const;
+  return (
+    <div className="rounded-2xl border border-accent-border bg-surface p-5">
+      <div className="flex items-start gap-2.5">
+        <RadioTower className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+        <div>
+          <h2 className="font-bold text-fg-strong">Enable remote access — one server-side step</h2>
+          <p className="mt-1 text-sm text-fg-dim">{cap.reason}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <CapPill ok={cap.checks.netAdmin} label="NET_ADMIN (root)" />
+        <CapPill ok={cap.wireguard} label="WireGuard available" />
+      </div>
+
+      {hub.enabled && hub.runtimeError && (
+        <div className="mt-3 rounded-lg bg-danger-bg px-3 py-2 text-xs text-danger-fg-strong">Remote access is switched on but can't run here: {hub.runtimeError}</div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-1 border-b border-border">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`-mb-px inline-flex items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-sm font-semibold ${tab === t.id ? 'border-accent bg-app text-fg-strong' : 'border-transparent text-fg-muted hover:text-fg'}`}>
+            <t.Icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-4">
+        {tab === 'portainer' && (
+          <div className="space-y-3">
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-fg-body">
+              <li>In Portainer: <b>Stacks → your RubyMIK stack → Editor</b>.</li>
+              <li><b>Replace</b> the editor contents with the file below — your data volumes and environment are preserved (same names).</li>
+              <li>Click <b>Update the stack</b>, then reload this page.</li>
+            </ol>
+            <CodeBlock code={cap.compose.portainer} label="docker-compose.yml (complete)" />
+            <p className="text-xs text-fg-dim">Also open <b>UDP {cap.listenPort}</b> on your host / cloud firewall so remote routers can reach the hub.</p>
+          </div>
+        )}
+        {tab === 'cli' && (
+          <div className="space-y-3">
+            <p className="text-sm text-fg-body">From the directory that holds your <code className="rounded bg-app px-1">docker-compose.yml</code>, run the opt-in override — it adds NET_ADMIN, root, the UDP port and <code className="rounded bg-app px-1">/dev/net/tun</code>:</p>
+            <CodeBlock code={cap.compose.cli} label="shell" oneLine />
+            <p className="text-xs text-fg-dim">Then open <b>UDP {cap.listenPort}</b> on your host / cloud firewall, and reload this page.</p>
+          </div>
+        )}
+        {tab === 'about' && (
+          <div className="space-y-3 text-sm text-fg-body">
+            <p><b>Why one server-side step?</b> Remote access turns RubyMIK into a small WireGuard VPN hub that behind-NAT routers dial into. Creating and managing a VPN network interface is a privileged operation — a container can't do it unless it was started with the <code className="rounded bg-app px-1">NET_ADMIN</code> capability, as root.</p>
+            <p><b>Why can't RubyMIK just do it for me?</b> A running container cannot grant itself new capabilities — that's Docker's security model, by design, not a RubyMIK limitation. The capability has to be set when the container is (re)created, which is why it's a one-time change to your compose/stack.</p>
+            <p><b>Do I even need this?</b> Only to manage routers that aren't on your network. If every device you manage is on the same LAN, you never need remote access — leave it off and none of this applies.</p>
+            <p className="text-fg-dim">RubyMIK checks for the capability before offering the Enable button, so clicking can never produce a cryptic kernel error.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
+        <p className="text-xs text-fg-dim">After you recreate the container, reload this page — Enable appears automatically.</p>
+        <button onClick={() => void onRecheck()} disabled={checking} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-semibold text-fg-body hover:bg-app disabled:opacity-50">
+          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Re-check
+        </button>
+      </div>
+      {capErr && <div className="mt-2 text-xs text-danger-fg">Capability check failed: {capErr}</div>}
     </div>
   );
 }
@@ -305,17 +435,6 @@ function BootstrapModal({ peer, bootstrap, onClose, reload }: { peer: PeerView; 
         {msg && <div className="mt-4 rounded-lg bg-success-bg px-3 py-2 text-sm text-success-fg">{msg}</div>}
         {err && <div className="mt-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
       </div>
-    </div>
-  );
-}
-
-function DockerNote() {
-  return (
-    <div className="rounded-2xl border border-warning-line bg-warning-bg/60 p-4 text-xs text-warning-fg">
-      <div className="mb-1 flex items-center gap-1.5 font-bold uppercase tracking-wide"><Lock className="h-3.5 w-3.5" /> Docker requirement</div>
-      Running the WireGuard hub needs the container started with <code className="rounded bg-warning-bg px-1">NET_ADMIN</code>, as root, and the UDP port published — supplied by the opt-in override:
-      <pre className="mt-2 overflow-auto rounded bg-sidebar p-2 text-[11px] text-inverse"><code>docker compose -f docker-compose.yml -f docker-compose.wireguard.yml up -d --build</code></pre>
-      The default (LAN-only) deployment needs none of this and is completely unaffected.
     </div>
   );
 }

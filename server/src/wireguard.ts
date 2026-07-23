@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { SecretBox } from './secretbox.js';
+import { readNetAdmin, decideCapability, type HubCapability } from './hubcapability.js';
 import { log } from './log.js';
 
 /**
@@ -243,6 +244,24 @@ export class WireguardHub {
       base.runtimeError = (err as Error).message;
     }
     return base;
+  }
+
+  /** Detect whether this container CAN run the hub, without doing anything that
+   *  fails raw. NET_ADMIN comes from /proc (no side effects); WireGuard is probed
+   *  only when NET_ADMIN is present (so an incapable container never sees a
+   *  RTNETLINK error just from the page loading). The probe creates + immediately
+   *  deletes a throwaway interface with a distinct name (never touches WG_IFACE). */
+  async capability(): Promise<HubCapability> {
+    const netAdmin = readNetAdmin();
+    const wgTool = (await run('wg', ['--version'])).code === 0;
+    let wgKernel: boolean | null = null;
+    if (netAdmin && wgTool) {
+      const probe = 'rmik-wgcap';
+      const add = await run('ip', ['link', 'add', 'dev', probe, 'type', 'wireguard']);
+      if (add.code === 0) { wgKernel = true; await run('ip', ['link', 'del', 'dev', probe]); }
+      else wgKernel = false;
+    }
+    return decideCapability({ netAdmin, wgTool, wgKernel });
   }
 
   /** Persist enabled flag + (re)bring the interface up/down accordingly. */

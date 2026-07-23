@@ -8,6 +8,8 @@ import {
   allocateTunnelIp, createPeer, generateBootstrap, isValidWgKey,
   type HubConfig, type PeerRow,
 } from '../remoteaccess.js';
+import { generateHubCompose, hubComposeCli } from '../hubcapability.js';
+import { APP_VERSION } from '../version.js';
 import { log } from '../log.js';
 
 /**
@@ -54,6 +56,23 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
     res.json({ hub: status, peers: peersView(), live: liveById });
   });
 
+  // Capability pre-check (P45). Called at page load BEFORE the Enable button is
+  // offered — so a click can never produce a raw RTNETLINK. Also returns the
+  // ready-to-paste setup (per deployment method) for the not-capable case.
+  router.get('/capability', async (_req, res) => {
+    const cap = await hub.capability();
+    const hubRow = db.prepare('SELECT listen_port FROM wg_hub WHERE id = 1').get() as { listen_port: number } | undefined;
+    const listenPort = hubRow?.listen_port ?? 51820;
+    res.json({
+      ...cap,
+      listenPort,
+      compose: {
+        portainer: generateHubCompose({ version: APP_VERSION, listenPort }),
+        cli: hubComposeCli(),
+      },
+    });
+  });
+
   // Configure the hub (operator supplies RubyMIK's reachable endpoint).
   router.post('/hub', async (req, res) => {
     const b = (req.body ?? {}) as Record<string, unknown>;
@@ -73,6 +92,12 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
   router.post('/hub/enable', async (req, res) => {
     const enabled = (req.body ?? {}).enabled === true;
     if (enabled && !hub.isConfigured()) { res.status(400).json({ error: 'Configure the hub endpoint before enabling remote access.' }); return; }
+    // Belt-and-suspenders: even if a stale page offers Enable, refuse with the
+    // honest capability reason rather than letting up() fail on a raw RTNETLINK.
+    if (enabled) {
+      const cap = await hub.capability();
+      if (!cap.capable) { res.status(409).json({ error: cap.reason, capability: cap }); return; }
+    }
     try {
       await hub.setEnabled(enabled);
       const status = await hub.status();

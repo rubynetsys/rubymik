@@ -399,6 +399,17 @@ export interface RemoteAccessView {
   live: Record<number, { state: 'never' | 'recent' | 'stale'; latestHandshakeUnix: number; rxBytes: number; txBytes: number } | null>;
 }
 
+// P45 — hub capability pre-check + the generated setup for each deployment method.
+export interface HubCapability {
+  capable: boolean;
+  netAdmin: boolean;
+  wireguard: boolean;
+  reason: string;
+  checks: { netAdmin: boolean; wgTool: boolean; wgKernel: boolean | null };
+  listenPort: number;
+  compose: { portainer: string; cli: string };
+}
+
 // --- DNS & NTP config (P8) ---
 
 export interface NetConfigView {

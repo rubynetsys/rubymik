@@ -10,6 +10,29 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Changed
+- **Remote Access enablement is now honest about the one server-side step — before you click.**
+  Running the WireGuard hub needs the container recreated with `NET_ADMIN` (as root, with the UDP
+  port) — a Docker boundary RubyMIK can't grant itself at runtime. The page now **detects that
+  capability at load** and, when it's missing, shows a **setup card instead of a dead Enable
+  button** — so a click can never produce a raw `RTNETLINK` error. The card has three tabs:
+  - **Portainer / single stack** — a **complete, ready-to-paste compose file** (your service + the
+    WireGuard additions merged), generated with your running image tag and UDP port. Replace your
+    stack editor contents with it and *Update the stack* — one paste, one click.
+  - **docker compose CLI** — the two-file override command.
+  - **What is this?** — plain-language: why a VPN hub needs one server-side step, that it's Docker's
+    security model (not RubyMIK's), and that LAN-only installs never need any of it.
+
+  After you recreate the container, the page auto-detects the capability on next load and the
+  **Enable** button appears (state machine: not-capable → capable-not-enabled → running). A
+  belt-and-suspenders server guard also refuses enable with the honest reason rather than failing
+  raw. Local-only installs are unaffected. The v1.1.1 provision-wizard "Set up Remote Access →"
+  link now lands somewhere actionable for every deployment method.
+
 ## [1.1.1] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).
