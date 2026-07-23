@@ -75,9 +75,11 @@ export function buildFailoverPlan(spec: FailoverSpec): FailoverPlan {
   legs.forEach((leg, i) => {
     routes.push(obj('route', '/ip/route', { 'dst-address': `${leg.probeTarget}/32`, gateway: leg.gateway, scope: '10', comment: tag(`wan${i + 1}-probe`) }));
   });
-  // 2. recursive defaults — check-gateway=ping; distance 1 primary / 2 backup
-  routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan1.probeTarget, 'check-gateway': 'ping', distance: '1', comment: tag('default-primary') }));
-  routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan2.probeTarget, 'check-gateway': 'ping', distance: '2', comment: tag('default-backup') }));
+  // 2. recursive defaults — check-gateway=ping; distance 1 primary / 2 backup.
+  //    target-scope (30) MUST exceed the probe route's scope (10) or RouterOS won't resolve the
+  //    recursive next-hop (equal scopes leave the route inactive — verified on RouterOS 7.23).
+  routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan1.probeTarget, 'check-gateway': 'ping', distance: '1', 'target-scope': '30', comment: tag('default-primary') }));
+  routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan2.probeTarget, 'check-gateway': 'ping', distance: '2', 'target-scope': '30', comment: tag('default-backup') }));
   // 3. per-table default routes — force marked replies out the WAN they arrived on.
   //    RouterOS 7: a route joins a table via `routing-table=` (v6's `routing-mark=` on a
   //    route is rejected as "unknown parameter"; only mangle keeps `new-routing-mark`).
@@ -337,7 +339,7 @@ export function restoreRouteBody(captured: Record<string, string>): Record<strin
 
 /** Poll for the RUBYMIK recursive PRIMARY default to show active (check-gateway resolved). Returns
  *  false if it never comes up — the caller then aborts BEFORE removing the old default (no partition). */
-async function waitPrimaryActive(ctx: WanContext, attempts = 5, delayMs = 2000): Promise<boolean> {
+async function waitPrimaryActive(ctx: WanContext, attempts = 8, delayMs = 2000): Promise<boolean> {
   for (let i = 0; i < attempts; i++) {
     const rt = await g(ctx, '/ip/route');
     const primary = rt.find((r) => isManaged(r.comment) && s(r.comment).includes('default-primary'));

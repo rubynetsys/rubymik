@@ -30,8 +30,8 @@ test('buildFailoverPlan — exact static/static object set (fixture diff)', () =
   assert.deepEqual(plan.routes.map((o) => o.body), [
     { 'dst-address': '1.0.0.1/32', gateway: '192.168.88.1', scope: '10', comment: 'RUBYMIK-WAN wan1-probe' },
     { 'dst-address': '8.8.4.4/32', gateway: '192.168.89.1', scope: '10', comment: 'RUBYMIK-WAN wan2-probe' },
-    { 'dst-address': '0.0.0.0/0', gateway: '1.0.0.1', 'check-gateway': 'ping', distance: '1', comment: 'RUBYMIK-WAN default-primary' },
-    { 'dst-address': '0.0.0.0/0', gateway: '8.8.4.4', 'check-gateway': 'ping', distance: '2', comment: 'RUBYMIK-WAN default-backup' },
+    { 'dst-address': '0.0.0.0/0', gateway: '1.0.0.1', 'check-gateway': 'ping', distance: '1', 'target-scope': '30', comment: 'RUBYMIK-WAN default-primary' },
+    { 'dst-address': '0.0.0.0/0', gateway: '8.8.4.4', 'check-gateway': 'ping', distance: '2', 'target-scope': '30', comment: 'RUBYMIK-WAN default-backup' },
     { 'dst-address': '0.0.0.0/0', gateway: '192.168.88.1', 'routing-table': 'RUBYMIK-to-wan1', comment: 'RUBYMIK-WAN markroute-wan1' },
     { 'dst-address': '0.0.0.0/0', gateway: '192.168.89.1', 'routing-table': 'RUBYMIK-to-wan2', comment: 'RUBYMIK-WAN markroute-wan2' },
   ]);
