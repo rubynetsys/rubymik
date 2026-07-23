@@ -96,6 +96,23 @@ Execute top to bottom. Each step gates the next.
 
 ## 6. Known gaps (backlog — not go-live blockers)
 
+- **DNS filtering end-to-end (P43) — unproven as one chain.** The full path *client →
+  router `:53` redirect → filtering resolver → blocked answer* has never run start-to-finish
+  on real hardware. Each layer is proven independently — the redirect/enforcement rule-set is
+  sim-diffed and the router objects were applied + verified on the bench (P43.3); Blocky's
+  category/custom blocking and the reload-verify are proven live (P43.1) — but the bench had no
+  LAN client and no bench-reachable resolver to join them. Same class as the P24 PPPoE-server
+  gap. **Verify on the first real filtered deployment** (pilot-zero or a customer site);
+  it comes off this list the day filtering runs for real end-to-end.
+  - Also unmeasured there: the **fail-open leakage rate** (how often RouterOS's `/ip/dns`
+    server-selection reaches the fallback while the resolver is healthy). The UI states the
+    behaviour honestly without a number; measure it on that first real deployment.
+- **Bench health note (for future live sessions).** The write-test bench's www service
+  intermittently returns an **empty `/export`**, which makes the P21 fail-closed snapshot
+  correctly refuse a write ("no snapshot, no write"). This is the safety working, not a bug —
+  future bench sessions should **expect occasional fail-closed refusals and retry**, not work
+  around the snapshot gate.
+
 - ~~**Admin self-recovery / password reset.**~~ **CLOSED in P40.** RubyMIK now has
   (1) a **"Forgot password?"** flow that emails a single-use, 30-minute, enumeration-
   safe reset link when SMTP is configured, and (2) a supported, documented CLI reset
