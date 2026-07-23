@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.0",
+  "latest": "1.1.1",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.0 — dual-WAN failover, optional DNS content filtering, and one-click in-UI backups (no env var needed). Includes a database migration (schema 24); an automatic encrypted pre-migration backup is taken on first boot. See the changelog."
+  "notes": "1.1.1 — patch: fixes the provision wizard's remote-site baseline (no more silent HTTP 400 at Apply). The Review step now catches a missing Remote-Access prerequisite, and API errors surface their reason. No migration (schema unchanged). See the changelog."
 }
