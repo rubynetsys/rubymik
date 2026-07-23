@@ -23,16 +23,17 @@ test('buildFailoverPlan — exact static/static object set (fixture diff)', () =
     { name: 'RUBYMIK-to-wan1', fib: 'yes', comment: 'RUBYMIK-WAN table-wan1' },
     { name: 'RUBYMIK-to-wan2', fib: 'yes', comment: 'RUBYMIK-WAN table-wan2' },
   ]);
-  // …and they come first in the applied order, ahead of the markroute routes and mangle.
+  // …and they come first in the applied order, ahead of anything that references a table
+  // (routes via routing-table=, mangle via new-routing-mark=).
   assert.equal(plan.all[0].menu, '/routing/table');
-  assert.ok(plan.all.findIndex((o) => o.menu === '/routing/table') < plan.all.findIndex((o) => o.body['routing-mark']));
+  assert.ok(plan.all.findIndex((o) => o.menu === '/routing/table') < plan.all.findIndex((o) => o.body['routing-table'] || o.body['new-routing-mark']));
   assert.deepEqual(plan.routes.map((o) => o.body), [
     { 'dst-address': '1.0.0.1/32', gateway: '192.168.88.1', scope: '10', comment: 'RUBYMIK-WAN wan1-probe' },
     { 'dst-address': '8.8.4.4/32', gateway: '192.168.89.1', scope: '10', comment: 'RUBYMIK-WAN wan2-probe' },
     { 'dst-address': '0.0.0.0/0', gateway: '1.0.0.1', 'check-gateway': 'ping', distance: '1', comment: 'RUBYMIK-WAN default-primary' },
     { 'dst-address': '0.0.0.0/0', gateway: '8.8.4.4', 'check-gateway': 'ping', distance: '2', comment: 'RUBYMIK-WAN default-backup' },
-    { 'dst-address': '0.0.0.0/0', gateway: '192.168.88.1', 'routing-mark': 'RUBYMIK-to-wan1', comment: 'RUBYMIK-WAN markroute-wan1' },
-    { 'dst-address': '0.0.0.0/0', gateway: '192.168.89.1', 'routing-mark': 'RUBYMIK-to-wan2', comment: 'RUBYMIK-WAN markroute-wan2' },
+    { 'dst-address': '0.0.0.0/0', gateway: '192.168.88.1', 'routing-table': 'RUBYMIK-to-wan1', comment: 'RUBYMIK-WAN markroute-wan1' },
+    { 'dst-address': '0.0.0.0/0', gateway: '192.168.89.1', 'routing-table': 'RUBYMIK-to-wan2', comment: 'RUBYMIK-WAN markroute-wan2' },
   ]);
   assert.deepEqual(plan.nat.map((o) => o.body), [
     { chain: 'srcnat', action: 'masquerade', 'out-interface': 'ether1', comment: 'RUBYMIK-WAN nat-wan1' },

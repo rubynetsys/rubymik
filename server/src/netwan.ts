@@ -78,9 +78,11 @@ export function buildFailoverPlan(spec: FailoverSpec): FailoverPlan {
   // 2. recursive defaults — check-gateway=ping; distance 1 primary / 2 backup
   routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan1.probeTarget, 'check-gateway': 'ping', distance: '1', comment: tag('default-primary') }));
   routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: spec.wan2.probeTarget, 'check-gateway': 'ping', distance: '2', comment: tag('default-backup') }));
-  // 3. routing-mark routes — force marked replies out the WAN they arrived on
+  // 3. per-table default routes — force marked replies out the WAN they arrived on.
+  //    RouterOS 7: a route joins a table via `routing-table=` (v6's `routing-mark=` on a
+  //    route is rejected as "unknown parameter"; only mangle keeps `new-routing-mark`).
   legs.forEach((leg, i) => {
-    routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: leg.gateway, 'routing-mark': routeMark(i + 1), comment: tag(`markroute-wan${i + 1}`) }));
+    routes.push(obj('route', '/ip/route', { 'dst-address': '0.0.0.0/0', gateway: leg.gateway, 'routing-table': routeMark(i + 1), comment: tag(`markroute-wan${i + 1}`) }));
   });
 
   // 4. NAT — masquerade out BOTH WANs
@@ -326,7 +328,7 @@ export function buildApplyOps(plan: FailoverPlan, oldDefaultIds: string[], mode:
 
 /** Fields that reconstruct a route verbatim on restore (rollback / teardown). Read-only/runtime
  *  fields (.id, active, dynamic, …) are dropped so the re-add reproduces the exact same line. */
-const ROUTE_RESTORE_FIELDS = ['dst-address', 'gateway', 'distance', 'check-gateway', 'scope', 'target-scope', 'routing-mark', 'pref-src', 'comment', 'disabled'] as const;
+const ROUTE_RESTORE_FIELDS = ['dst-address', 'gateway', 'distance', 'check-gateway', 'scope', 'target-scope', 'routing-table', 'routing-mark', 'pref-src', 'comment', 'disabled'] as const;
 export function restoreRouteBody(captured: Record<string, string>): Record<string, string> {
   const body: Record<string, string> = {};
   for (const f of ROUTE_RESTORE_FIELDS) { const v = captured[f]; if (v !== undefined && v !== '') body[f] = v; }
