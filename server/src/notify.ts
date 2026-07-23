@@ -107,7 +107,7 @@ export class Notifier {
 
   private subject(event: string, a: AlertPayload): string {
     if (event === 'test') return 'RubyMIK — test notification';
-    const verb = (event === 'alert.resolved' || event === 'wan.primary.restored') ? 'resolved' : 'FIRING';
+    const verb = (event === 'alert.resolved' || event === 'wan.primary.restored' || event === 'dnsfilter.resolver.restored') ? 'resolved' : 'FIRING';
     return `[RubyMIK] ${a.label} ${verb}: ${a.device.name}`;
   }
   private textBody(event: string, a: AlertPayload): string {
@@ -123,7 +123,7 @@ export class Notifier {
   }
 
   /** Deliver to every ENABLED channel. Fire-and-forget: never throws, never blocks. */
-  send(event: 'alert.fired' | 'alert.resolved' | 'test' | 'wan.failover.engaged' | 'wan.primary.restored' | 'wan.both.down' | 'wan.flapping', alert: AlertPayload): void {
+  send(event: 'alert.fired' | 'alert.resolved' | 'test' | 'wan.failover.engaged' | 'wan.primary.restored' | 'wan.both.down' | 'wan.flapping' | 'dnsfilter.resolver.down' | 'dnsfilter.resolver.restored', alert: AlertPayload): void {
     const r = this.row();
     if (r.webhook_enabled === 1 && r.webhook_url) void this.attempt('webhook', event, alert, () => this.postWebhook(r.webhook_url!, event, alert));
     if (r.smtp_enabled === 1) void this.attempt('smtp', event, alert, () => this.sendSmtp(r, event, alert));

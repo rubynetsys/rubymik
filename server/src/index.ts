@@ -23,6 +23,8 @@ import { snaprestoreRoutes } from './routes/snaprestore.js';
 import { AlertEngine } from './alerts.js';
 import { WanEngine } from './wanengine.js';
 import { Notifier } from './notify.js';
+import { ResolverHealthMonitor } from './dnshealth.js';
+import { ensureResolverConfig } from './resolver.js';
 import { alertRoutes } from './routes/alerts.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
@@ -101,6 +103,13 @@ const wgHub = new WireguardHub(db, box);
 let updateChecker: { stop: () => void } = { stop: () => {} }; // P38: replaced once the server is listening
 const SELFBACKUP_GAP_HOURS = 8;
 const selfBackupScheduler = new SelfBackupScheduler(db, backupKey, config.dataDir, config.selfBackupIntervalSec * 1000, config.selfBackupKeep, notifier, SELFBACKUP_GAP_HOURS);
+// P43: watch the (single, global) filtering resolver — a dead resolver on a fail-open site is
+// silent no-filtering. Only when filtering is deployed. Boot writes a default config if none
+// exists yet, so the resolver container has something to start from.
+const resolverHealth = config.dnsFilter.enabled
+  ? new ResolverHealthMonitor({ dnsHost: config.dnsFilter.dnsHost, dnsPort: config.dnsFilter.dnsPort }, notifier, config.pollIntervalSec > 0 ? config.pollIntervalSec : 30)
+  : null;
+if (config.dnsFilter.enabled) ensureResolverConfig(config.dnsFilter.configPath);
 
 const app = express();
 app.disable('x-powered-by');
@@ -194,6 +203,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   selfBackupScheduler.start();
   updateChecker = startUpdateChecks(db, { currentVersion: APP_VERSION, defaultUrl: config.updateUrl }); // P38: daily update check (opt-out honored, offline-safe)
   void wgHub.startup(); // no-op unless remote access was enabled; never fatal
+  resolverHealth?.start(); // P43: only when filtering is deployed
 });
 
 // The WebFig reverse proxy runs on its own port (router admin UIs need web-root
@@ -214,6 +224,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     backupScheduler.stop();
     selfBackupScheduler.stop();
     updateChecker.stop();
+    resolverHealth?.stop();
     webfigServer?.close();
     server.close(() => {
       db.close();
