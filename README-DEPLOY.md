@@ -85,7 +85,7 @@ finds nothing). They are read from the environment only.
 | Key | What it protects | If you lose it |
 |-----|------------------|----------------|
 | **`RUBYMIK_ENCRYPTION_KEY`** | Device/VPN/notification credentials stored in the DB (field encryption). | You must re-enter every device credential. |
-| **`RUBYMIK_BACKUP_KEY`** | The whole-DB self-backups **and** the automatic pre-upgrade backup. | Existing backups become unreadable. |
+| **`RUBYMIK_BACKUP_KEY`** *(advanced/optional)* | The whole-DB self-backups **and** the automatic pre-upgrade backup. Normally you don't set this — enable backups in one click from the UI. | Existing backups become unreadable. |
 
 Rules:
 
@@ -93,18 +93,28 @@ Rules:
   generates one at `/data/secret.key` (persisted in the volume) — fine for a quick
   trial, but you should manage it yourself in production so it survives a volume
   loss and lives in your secret store.
-- **`RUBYMIK_BACKUP_KEY` must differ from `RUBYMIK_ENCRYPTION_KEY`** (RubyMIK
-  refuses to start if they match — a backup encrypted with the field key protects
-  nothing new).
-- **Store the backup key OFF this host**, apart from the backups themselves. A
-  backup plus its key together are plaintext-equivalent.
-- Keys reach the container via the environment / your `.env`. The `.env` is
-  git-ignored and excluded from the image build context. Never commit it.
+- **`RUBYMIK_BACKUP_KEY` is advanced/optional — you almost certainly don't need it.**
+  Enable backups in **one click** from the Backup page: RubyMIK generates the key, stores it in
+  `/data` (`0600`), and offers **Download recovery key** plus an optional **strict** mode. Set
+  this env var only to manage the key yourself via the environment (it **wins** if present). It
+  **must differ** from `RUBYMIK_ENCRYPTION_KEY`.
+- **Store any downloaded / env-managed backup key OFF this host**, apart from the backups —
+  a backup plus its key together are plaintext-equivalent.
+- Keys reach the container via the environment / your `.env`. The `.env` is git-ignored and
+  excluded from the image build context. Never commit it.
 
-> **The backup key gates upgrades.** RubyMIK will not apply a schema migration
-> without first taking an encrypted backup (see §5). If `RUBYMIK_BACKUP_KEY` is
-> unset when a new image needs to migrate, the app **refuses to start** with a
-> clear message rather than migrate un-backed-up data. Keep the backup key set.
+### Strict off-server mode
+
+Strict mode keeps the backup key **in memory only** — never on disk beside the database, the
+maximum-protection tier. The trade-off is ceremony: after any **restart or upgrade**, the
+install sits at **"needs-key"** and takes no backups until you re-provide the recovery key from
+the Backup page. **Strict-mode installs: have your recovery key ready before upgrading** — a
+v1.1.0 (or any migration) boot-backup waits on you providing the key first.
+
+> **Upgrades take a pre-migration backup automatically.** RubyMIK takes an encrypted backup
+> before any schema migration and, if no key is configured, **auto-enables** one (generating +
+> storing it in `/data`) — so an upgrade never needs compose surgery. The **one exception** is
+> strict mode (above): the key is off-server, so provide it before you upgrade.
 
 ---
 
