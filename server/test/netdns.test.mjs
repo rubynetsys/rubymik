@@ -17,9 +17,11 @@ test('local resolver, fail-closed, no exemptions/DoH — exact object set (incl.
     { chain: 'dstnat', 'in-interface': 'bridge-lan', protocol: 'udp', 'dst-port': '53', action: 'redirect', 'to-ports': '53', comment: 'RUBYMIK-DNS redirect-udp-bridge-lan' },
     { chain: 'dstnat', 'in-interface': 'bridge-lan', protocol: 'tcp', 'dst-port': '53', action: 'redirect', 'to-ports': '53', comment: 'RUBYMIK-DNS redirect-tcp-bridge-lan' },
     { chain: 'forward', 'in-interface': 'bridge-lan', protocol: 'tcp', 'dst-port': '853', action: 'drop', comment: 'RUBYMIK-DNS block-dot-bridge-lan' },
-    { chain: 'input', 'in-interface': 'ether-wan', protocol: 'udp', 'dst-port': '53', action: 'drop', comment: 'RUBYMIK-DNS block-wan-dns-udp-ether-wan' },
-    { chain: 'input', 'in-interface': 'ether-wan', protocol: 'tcp', 'dst-port': '53', action: 'drop', comment: 'RUBYMIK-DNS block-wan-dns-tcp-ether-wan' },
+    { chain: 'prerouting', 'in-interface': 'ether-wan', protocol: 'udp', 'dst-port': '53', 'dst-address-type': 'local', action: 'drop', comment: 'RUBYMIK-DNS block-wan-dns-udp-ether-wan' },
+    { chain: 'prerouting', 'in-interface': 'ether-wan', protocol: 'tcp', 'dst-port': '53', 'dst-address-type': 'local', action: 'drop', comment: 'RUBYMIK-DNS block-wan-dns-tcp-ether-wan' },
   ]);
+  // WAN drop lives in the RAW table (order-independent — a filter-chain drop is dead behind accepts)
+  assert.ok(p.wanDnsDrop.every((r) => r.menu === '/ip/firewall/raw' && r.body.chain === 'prerouting' && r.body['dst-address-type'] === 'local'));
 });
 
 test('OPEN-RESOLVER GUARD — a plan that sets allow-remote-requests ALWAYS drops :53 on WAN input', () => {
@@ -27,8 +29,8 @@ test('OPEN-RESOLVER GUARD — a plan that sets allow-remote-requests ALWAYS drop
     const p = buildEnforcementPlan({ ...localClosed, failMode, fallbackUpstream: '1.1.1.1', wanInterfaces: ['ether-wan', 'pppoe-out'] });
     assert.equal(p.dns['allow-remote-requests'], 'yes');
     for (const wan of ['ether-wan', 'pppoe-out']) for (const proto of ['udp', 'tcp']) {
-      assert.ok(p.wanDnsDrop.some((r) => r.body.chain === 'input' && r.body['in-interface'] === wan && r.body.protocol === proto && r.body['dst-port'] === '53' && r.body.action === 'drop'),
-        `missing WAN 53 input drop for ${proto} on ${wan}`);
+      assert.ok(p.wanDnsDrop.some((r) => r.menu === '/ip/firewall/raw' && r.body.chain === 'prerouting' && r.body['in-interface'] === wan && r.body.protocol === proto && r.body['dst-port'] === '53' && r.body['dst-address-type'] === 'local' && r.body.action === 'drop'),
+        `missing WAN 53 raw drop for ${proto} on ${wan}`);
     }
   }
 });

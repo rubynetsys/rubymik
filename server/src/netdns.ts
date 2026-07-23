@@ -102,13 +102,16 @@ export function buildEnforcementPlan(spec: DnsEnforceSpec): EnforcePlan {
     }
   }
   // OPEN-RESOLVER GUARD (security-critical): allow-remote-requests=yes turns the router into a
-  // resolver on EVERY interface, including WAN → a DNS-amplification reflector. Drop :53 on input
-  // from every WAN so the router only answers LAN clients. Always present when we set /ip/dns.
+  // resolver on EVERY interface, including WAN → a DNS-amplification reflector. Drop :53-to-router
+  // from every WAN. Uses the RAW table (chain=prerouting, dst-address-type=local): raw runs BEFORE
+  // the filter chain, so the drop is order-independent — a filter-chain drop appended after the
+  // router's existing accepts is dead (verified on the bench). in=WAN + local-only never touches
+  // LAN clients (their :53 on the LAN interface hits the nat redirect instead).
   const wanDnsDrop: PlanObject[] = [];
   for (const wan of spec.wanInterfaces) {
     for (const proto of ['udp', 'tcp'] as const) {
-      wanDnsDrop.push({ menu: '/ip/firewall/filter', body: {
-        chain: 'input', 'in-interface': wan, protocol: proto, 'dst-port': '53',
+      wanDnsDrop.push({ menu: '/ip/firewall/raw', body: {
+        chain: 'prerouting', 'in-interface': wan, protocol: proto, 'dst-port': '53', 'dst-address-type': 'local',
         action: 'drop', comment: tag(`block-wan-dns-${proto}-${wan}`),
       } });
     }
@@ -185,7 +188,7 @@ const getDnsObj = async (ctx: DnsContext): Promise<Dict> => {
 };
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
 const isManaged = (c: unknown) => typeof c === 'string' && c.startsWith(TAG);
-const MENUS = ['/ip/firewall/nat', '/ip/firewall/filter', '/ip/firewall/address-list'] as const;
+const MENUS = ['/ip/firewall/nat', '/ip/firewall/filter', '/ip/firewall/raw', '/ip/firewall/address-list'] as const;
 type IdSet = Record<string, string[]>;
 const setDns = (ctx: DnsContext, patch: DnsSettingsPatch) => restCommand(ctx.write, ctx.transport, '/ip/dns/set', patch as unknown as Record<string, unknown>);
 const flushDns = (ctx: DnsContext) => restCommand(ctx.write, ctx.transport, '/ip/dns/cache/flush', {});
@@ -207,8 +210,8 @@ export interface DnsEnforceView {
   dnsServers: string; allowRemoteRequests: string; mgmt: NatMgmtInfo;
 }
 export async function readEnforcement(ctx: DnsContext): Promise<DnsEnforceView> {
-  const [nat, filter, alist, d, mgmt] = await Promise.all([
-    g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/filter'), g(ctx, '/ip/firewall/address-list'), getDnsObj(ctx), mgmtInfo(ctx),
+  const [nat, filter, raw, alist, d, mgmt] = await Promise.all([
+    g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/filter'), g(ctx, '/ip/firewall/raw'), g(ctx, '/ip/firewall/address-list'), getDnsObj(ctx), mgmtInfo(ctx),
   ]);
   const has = (rows: Dict[], sub: string) => rows.filter((r) => isManaged(r.comment) && s(r.comment).includes(sub));
   const redirects = has(nat, 'redirect');
@@ -218,7 +221,7 @@ export async function readEnforcement(ctx: DnsContext): Promise<DnsEnforceView> 
     redirects: redirects.length,
     dotBlocks: has(filter, 'block-dot').length,
     dohBlocks: has(filter, 'block-doh').length,
-    wanDrops: has(filter, 'block-wan-dns').length,
+    wanDrops: has(raw, 'block-wan-dns').length,
     exemptions: alist.filter((r) => isManaged(r.comment) && s(r.list) === EXEMPT_LIST).length,
     dnsServers: s(d.servers), allowRemoteRequests: s(d['allow-remote-requests']) || 'no', mgmt,
   };
