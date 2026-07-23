@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Wand2, Network, RadioTower, ShieldCheck, ShieldQuestion, Loader2, CheckCircle2, AlertTriangle,
-  Copy, Link2, ArrowRight, ArrowLeft, Server, Lock, Eye, Archive, Clock, Building2, X,
+  Link2, ArrowRight, ArrowLeft, Server, Lock, Eye, Archive, Clock, Building2, X,
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import CodeBlock from '../components/CodeBlock';
 import type { RemoteAccessView, Site } from '../types';
 
 /**
@@ -220,7 +221,6 @@ function TunnelStep(props: {
   setErr: (s: string | null) => void; onProvisioned: (pid: number, ip: string, bs: string) => void;
 }) {
   const { hub, name, setName, peerId, tunnelIp, bootstrap, pubkey, setPubkey, handshake, setHandshake, busy, setBusy, setErr, onProvisioned } = props;
-  const [copied, setCopied] = useState(false);
   const poll = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => () => { if (poll.current) clearInterval(poll.current); }, []);
 
@@ -272,7 +272,7 @@ function TunnelStep(props: {
         </div>
       ) : (
         <>
-          <AdditiveBootstrap tunnelIp={tunnelIp} bootstrap={bootstrap} copied={copied} onCopy={async () => { try { await navigator.clipboard.writeText(bootstrap); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } }} />
+          <AdditiveBootstrap tunnelIp={tunnelIp} bootstrap={bootstrap} />
           <div>
             <StepTitle icon={Link2} title="Register the router's key" sub="After you apply the script, it prints RUBYMIK_PUBKEY=… — paste that here." />
             <div className="mt-2 flex items-end gap-2">
@@ -289,7 +289,7 @@ function TunnelStep(props: {
   );
 }
 
-function AdditiveBootstrap({ tunnelIp, bootstrap, copied, onCopy }: { tunnelIp: string; bootstrap: string; copied: boolean; onCopy: () => void }) {
+function AdditiveBootstrap({ tunnelIp, bootstrap }: { tunnelIp: string; bootstrap: string }) {
   return (
     <div className="rounded-xl border border-border p-4">
       <StepTitle icon={ShieldCheck} title="Apply this once on the router" sub={`Overlay IP ${tunnelIp}. WinBox → New Terminal, or paste over SSH.`} />
@@ -303,11 +303,9 @@ function AdditiveBootstrap({ tunnelIp, bootstrap, copied, onCopy }: { tunnelIp: 
         </ul>
         <div className="mt-1.5 text-xs">Everything is tagged <code className="rounded bg-success-bg px-1">RUBYMIK</code> / <code className="rounded bg-success-bg px-1">rmik-wg</code> and removes cleanly. Nothing existing is modified or removed.</div>
       </div>
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-dim">The exact script</span>
-        <button onClick={onCopy} className="inline-flex items-center gap-1 rounded-md bg-sidebar px-2.5 py-1 text-xs font-semibold text-inverse hover:bg-fg-body">{copied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}</button>
+      <div className="mt-3">
+        <CodeBlock code={bootstrap} label="the exact script · bootstrap.rsc" filename={`rubymik-bootstrap-${tunnelIp}.rsc`} maxHeightClass="max-h-52" />
       </div>
-      <pre className="mt-1.5 max-h-52 overflow-auto rounded-lg bg-sidebar p-3 text-[11px] leading-relaxed text-inverse"><code>{bootstrap}</code></pre>
     </div>
   );
 }

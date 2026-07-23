@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Globe, Loader2, Plus, RadioTower, ShieldCheck, X, Copy, CheckCircle2,
+  Globe, Loader2, Plus, RadioTower, ShieldCheck, X, CheckCircle2,
   AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw,
 } from 'lucide-react';
 import { api } from '../api';
 import type { RemoteAccessView, PeerView, HubCapability, HubStatus } from '../types';
 import { phaseFor } from '../lib/hubphase';
+import CodeBlock from '../components/CodeBlock';
 
 const inputCls = 'w-full rounded-lg border border-border-strong px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
 const REFRESH_MS = 5000;
@@ -103,22 +104,6 @@ function CapPill({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-function CodeBlock({ code, label, oneLine }: { code: string; label?: string; oneLine?: boolean }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center justify-between bg-app px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">{label ?? 'file'}</span>
-        <button onClick={async () => { try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } }}
-          className="inline-flex items-center gap-1 rounded-md bg-sidebar px-2.5 py-1 text-xs font-semibold text-inverse hover:bg-fg-body">
-          {copied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
-        </button>
-      </div>
-      <pre className={`overflow-auto bg-sidebar p-3 text-[11px] leading-relaxed text-inverse ${oneLine ? '' : 'max-h-80'}`}><code>{code}</code></pre>
-    </div>
-  );
-}
-
 function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapability; hub: HubStatus; checking: boolean; onRecheck: () => Promise<void>; capErr: string | null }) {
   const [tab, setTab] = useState<'portainer' | 'cli' | 'about'>('portainer');
   const tabs = [
@@ -162,14 +147,14 @@ function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapabili
               <li><b>Replace</b> the editor contents with the file below — your data volumes and environment are preserved (same names).</li>
               <li>Click <b>Update the stack</b>, then reload this page.</li>
             </ol>
-            <CodeBlock code={cap.compose.portainer} label="docker-compose.yml (complete)" />
+            <CodeBlock code={cap.compose.portainer} label="docker-compose.yml (complete)" filename="docker-compose.yml" />
             <p className="text-xs text-fg-dim">Also open <b>UDP {cap.listenPort}</b> on your host / cloud firewall so remote routers can reach the hub.</p>
           </div>
         )}
         {tab === 'cli' && (
           <div className="space-y-3">
             <p className="text-sm text-fg-body">From the directory that holds your <code className="rounded bg-app px-1">docker-compose.yml</code>, run the opt-in override — it adds NET_ADMIN, root, the UDP port and <code className="rounded bg-app px-1">/dev/net/tun</code>:</p>
-            <CodeBlock code={cap.compose.cli} label="shell" oneLine />
+            <CodeBlock code={cap.compose.cli} label="shell" maxHeightClass="" />
             <p className="text-xs text-fg-dim">Then open <b>UDP {cap.listenPort}</b> on your host / cloud firewall, and reload this page.</p>
           </div>
         )}
@@ -365,7 +350,6 @@ function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; 
 }
 
 function BootstrapModal({ peer, bootstrap, onClose, reload }: { peer: PeerView; bootstrap: string; onClose: () => void; reload: () => Promise<void> }) {
-  const [copied, setCopied] = useState(false);
   const [pubkey, setPubkey] = useState('');
   const [name, setName] = useState(peer.label);
   const [ru, setRu] = useState(''); const [rp, setRp] = useState('');
@@ -374,9 +358,6 @@ function BootstrapModal({ peer, bootstrap, onClose, reload }: { peer: PeerView; 
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  async function copy() {
-    try { await navigator.clipboard.writeText(bootstrap); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
-  }
   async function register() {
     setBusy(true); setErr(null); setMsg(null);
     try { await api.post(`/api/remote-access/sites/${peer.id}/register`, { publicKey: pubkey.trim() }); setMsg('Public key registered — the hub is reconciling. Watch the tunnel status.'); await reload(); }
@@ -400,13 +381,8 @@ function BootstrapModal({ peer, bootstrap, onClose, reload }: { peer: PeerView; 
 
         <ol className="mt-4 space-y-4 text-sm">
           <li>
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="font-semibold text-fg">1. Apply this once on the router (WinBox → New Terminal, or SSH)</span>
-              <button onClick={() => void copy()} className="inline-flex items-center gap-1 rounded-md bg-fg px-2.5 py-1 text-xs font-semibold text-inverse hover:bg-fg-body">
-                {copied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}
-              </button>
-            </div>
-            <pre className="max-h-56 overflow-auto rounded-lg bg-sidebar p-3 text-[11px] leading-relaxed text-inverse"><code>{bootstrap}</code></pre>
+            <div className="mb-1.5 font-semibold text-fg">1. Apply this once on the router (WinBox → New Terminal, or SSH)</div>
+            <CodeBlock code={bootstrap} label="bootstrap.rsc" filename={`rubymik-bootstrap-${peer.tunnelIp}.rsc`} maxHeightClass="max-h-56" />
             <p className="mt-1 text-xs text-fg-dim">The router generates its own private key — nothing in this script is secret.</p>
           </li>
           <li>

@@ -10,6 +10,26 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Copy buttons now work over plain HTTP.** `navigator.clipboard` is undefined outside a secure
+  context (HTTPS / localhost), and most self-hosted installs run plain HTTP on a LAN — so every
+  Copy button in the app was silently doing nothing for them. Fixed at one shared utility
+  (`copyText()`): it uses the async Clipboard API when available and otherwise falls back to a
+  hidden-textarea + `execCommand('copy')`, which works everywhere including over HTTP. Every button
+  now gives feedback — "Copied ✓" on success, or, if a copy truly can't be performed, it selects
+  the text and shows "Press Ctrl+C" so there's always a path. Affected buttons: Remote Access setup
+  card, WireGuard bootstrap scripts, provision baseline, new-user credentials, and 2FA recovery
+  codes.
+
+### Added
+- **Download buttons beside Copy** on large blocks — the generated compose file, the `.rsc`
+  bootstrap and baseline scripts, and 2FA recovery codes. Blob downloads work over plain HTTP, and
+  for a 60-line compose file downloading is often the better option anyway.
+
 ## [1.1.2] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

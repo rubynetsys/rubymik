@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  HardDriveDownload, Loader2, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, Copy,
+  HardDriveDownload, Loader2, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft,
   ShieldCheck, Network, RadioTower, Server, Cpu, X,
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import CodeBlock from '../components/CodeBlock';
 import { CATALOG, CATEGORY_META, MODEL_COUNT } from '../catalog';
 
 /**
@@ -281,7 +282,6 @@ function Review({ spec, validation, busy, revalidate, mode, setMode }: any) {
 }
 
 function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, applyOut, setApplyOut }: any) {
-  const [copied, setCopied] = useState(false);
   const [host, setHost] = useState(''); const [user, setUser] = useState(''); const [pass, setPass] = useState('');
 
   async function generate() {
@@ -301,8 +301,7 @@ function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, app
           <button onClick={() => void generate()} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">{busy && <Loader2 className="h-4 w-4 animate-spin" />} Generate baseline</button>
         ) : (
           <>
-            <div className="flex justify-end"><button onClick={async () => { try { await navigator.clipboard.writeText(genScript); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* */ } }} className="inline-flex items-center gap-1 rounded-md bg-sidebar px-2.5 py-1 text-xs font-semibold text-inverse hover:bg-fg-body">{copied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy</>}</button></div>
-            <pre className="max-h-96 overflow-auto rounded-lg bg-sidebar p-3 text-[11px] leading-relaxed text-inverse"><code>{genScript}</code></pre>
+            <CodeBlock code={genScript} label="baseline.rsc" filename="rubymik-baseline.rsc" maxHeightClass="max-h-96" />
             <div className="rounded-lg bg-success-bg px-3 py-2 text-sm text-success-fg">After it's applied and the router is reachable{spec.remote ? ' over the tunnel' : ''}, adopt it from the Onboard wizard.</div>
           </>
         )}

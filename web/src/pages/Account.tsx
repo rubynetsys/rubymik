@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, KeyRound, Loader2, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react';
+import { Check, Download, KeyRound, Loader2, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react';
 import { api } from '../api';
+import CopyButton from '../components/CopyButton';
+import { downloadText } from '../lib/clipboard';
 import { useMe } from '../me';
 
 export default function Account({ onChanged }: { onChanged: () => void }) {
@@ -66,6 +68,7 @@ function TwoFactorCard({ enabled, onChanged }: { enabled: boolean; onChanged: ()
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [disablePw, setDisablePw] = useState('');
+  const codesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!setup) { setQr(null); return; }
@@ -95,11 +98,13 @@ function TwoFactorCard({ enabled, onChanged }: { enabled: boolean; onChanged: ()
       <Card icon={ShieldCheck} title="Two-factor authentication">
         <div className="rounded-lg bg-success-bg px-3 py-2 text-sm font-medium text-success-fg">Two-factor is now on. Save these recovery codes.</div>
         <p className="mt-3 text-sm text-fg-dim">Each code works <b>once</b> if you lose your authenticator. They're shown only now.</p>
-        <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg border border-border-strong bg-app p-3 font-mono text-sm text-fg-strong">
+        <div ref={codesRef} className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg border border-border-strong bg-app p-3 font-mono text-sm text-fg-strong">
           {codes.map((c) => <div key={c}>{c}</div>)}
         </div>
-        <div className="mt-3 flex gap-3">
-          <button onClick={() => navigator.clipboard?.writeText(codes.join('\n'))} className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken"><Copy className="h-4 w-4" /> Copy codes</button>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <CopyButton text={codes.join('\n')} label="Copy codes" iconClass="h-4 w-4" getSelect={() => codesRef.current}
+            className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken" />
+          <button onClick={() => downloadText('rubymik-2fa-recovery-codes.txt', codes.join('\n'))} className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken"><Download className="h-4 w-4" /> Download</button>
           <button onClick={() => setCodes(null)} className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Done</button>
         </div>
       </Card>

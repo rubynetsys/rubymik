@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, KeyRound, Loader2, Plus, ShieldOff, Trash2, UserPlus, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, KeyRound, Loader2, Plus, ShieldOff, Trash2, UserPlus, X } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
+import CopyButton from '../components/CopyButton';
 import { useMe, type Role } from '../me';
 
 interface User { id: number; email: string | null; username: string; role: Role; disabled: boolean; twoFactor: boolean; createdAt: string }
@@ -156,21 +157,19 @@ function AddUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 }
 
 function SecretModal({ secret, onClose }: { secret: { title: string; username: string; password: string }; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => { navigator.clipboard?.writeText(`Email: ${secret.username}\nPassword: ${secret.password}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); };
+  const credRef = useRef<HTMLDivElement>(null);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold text-fg-strong">{secret.title} for “{secret.username}”</h3>
         <p className="mt-1 text-sm text-fg-dim">This is shown <b>once</b>. Copy it now — it can't be retrieved later (only reset).</p>
-        <div className="mt-4 rounded-lg border border-border-strong bg-app p-3 font-mono text-sm">
+        <div ref={credRef} className="mt-4 rounded-lg border border-border-strong bg-app p-3 font-mono text-sm">
           <div className="text-fg-dim">email: <span className="text-fg">{secret.username}</span></div>
           <div className="text-fg-dim">password: <span className="text-fg-strong">{secret.password}</span></div>
         </div>
         <div className="mt-4 flex justify-end gap-3">
-          <button onClick={copy} className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">
-            {copied ? <Check className="h-4 w-4 text-success-fg" /> : <Copy className="h-4 w-4" />} {copied ? 'Copied' : 'Copy'}
-          </button>
+          <CopyButton text={`Email: ${secret.username}\nPassword: ${secret.password}`} iconClass="h-4 w-4" getSelect={() => credRef.current}
+            className="inline-flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken" />
           <button onClick={onClose} className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Done</button>
         </div>
       </div>
