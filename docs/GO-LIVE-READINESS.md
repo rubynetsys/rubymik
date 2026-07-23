@@ -80,8 +80,15 @@ Execute top to bottom. Each step gates the next.
 2. **Domain** — stand up `get.rubymik.com/version.json` (and the sender domain);
    point `RUBYMIK_UPDATE_URL` there (or accept the built-in default). Verify a test
    instance shows the banner against the real URL.
-3. **Backup key** — generate the production `RUBYMIK_BACKUP_KEY`, store it off-host,
-   and confirm a self-backup + restore-drill passes on the production box.
+3. **Backups (P44)** — enable backups in **one click** from the Backup page (the app
+   generates + stores the key in `/data`); confirm a self-backup + restore-drill passes.
+   Optionally **Download recovery key** and turn on strict off-server mode. The
+   `RUBYMIK_BACKUP_KEY` env is now **optional/advanced** (env wins if present).
+   > **v1.1.0 release gate:** v1.1.0 ships a database migration, and the P38 boot guard
+   > takes a pre-migration backup — which requires backups to be enabled. v1.1.0 therefore
+   > **must ship with P44** (one-click enable). A migration release must never require
+   > compose surgery to turn on the backup the migration depends on. Do not tag v1.1.0
+   > until P44 + P43.5 land.
 4. **Registry flip** — set the GHCR package public, set `PUBLIC=true` in
    `scripts/release.sh`, and `scripts/release.sh --push` a signed `v0.9.1` (or
    `v1.0.0`) image. Verify a clean `docker compose pull && up -d` from a machine with
