@@ -290,6 +290,27 @@ export interface NatRule {
 export interface NatMgmtInfo { mgmtIp: string; mgmtInterface: string | null; mgmtPorts: string[]; mgmtPort: number; mgmtScheme: string }
 export interface NatView { manageable: boolean; rules: NatRule[]; mgmt: NatMgmtInfo }
 
+// ── P43: DNS content filtering ──
+export type DnsCategory = 'ads' | 'malware' | 'adult' | 'gambling' | 'social' | 'streaming' | 'gaming';
+export interface ResolverSettings {
+  categories: Record<DnsCategory, boolean>;
+  customBlock: string[]; customAllow: string[]; clientExemptions: string[];
+  upstreams: string[]; blockType: 'zeroIP' | 'nxDomain';
+}
+export interface DnsFilterSettingsResp { enabled: boolean; settings: ResolverSettings; resolverUp: boolean | null }
+export interface DnsApplyResult { ok: boolean; detail: string; outageMs: number | null }
+export interface DnsEnforceView {
+  configured: boolean; manageable: boolean;
+  redirects: number; dotBlocks: number; dohBlocks: number; wanDrops: number; exemptions: number;
+  dnsServers: string; allowRemoteRequests: string; mgmt: NatMgmtInfo;
+}
+export type DnsFailMode = 'open' | 'closed';
+export interface DnsEnforceSpec {
+  resolverIp: string; resolverNet: 'direct' | 'tunnel';
+  lanInterfaces: string[]; wanInterfaces: string[]; exemptions: string[];
+  failMode: DnsFailMode; fallbackUpstream: string; blockDoh: boolean;
+}
+
 // ── P42: dual-WAN failover ──
 export type WanState = 'primary' | 'failover' | 'both-down' | 'none';
 export interface WanRouteRow { id: string; comment: string; dst: string; gateway: string; distance: string; active: boolean; checkGateway: string }

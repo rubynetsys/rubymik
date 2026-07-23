@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Bell, BellRing, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Rocket, Router as RouterIcon, ScrollText, Server, Settings as SettingsIcon, UsersRound, Waypoints, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Bell, BellRing, Building2, DatabaseBackup, Eye, LayoutDashboard, LogOut, RadioTower, Rocket, Router as RouterIcon, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, UsersRound, Waypoints, Wand2, X } from 'lucide-react';
 import { api } from '../api';
 import type { AlertSummary, BackupStatus, UpdateStatus } from '../types';
 import { useMe } from '../me';
@@ -18,6 +18,7 @@ const NAV: Array<{ to: string; label: string; icon: typeof Bell; adminOnly?: boo
   { to: '/add-device', label: 'Add device', icon: Wand2, writeOnly: true },
   { to: '/sites', label: 'Sites', icon: Building2 },
   { to: '/remote-access', label: 'Remote Access', icon: RadioTower },
+  { to: '/dns-filter', label: 'DNS Filtering', icon: ShieldCheck },
   { to: '/audit', label: 'Audit', icon: ScrollText },
 ];
 

@@ -16,6 +16,7 @@ import Devices from './pages/Devices';
 import DeviceDetail from './pages/DeviceDetail';
 import Sites from './pages/Sites';
 import RemoteAccess from './pages/RemoteAccess';
+import DnsFilter from './pages/DnsFilter';
 import Onboard from './pages/Onboard';
 import Provision from './pages/Provision';
 import AddDevice from './pages/AddDevice';
@@ -123,6 +124,7 @@ export default function App() {
           <Route path="/devices/:id" element={<DeviceDetail />} />
           <Route path="/sites" element={<Sites />} />
           <Route path="/remote-access" element={<RemoteAccess />} />
+          <Route path="/dns-filter" element={<DnsFilter />} />
           <Route path="/users" element={<Users />} />
           <Route path="/backup" element={<SelfBackup />} />
           <Route path="/settings/notifications" element={<Notifications />} />
