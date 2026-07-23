@@ -38,14 +38,22 @@ export function provisionRoutes(db: DatabaseSync): Router {
     return { endpoint: r.endpoint, listenPort: r.listen_port, overlayCidr: r.overlay_cidr, hubAddress: r.hub_address, publicKey: r.public_key };
   }
 
-  // Validate a spec (pure — never touches a device).
+  // Validate a spec. Coherence here means BOTH: (1) the spec is internally
+  // consistent (pure validateSpec, never touches a device), AND (2) everything
+  // Apply will need actually exists. A remote baseline embeds a tunnel-back, which
+  // requires the WireGuard hub — so if the hub isn't set up we report it here as a
+  // prerequisite, rather than letting Apply's /generate 400 after Review said "OK".
   router.post('/validate', (req, res) => {
     const spec = parseSpec(req.body);
     const errors = validateSpec(spec);
+    const preconditions: string[] = [];
+    if (spec.remote && !hubConfig()) {
+      preconditions.push('Remote provisioning needs the WireGuard hub. Set up Remote Access first, then return here — or provision this router as local.');
+    }
     // Structural safety fact the UI surfaces: a firewall baseline always carries the mgmt guard.
     const fw = spec.firewall && spec.firewall !== 'off' ? baselineFirewall(spec) : [];
     const hasMgmtGuard = fw.length === 0 || fw[0]?.action === 'accept';
-    res.json({ ok: errors.length === 0, errors, firewallRuleCount: fw.length, mgmtGuardFirst: hasMgmtGuard });
+    res.json({ ok: errors.length === 0 && preconditions.length === 0, errors, preconditions, firewallRuleCount: fw.length, mgmtGuardFirst: hasMgmtGuard });
   });
 
   // Mode A: generate the complete baseline script. For a remote baseline, requires

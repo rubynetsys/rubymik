@@ -10,6 +10,26 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Provision wizard: remote-site baseline no longer fails at Apply with a bare "Request
+  failed (HTTP 400)".** Two defects, both fixed:
+  - *Root cause* — a remote baseline embeds a WireGuard tunnel-back, which needs the hub set
+    up, but the Review step only checked the spec's internal consistency. So a fresh install
+    (no hub) passed Review ("Spec is coherent") and then 400'd at Generate. Coherence now also
+    checks that **everything Apply needs exists**: a remote spec on an install with no hub is
+    reported at Review as a **prerequisite** ("set up Remote Access first"), with a link — the
+    Apply button stays disabled until it's resolved. Local provisioning is unaffected (it
+    needs no hub); the breakage was remote-only.
+  - *Error surfacing (framework-level)* — the API client only rendered a single `error`
+    string and ignored the `errors: string[]` list that `validate` / `generate` / `apply`
+    return, so any such 400 showed a generic "Request failed (HTTP …)" and swallowed the real
+    reason. It now surfaces the `errors` list too — this fixes the reason-display for **every**
+    endpoint using that convention, not just provisioning.
+
 ## [1.1.0] — 2026-07-23 (schema 24)
 
 > **This release includes a database migration.** On first boot after upgrading, RubyMIK takes an

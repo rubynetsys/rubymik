@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   HardDriveDownload, Loader2, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, Copy,
   ShieldCheck, Network, RadioTower, Server, Cpu, X,
@@ -59,7 +60,7 @@ export default function Provision() {
     lan: { routerIp: '192.168.88.1', prefix: 24 },
     dhcp: { enabled: true, poolStart: '192.168.88.10', poolEnd: '192.168.88.254', dns: '1.1.1.1', leaseTime: '1h' },
   });
-  const [validation, setValidation] = useState<{ ok: boolean; errors: string[]; firewallRuleCount: number; mgmtGuardFirst: boolean } | null>(null);
+  const [validation, setValidation] = useState<{ ok: boolean; errors: string[]; preconditions?: string[]; firewallRuleCount: number; mgmtGuardFirst: boolean } | null>(null);
   const [mode, setMode] = useState<'A' | 'B'>('A');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -231,23 +232,36 @@ function Review({ spec, validation, busy, revalidate, mode, setMode }: any) {
     <div className="space-y-4">
       <Title icon={CheckCircle2} title="Review & validate" sub="RubyMIK refuses to generate an incoherent config. Fix any errors before continuing." />
       {busy && !validation ? <div className="h-20 animate-pulse rounded-lg bg-app" /> : validation && (
-        validation.ok ? (
-          <div className="rounded-xl border border-success-line bg-success-bg/50 p-4 text-sm">
-            <div className="flex items-center gap-2 font-bold text-success-fg"><CheckCircle2 className="h-4 w-4" /> Spec is coherent.</div>
-            <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
-              <Meta label="Identity" value={spec.identity} /><Meta label="Placement" value={spec.remote ? 'Remote (tunnel-back)' : 'Local'} />
-              <Meta label="WAN" value={spec.wan.type} /><Meta label="LAN" value={`${spec.lan.routerIp}/${spec.lan.prefix}`} />
-              <Meta label="DHCP" value={spec.dhcp.enabled ? `${spec.dhcp.poolStart}–${spec.dhcp.poolEnd}` : 'none'} />
-              <Meta label="Firewall" value={`${spec.firewall}${validation.firewallRuleCount ? ` (${validation.firewallRuleCount} rules, mgmt-accept first)` : ''}`} />
-            </dl>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-danger-line bg-danger-bg p-4 text-sm">
-            <div className="mb-2 flex items-center gap-2 font-bold text-danger-fg-strong"><AlertTriangle className="h-4 w-4" /> This spec is incoherent — refusing to generate:</div>
-            <ul className="list-disc space-y-1 pl-5 text-danger-fg">{validation.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
-            <button onClick={() => void revalidate()} className="mt-3 text-xs font-semibold text-danger-fg underline">Re-validate</button>
-          </div>
-        )
+        <>
+          {validation.errors.length > 0 && (
+            <div className="rounded-xl border border-danger-line bg-danger-bg p-4 text-sm">
+              <div className="mb-2 flex items-center gap-2 font-bold text-danger-fg-strong"><AlertTriangle className="h-4 w-4" /> This spec is incoherent — refusing to generate:</div>
+              <ul className="list-disc space-y-1 pl-5 text-danger-fg">{validation.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+              <button onClick={() => void revalidate()} className="mt-3 text-xs font-semibold text-danger-fg underline">Re-validate</button>
+            </div>
+          )}
+          {validation.preconditions && validation.preconditions.length > 0 && (
+            <div className="rounded-xl border border-warning-line bg-warning-bg/60 p-4 text-sm">
+              <div className="mb-2 flex items-center gap-2 font-bold text-warning-fg"><AlertTriangle className="h-4 w-4" /> The spec is fine, but a prerequisite for Apply isn't ready:</div>
+              <ul className="list-disc space-y-1 pl-5 text-warning-fg">{validation.preconditions.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+              <div className="mt-3 flex items-center gap-3">
+                <Link to="/remote-access" className="text-xs font-semibold text-warning-fg underline">Set up Remote Access →</Link>
+                <button onClick={() => void revalidate()} className="text-xs font-semibold text-warning-fg underline">Re-check</button>
+              </div>
+            </div>
+          )}
+          {validation.ok && (
+            <div className="rounded-xl border border-success-line bg-success-bg/50 p-4 text-sm">
+              <div className="flex items-center gap-2 font-bold text-success-fg"><CheckCircle2 className="h-4 w-4" /> Spec is coherent{spec.remote ? ' — hub ready' : ''}.</div>
+              <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+                <Meta label="Identity" value={spec.identity} /><Meta label="Placement" value={spec.remote ? 'Remote (tunnel-back)' : 'Local'} />
+                <Meta label="WAN" value={spec.wan.type} /><Meta label="LAN" value={`${spec.lan.routerIp}/${spec.lan.prefix}`} />
+                <Meta label="DHCP" value={spec.dhcp.enabled ? `${spec.dhcp.poolStart}–${spec.dhcp.poolEnd}` : 'none'} />
+                <Meta label="Firewall" value={`${spec.firewall}${validation.firewallRuleCount ? ` (${validation.firewallRuleCount} rules, mgmt-accept first)` : ''}`} />
+              </dl>
+            </div>
+          )}
+        </>
       )}
       {validation?.ok && (
         <div>

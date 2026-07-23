@@ -13,11 +13,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ApiError(
-      (body as { error?: string } | null)?.error ?? `Request failed (HTTP ${res.status})`,
-      res.status,
-      body,
-    );
+    // Surface a field-level reason from EITHER convention the API uses: a single
+    // `error` string, or an `errors: string[]` list (validate/generate/apply).
+    // Without this an endpoint that only returns `errors` shows a bare
+    // "Request failed (HTTP 400)" and swallows the actual reason.
+    const b = body as { error?: string; errors?: unknown } | null;
+    const listed = Array.isArray(b?.errors) ? b!.errors.filter((x): x is string => typeof x === 'string') : [];
+    const message = b?.error ?? (listed.length ? listed.join('; ') : null) ?? `Request failed (HTTP ${res.status})`;
+    throw new ApiError(message, res.status, body);
   }
   return body as T;
 }
