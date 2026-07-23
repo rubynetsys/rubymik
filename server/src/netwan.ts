@@ -358,6 +358,17 @@ export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpe
   const mode: FailoverMode = spec.mode ?? 'fresh';
   let before: IdSet = { route: [], nat: [], mangle: [], table: [] };
   let removed: Record<string, string>[] = [];
+  // Undo helpers shared by rollback AND the defensive apply-catch. runSafeApply does NOT roll
+  // back when apply() throws (it treats a throw as "nothing committed"), but our apply commits
+  // objects incrementally — so we clean up our own partial writes before letting the throw out.
+  const removeAdded = async () => {
+    const now = await allIds(ctx);
+    // route/mangle before table — a table can't be removed while a route still references it.
+    for (const [k, menu] of [['mangle', '/ip/firewall/mangle'], ['nat', '/ip/firewall/nat'], ['route', '/ip/route'], ['table', '/routing/table']] as const) {
+      for (const id of now[k].filter((x) => !before[k].includes(x))) await restRemove(ctx.write, ctx.transport, menu, id);
+    }
+  };
+  const restoreRemoved = async () => { for (const r of removed) await restAdd(ctx.write, ctx.transport, '/ip/route', restoreRouteBody(r)); };
   return runSafeApply<{ before: IdSet; removed: Record<string, string>[] }>(ctxFull(ctx, sac), {
     snapshot: async () => {
       before = await allIds(ctx);
@@ -369,35 +380,41 @@ export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpe
     },
     summary: () => `Set up dual-WAN failover (${mode}): +${plan.all.length} RUBYMIK-WAN objects, ${plan.patches.length} pppoe patch${removed.length ? `, retire ${removed.length} existing default (add-before-remove)` : ''}`,
     apply: async () => {
-      const ops = buildApplyOps(plan, removed.map((r) => s(r['.id'])), mode);
-      for (const op of ops) {
-        if (op.kind === 'patch') {
-          const rows = await g(ctx, op.menu);
-          const hit = rows.find((r) => Object.entries(op.where).every(([k, v]) => s(r[k]) === v));
-          if (hit) await restSet(ctx.write, ctx.transport, op.menu, s(hit['.id']), op.body);
-        } else if (op.kind === 'add') {
-          await restAdd(ctx.write, ctx.transport, op.menu, op.body);
-        } else if (op.kind === 'verify-primary-active') {
-          if (!(await waitPrimaryActive(ctx))) throw new Error('The new recursive primary default did not become active — aborting BEFORE the existing default is touched (no partition; the RUBYMIK objects roll back).');
-        } else {
-          await restRemove(ctx.write, ctx.transport, '/ip/route', op.id);
+      try {
+        const ops = buildApplyOps(plan, removed.map((r) => s(r['.id'])), mode);
+        let primaryUp = true;
+        for (const op of ops) {
+          if (op.kind === 'patch') {
+            const rows = await g(ctx, op.menu);
+            const hit = rows.find((r) => Object.entries(op.where).every(([k, v]) => s(r[k]) === v));
+            if (hit) await restSet(ctx.write, ctx.transport, op.menu, s(hit['.id']), op.body);
+          } else if (op.kind === 'add') {
+            await restAdd(ctx.write, ctx.transport, op.menu, op.body);
+          } else if (op.kind === 'verify-primary-active') {
+            // P19 gate: the new recursive primary must be verified active BEFORE we retire the
+            // old default. If it never comes up we do NOT throw — we simply skip the removal and
+            // let verifyTook fail, so the framework rolls back the adds with the old default intact.
+            primaryUp = await waitPrimaryActive(ctx);
+          } else if (op.kind === 'remove-old-default') {
+            if (primaryUp) await restRemove(ctx.write, ctx.transport, '/ip/route', op.id);
+          }
         }
+      } catch (err) {
+        // Never orphan a partial apply: undo our own writes, then re-throw for the audit trail.
+        try { await removeAdded(); await restoreRemoved(); } catch { /* best-effort */ }
+        throw err;
       }
     },
     verifyTook: async () => {
       const view = await readWan(ctx);
       const primaryActive = view.routes.some((r) => r.comment.includes('default-primary') && r.active);
       const ok = view.nat.length >= 2 && primaryActive && view.state !== 'none';
-      return { ok, after: { state: view.state, removedDefaults: removed, routes: view.routes.length, nat: view.nat.length, mangle: view.mangle.length } };
+      return { ok, detail: primaryActive ? undefined : 'The recursive primary default did not become active — the WAN1 uplink or its probe target is unreachable. No existing default was removed.', after: { state: view.state, removedDefaults: removed, routes: view.routes.length, nat: view.nat.length, mangle: view.mangle.length } };
     },
-    rollback: async (b) => {
-      const now = await allIds(ctx);
-      // route/mangle before table — a table can't be removed while a route still references it.
-      for (const [k, menu] of [['mangle', '/ip/firewall/mangle'], ['nat', '/ip/firewall/nat'], ['route', '/ip/route'], ['table', '/routing/table']] as const) {
-        for (const id of now[k].filter((x) => !b.before[k].includes(x))) await restRemove(ctx.write, ctx.transport, menu, id);
-      }
+    rollback: async () => {
+      await removeAdded();
       // CRITICAL: hand back the default(s) we retired — no partition on rollback.
-      for (const r of b.removed) await restAdd(ctx.write, ctx.transport, '/ip/route', restoreRouteBody(r));
+      await restoreRemoved();
     },
   });
 }
