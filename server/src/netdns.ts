@@ -242,7 +242,8 @@ export async function applyEnforcement(ctx: DnsContext, sac: Sac, spec: DnsEnfor
     },
     verifyTook: async () => {
       const v = await readEnforcement(ctx);
-      const ok = v.redirects >= 1 && v.wanDrops >= 1 && v.dnsServers.startsWith(spec.resolverIp) && v.allowRemoteRequests === 'yes';
+      // RouterOS returns allow-remote-requests as 'true'/'false' even though it accepts 'yes'/'no' on set.
+      const ok = v.redirects >= 1 && v.wanDrops >= 1 && v.dnsServers.startsWith(spec.resolverIp) && (v.allowRemoteRequests === 'true' || v.allowRemoteRequests === 'yes');
       return { ok, after: { redirects: v.redirects, wanDrops: v.wanDrops, dnsServers: v.dnsServers, priorDns } };
     },
     rollback: async (b) => {
