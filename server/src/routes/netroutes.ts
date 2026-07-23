@@ -125,16 +125,19 @@ export function netroutesRoutes(db: DatabaseSync, box: SecretBox): Router {
     const route = view.routes.find((r) => r.id === req.params.routeId);
     if (!route) { res.status(404).json({ error: 'Route not found.' }); return; }
     if (route.kind !== 'static') { res.status(400).json({ error: `Only static routes can be removed — this is a ${route.kind} route (read-only).` }); return; }
-    if (!route.managed && (req.body ?? {}).force !== true) {
-      res.status(409).json({ error: 'This is a pre-existing static route (not RubyMIK-managed). Re-send with force:true to remove it.', preExistingRoute: true });
-      return;
-    }
-    // P42: deleting a DEFAULT route is dual-WAN-guarded — refuse cutting the sole active
-    // default unless another WAN's default is present AND verified reachable (active).
+    // P42: deleting a DEFAULT route is dual-WAN-guarded FIRST — refuse cutting the sole active
+    // default unless another WAN's default is present AND verified reachable (active). This runs
+    // ahead of the pre-existing check and ignores force: the anti-strand guard protects ANY
+    // active default (RUBYMIK-WAN routes read as unmanaged to the routes module, and force must
+    // not be able to strand the box).
     if (route.dst === '0.0.0.0/0') {
       const defaults = view.routes.filter((r) => r.dst === '0.0.0.0/0').map((r) => ({ distance: String(r.distance ?? ''), active: r.active }));
       const wg = wanRouteGuard('delete', { dst: '0.0.0.0/0', distance: String(route.distance ?? ''), active: route.active }, defaults);
       if (wg) { auditRejected(sac(m.row, m.actor, 'route.remove', route.dst), 'Remove route', `Blocked by WAN failover guard: ${wg}`); res.status(409).json({ error: wg, wanFailoverMgmtGuard: true }); return; }
+    }
+    if (!route.managed && (req.body ?? {}).force !== true) {
+      res.status(409).json({ error: 'This is a pre-existing static route (not RubyMIK-managed). Re-send with force:true to remove it.', preExistingRoute: true });
+      return;
     }
     try {
       const outcome = await removeRoute(m.ctx, sac(m.row, m.actor, 'route.remove', route.dst), req.params.routeId);
