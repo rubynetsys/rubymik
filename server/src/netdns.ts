@@ -178,6 +178,11 @@ type Dict = Record<string, unknown>;
 type Sac = Omit<SafeApplyContext, 'target' | 'transport' | 'probe'>;
 const ctxFull = (ctx: DnsContext, sac: Sac): SafeApplyContext => ({ ...sac, target: ctx.read, transport: ctx.transport });
 const g = (ctx: DnsContext, path: string) => restGet(ctx.read, ctx.transport.scheme, ctx.transport.port, path) as Promise<Dict[]>;
+// /ip/dns is a SETTINGS singleton — RouterOS REST returns an OBJECT here, not an array.
+const getDnsObj = async (ctx: DnsContext): Promise<Dict> => {
+  const raw = await restGet(ctx.read, ctx.transport.scheme, ctx.transport.port, '/ip/dns');
+  return (Array.isArray(raw) ? ((raw as Dict[])[0] ?? {}) : (raw as Dict));
+};
 const s = (v: unknown): string => (typeof v === 'string' ? v : '');
 const isManaged = (c: unknown) => typeof c === 'string' && c.startsWith(TAG);
 const MENUS = ['/ip/firewall/nat', '/ip/firewall/filter', '/ip/firewall/address-list'] as const;
@@ -187,8 +192,7 @@ const flushDns = (ctx: DnsContext) => restCommand(ctx.write, ctx.transport, '/ip
 
 /** The static /ip/dns settings we PATCH — captured before apply so teardown restores them verbatim. */
 async function readDnsSettings(ctx: DnsContext): Promise<DnsSettingsPatch> {
-  const rows = await g(ctx, '/ip/dns');
-  const r = rows[0] ?? {};
+  const r = await getDnsObj(ctx);
   return { servers: s(r.servers), 'allow-remote-requests': s(r['allow-remote-requests']) || 'no' };
 }
 async function allIds(ctx: DnsContext): Promise<IdSet> {
@@ -203,11 +207,10 @@ export interface DnsEnforceView {
   dnsServers: string; allowRemoteRequests: string; mgmt: NatMgmtInfo;
 }
 export async function readEnforcement(ctx: DnsContext): Promise<DnsEnforceView> {
-  const [nat, filter, alist, dns, mgmt] = await Promise.all([
-    g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/filter'), g(ctx, '/ip/firewall/address-list'), g(ctx, '/ip/dns'), mgmtInfo(ctx),
+  const [nat, filter, alist, d, mgmt] = await Promise.all([
+    g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/filter'), g(ctx, '/ip/firewall/address-list'), getDnsObj(ctx), mgmtInfo(ctx),
   ]);
   const has = (rows: Dict[], sub: string) => rows.filter((r) => isManaged(r.comment) && s(r.comment).includes(sub));
-  const d = dns[0] ?? {};
   const redirects = has(nat, 'redirect');
   return {
     configured: redirects.length > 0,
