@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   buildFailoverPlan, validateFailoverInput, computeWanState, wanRouteGuard,
   dnsCollisions, analyzeCollisions, planDhcpReconcile, mangleIsMgmtSafe,
+  buildApplyOps, restoreRouteBody,
   DEFAULT_PROBE_WAN1, DEFAULT_PROBE_WAN2,
 } from '../dist/netwan.js';
 
@@ -127,4 +128,37 @@ test('PPPoE leg adds an add-default-route=no patch for its pppoe-client (wizard 
   assert.deepEqual(plan.patches, [{ menu: '/interface/pppoe-client', where: { name: 'pppoe-out2' }, body: { 'add-default-route': 'no' }, note: 'pppoe-client pppoe-out2: add-default-route=no (wizard owns defaults)' }]);
   // pppoe probe/markroute use the interface name as gateway (recursive via pppoe peer)
   assert.equal(plan.routes.find((r) => r.body.comment === 'RUBYMIK-WAN wan2-probe').body.gateway, 'pppoe-out2');
+});
+
+// ── P19 add-before-remove SEQUENCE (the live-danger concern) ──────────────────────────────
+test('buildApplyOps — replace mode: new primary is verified active BEFORE the old default is removed', () => {
+  const plan = buildFailoverPlan(STATIC);
+  const ops = buildApplyOps(plan, ['*7'], 'replace');
+  const verifyIdx = ops.findIndex((o) => o.kind === 'verify-primary-active');
+  const removeIdx = ops.findIndex((o) => o.kind === 'remove-old-default');
+  const lastAddIdx = ops.map((o) => o.kind).lastIndexOf('add');
+  assert.ok(verifyIdx >= 0, 'the apply gates on the new primary becoming active');
+  assert.ok(removeIdx >= 0, 'replace mode retires the existing default');
+  assert.ok(lastAddIdx < verifyIdx, 'every RUBYMIK add happens before the verify gate');
+  assert.ok(verifyIdx < removeIdx, 'the old default is removed strictly AFTER the verify gate (P19: no partition)');
+  assert.equal(ops[removeIdx].id, '*7', 'the removed default is the captured pre-existing one, by id');
+});
+
+test('buildApplyOps — fresh mode never removes a default (nothing to retire)', () => {
+  const ops = buildApplyOps(buildFailoverPlan(STATIC), [], 'fresh');
+  assert.equal(ops.filter((o) => o.kind === 'remove-old-default').length, 0);
+  assert.ok(ops.some((o) => o.kind === 'verify-primary-active'));
+});
+
+test('restoreRouteBody — hands back the ORIGINAL default verbatim (dst/gateway/distance/flags), drops runtime fields', () => {
+  // a captured pre-wizard default route as RouterOS returns it
+  const captured = {
+    '.id': '*A', 'dst-address': '0.0.0.0/0', gateway: '192.168.88.1', distance: '1',
+    'check-gateway': 'ping', scope: '30', 'target-scope': '10', active: 'true', dynamic: 'false', comment: '',
+  };
+  const body = restoreRouteBody(captured);
+  // the identifying line is reproduced exactly …
+  assert.deepEqual(body, { 'dst-address': '0.0.0.0/0', gateway: '192.168.88.1', distance: '1', 'check-gateway': 'ping', scope: '30', 'target-scope': '10' });
+  // … and NO runtime/read-only field leaks into the re-add (a subtly-different route would pass a lazy check)
+  for (const k of ['.id', 'active', 'dynamic']) assert.equal(body[k], undefined, `${k} is not replayed`);
 });

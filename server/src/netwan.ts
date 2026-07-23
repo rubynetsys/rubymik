@@ -10,6 +10,7 @@ import { restGet } from './routeros/rest.js';
 import { restAdd, restRemove, restSet } from './routeros/write.js';
 import { runSafeApply, type SafeApplyContext, type SafeApplyOutcome } from './safeapply.js';
 import { mgmtInfo, type NatContext, type NatMgmtInfo } from './netnat.js';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 export const TAG = 'RUBYMIK-WAN';
 export type WanContext = NatContext; // { read, write, transport, row }
@@ -295,56 +296,122 @@ const allIds = async (ctx: WanContext): Promise<IdSet> => {
   return { route: rt.map((r) => s(r['.id'])), nat: nat.map((r) => s(r['.id'])), mangle: mg.map((r) => s(r['.id'])) };
 };
 
-/** Apply the whole failover set (incl. pppoe add-default-route=no patches) as ONE
- *  snapshot-bracketed op. Rollback removes only what this op added (delta by id per menu). */
+/**
+ * The ORDERED apply sequence — P19 add-before-remove. Every RUBYMIK object is added and the new
+ * recursive PRIMARY default is verified active BEFORE any pre-existing default is removed, so the
+ * mgmt path (which rides the default on this box) never loses egress. In 'fresh' mode no default
+ * is removed; in 'adopt'/'replace' the old non-RUBYMIK default(s) are retired LAST.
+ */
+export type ApplyOp =
+  | { kind: 'patch'; menu: string; where: Record<string, string>; body: Record<string, string> }
+  | { kind: 'add'; menu: string; body: Record<string, string> }
+  | { kind: 'verify-primary-active' }
+  | { kind: 'remove-old-default'; id: string };
+export function buildApplyOps(plan: FailoverPlan, oldDefaultIds: string[], mode: FailoverMode): ApplyOp[] {
+  const ops: ApplyOp[] = [];
+  for (const p of plan.patches) ops.push({ kind: 'patch', menu: p.menu, where: p.where, body: p.body });
+  for (const o of plan.all) ops.push({ kind: 'add', menu: o.menu, body: o.body });
+  ops.push({ kind: 'verify-primary-active' });               // ← gate: the new primary must be up …
+  if (mode !== 'fresh') for (const id of oldDefaultIds) ops.push({ kind: 'remove-old-default', id }); // … before the old default is retired
+  return ops;
+}
+
+/** Fields that reconstruct a route verbatim on restore (rollback / teardown). Read-only/runtime
+ *  fields (.id, active, dynamic, …) are dropped so the re-add reproduces the exact same line. */
+const ROUTE_RESTORE_FIELDS = ['dst-address', 'gateway', 'distance', 'check-gateway', 'scope', 'target-scope', 'routing-mark', 'pref-src', 'comment', 'disabled'] as const;
+export function restoreRouteBody(captured: Record<string, string>): Record<string, string> {
+  const body: Record<string, string> = {};
+  for (const f of ROUTE_RESTORE_FIELDS) { const v = captured[f]; if (v !== undefined && v !== '') body[f] = v; }
+  return body;
+}
+
+/** Poll for the RUBYMIK recursive PRIMARY default to show active (check-gateway resolved). Returns
+ *  false if it never comes up — the caller then aborts BEFORE removing the old default (no partition). */
+async function waitPrimaryActive(ctx: WanContext, attempts = 5, delayMs = 2000): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    const rt = await g(ctx, '/ip/route');
+    const primary = rt.find((r) => isManaged(r.comment) && s(r.comment).includes('default-primary'));
+    if (primary && s(primary.active) === 'true') return true;
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return false;
+}
+
+/** Apply the whole failover set as ONE snapshot-bracketed op with P19 ordering. The rollback both
+ *  removes what this op added AND re-adds any pre-existing default it retired — removing the new
+ *  default without restoring the old one is itself a partition. outcome.after carries the retired
+ *  default(s) verbatim so the API can persist them for a faithful teardown. */
 export async function applyFailover(ctx: WanContext, sac: Sac, spec: FailoverSpec): Promise<SafeApplyOutcome> {
   const plan = buildFailoverPlan(spec);
+  const mode: FailoverMode = spec.mode ?? 'fresh';
   let before: IdSet = { route: [], nat: [], mangle: [] };
-  return runSafeApply<IdSet>(ctxFull(ctx, sac), {
-    snapshot: async () => { before = await allIds(ctx); return before; },
-    summary: () => `Set up dual-WAN failover (${spec.mode ?? 'fresh'}): ${plan.routes.length} routes, ${plan.nat.length} NAT, ${plan.mangle.length} mangle, ${plan.patches.length} pppoe patch (RUBYMIK-WAN)`,
+  let removed: Record<string, string>[] = [];
+  return runSafeApply<{ before: IdSet; removed: Record<string, string>[] }>(ctxFull(ctx, sac), {
+    snapshot: async () => {
+      before = await allIds(ctx);
+      const rt = await g(ctx, '/ip/route');
+      removed = mode === 'fresh' ? [] : rt
+        .filter((r) => s(r['dst-address']) === '0.0.0.0/0' && s(r.dynamic) !== 'true' && !isManaged(r.comment))
+        .map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, s(v)])));
+      return { before, removed };
+    },
+    summary: () => `Set up dual-WAN failover (${mode}): +${plan.all.length} RUBYMIK-WAN objects, ${plan.patches.length} pppoe patch${removed.length ? `, retire ${removed.length} existing default (add-before-remove)` : ''}`,
     apply: async () => {
-      // pppoe add-default-route=no FIRST so the pppoe-client never fights our defaults
-      for (const p of plan.patches) {
-        const rows = await g(ctx, p.menu);
-        const hit = rows.find((r) => Object.entries(p.where).every(([k, v]) => s(r[k]) === v));
-        if (hit) await restSet(ctx.write, ctx.transport, p.menu, s(hit['.id']), p.body);
+      const ops = buildApplyOps(plan, removed.map((r) => s(r['.id'])), mode);
+      for (const op of ops) {
+        if (op.kind === 'patch') {
+          const rows = await g(ctx, op.menu);
+          const hit = rows.find((r) => Object.entries(op.where).every(([k, v]) => s(r[k]) === v));
+          if (hit) await restSet(ctx.write, ctx.transport, op.menu, s(hit['.id']), op.body);
+        } else if (op.kind === 'add') {
+          await restAdd(ctx.write, ctx.transport, op.menu, op.body);
+        } else if (op.kind === 'verify-primary-active') {
+          if (!(await waitPrimaryActive(ctx))) throw new Error('The new recursive primary default did not become active — aborting BEFORE the existing default is touched (no partition; the RUBYMIK objects roll back).');
+        } else {
+          await restRemove(ctx.write, ctx.transport, '/ip/route', op.id);
+        }
       }
-      for (const o of plan.all) await restAdd(ctx.write, ctx.transport, o.menu, o.body);
     },
     verifyTook: async () => {
       const view = await readWan(ctx);
-      const ok = view.routes.filter((r) => r.dst === '0.0.0.0/0' && !r.comment.includes('markroute')).length >= 2 && view.nat.length >= 2 && view.state !== 'none';
-      return { ok, after: { state: view.state, routes: view.routes.length, nat: view.nat.length, mangle: view.mangle.length } };
+      const primaryActive = view.routes.some((r) => r.comment.includes('default-primary') && r.active);
+      const ok = view.nat.length >= 2 && primaryActive && view.state !== 'none';
+      return { ok, after: { state: view.state, removedDefaults: removed, routes: view.routes.length, nat: view.nat.length, mangle: view.mangle.length } };
     },
     rollback: async (b) => {
       const now = await allIds(ctx);
       for (const [k, menu] of [['mangle', '/ip/firewall/mangle'], ['nat', '/ip/firewall/nat'], ['route', '/ip/route']] as const) {
-        for (const id of now[k].filter((x) => !b[k].includes(x))) await restRemove(ctx.write, ctx.transport, menu, id);
+        for (const id of now[k].filter((x) => !b.before[k].includes(x))) await restRemove(ctx.write, ctx.transport, menu, id);
       }
+      // CRITICAL: hand back the default(s) we retired — no partition on rollback.
+      for (const r of b.removed) await restAdd(ctx.write, ctx.transport, '/ip/route', restoreRouteBody(r));
     },
   });
 }
 
-/** Teardown — remove ONLY RUBYMIK-WAN-tagged objects (routes/NAT/mangle). */
-export async function teardownFailover(ctx: WanContext, sac: Sac): Promise<SafeApplyOutcome> {
+/** Teardown — remove ONLY RUBYMIK-WAN objects, then restore the exact pre-wizard default(s) the
+ *  setup retired (verbatim: dst/gateway/distance/flags). Pass the retired defaults captured at
+ *  apply time (persisted in wan_config_json); [] when the setup was 'fresh'. */
+export async function teardownFailover(ctx: WanContext, sac: Sac, originalDefaults: Record<string, string>[] = []): Promise<SafeApplyOutcome> {
   return runSafeApply<{ count: number }>(ctxFull(ctx, sac), {
     snapshot: async () => {
       const [rt, nat, mg] = await Promise.all([g(ctx, '/ip/route'), g(ctx, '/ip/firewall/nat'), g(ctx, '/ip/firewall/mangle')]);
       return { count: [...rt, ...nat, ...mg].filter((r) => isManaged(r.comment)).length };
     },
-    summary: (b) => `Tear down dual-WAN failover (${b.count} RUBYMIK-WAN objects)`,
+    summary: (b) => `Tear down dual-WAN failover (${b.count} RUBYMIK-WAN objects${originalDefaults.length ? `, restore ${originalDefaults.length} original default` : ''})`,
     apply: async () => {
       for (const menu of ['/ip/firewall/mangle', '/ip/firewall/nat', '/ip/route']) {
         const rows = await g(ctx, menu);
         for (const r of rows.filter((x) => isManaged(x.comment))) await restRemove(ctx.write, ctx.transport, menu, s(r['.id']));
       }
+      // restore the exact original default(s) the wizard retired (verbatim)
+      for (const d of originalDefaults) await restAdd(ctx.write, ctx.transport, '/ip/route', restoreRouteBody(d));
     },
     verifyTook: async () => {
       const v = await readWan(ctx);
-      return { ok: v.routes.length === 0 && v.nat.length === 0 && v.mangle.length === 0, after: { state: v.state } };
+      return { ok: v.routes.length === 0 && v.nat.length === 0 && v.mangle.length === 0, after: { state: v.state, restoredDefaults: originalDefaults.length } };
     },
-    rollback: async () => { /* removal-only; pre-snapshot is the restore point */ },
+    rollback: async () => { /* removal+restore; the pre-snapshot is the restore point */ },
   });
 }
 

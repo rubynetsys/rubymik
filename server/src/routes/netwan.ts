@@ -105,7 +105,9 @@ export function netwanRoutes(db: DatabaseSync, box: SecretBox): Router {
       }
       const outcome = await applyFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.setup', 'dual-WAN'), resolved);
       if (outcome.result === 'applied') {
-        const cfg = { wan1: { interface: resolved.wan1.interface, sourceType: resolved.wan1.sourceType }, wan2: { interface: resolved.wan2.interface, sourceType: resolved.wan2.sourceType } };
+        // Persist the retired default(s) verbatim so teardown hands back the exact original line.
+        const removedDefaults = (outcome.after as { removedDefaults?: Record<string, string>[] } | undefined)?.removedDefaults ?? [];
+        const cfg = { wan1: { interface: resolved.wan1.interface, sourceType: resolved.wan1.sourceType }, wan2: { interface: resolved.wan2.interface, sourceType: resolved.wan2.sourceType }, mode: resolved.mode ?? 'fresh', originalDefaults: removedDefaults };
         db.prepare('UPDATE device_status SET wan_config_json = ? WHERE device_id = ?').run(JSON.stringify(cfg), m.row.id);
       }
       send(res, 201, outcome);
@@ -116,7 +118,10 @@ export function netwanRoutes(db: DatabaseSync, box: SecretBox): Router {
   router.post('/:id/wan-failover/teardown', async (req, res) => {
     const m = await requireManageable(req, res); if (!m) return;
     try {
-      const outcome = await teardownFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.teardown', 'dual-WAN'));
+      const cfgRow = db.prepare('SELECT wan_config_json FROM device_status WHERE device_id = ?').get(m.row.id) as { wan_config_json: string | null } | undefined;
+      let originalDefaults: Record<string, string>[] = [];
+      if (cfgRow?.wan_config_json) { try { originalDefaults = (JSON.parse(cfgRow.wan_config_json).originalDefaults ?? []) as Record<string, string>[]; } catch { /* corrupt cfg → restore nothing */ } }
+      const outcome = await teardownFailover(m.ctx, sac(m.row, m.actor, 'wan.failover.teardown', 'dual-WAN'), originalDefaults);
       if (outcome.result === 'applied') db.prepare('UPDATE device_status SET wan_config_json = NULL, wan_state_json = NULL WHERE device_id = ?').run(m.row.id);
       send(res, 200, outcome);
     } catch (err) { writeErr(res, err); }
