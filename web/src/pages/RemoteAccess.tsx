@@ -144,9 +144,14 @@ function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapabili
           <div className="space-y-3">
             <ol className="list-decimal space-y-1 pl-5 text-sm text-fg-body">
               <li>In Portainer: <b>Stacks → your RubyMIK stack → Editor</b>.</li>
-              <li><b>Replace</b> the editor contents with the file below — your data volumes and environment are preserved (same names).</li>
+              <li><b>Replace</b> the editor contents with the file below — your ports, volumes and environment are reproduced as-is; only the WireGuard lines are added.</li>
               <li>Click <b>Update the stack</b>, then reload this page.</li>
             </ol>
+            {cap.mainHostPort != null ? (
+              <p className="text-xs text-fg-dim">Detected your host port as <b className="text-fg-body">{cap.mainHostPort}</b> and reproduced it exactly (no assumed 8080, no extra published ports).</p>
+            ) : (
+              <p className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">Couldn't auto-detect your host port — the file has a <b>“set your host port”</b> comment where it belongs. Set it to the port you open RubyMIK on before applying (don't leave a wrong default).</p>
+            )}
             <CodeBlock code={cap.compose.portainer} label="docker-compose.yml (complete)" filename="docker-compose.yml" />
             <p className="text-xs text-fg-dim">Also open <b>UDP {cap.listenPort}</b> on your host / cloud firewall so remote routers can reach the hub.</p>
           </div>

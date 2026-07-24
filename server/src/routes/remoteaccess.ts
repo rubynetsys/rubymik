@@ -8,7 +8,7 @@ import {
   allocateTunnelIp, createPeer, generateBootstrap, isValidWgKey,
   type HubConfig, type PeerRow,
 } from '../remoteaccess.js';
-import { generateHubCompose, hubComposeCli } from '../hubcapability.js';
+import { generateHubCompose, hubComposeCli, parseHostPort, isMounted, type RunningConfig } from '../hubcapability.js';
 import { APP_VERSION } from '../version.js';
 import { log } from '../log.js';
 
@@ -59,17 +59,25 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
   // Capability pre-check (P45). Called at page load BEFORE the Enable button is
   // offered — so a click can never produce a raw RTNETLINK. Also returns the
   // ready-to-paste setup (per deployment method) for the not-capable case.
-  router.get('/capability', async (_req, res) => {
+  router.get('/capability', async (req, res) => {
     const cap = await hub.capability();
     const hubRow = db.prepare('SELECT listen_port FROM wg_hub WHERE id = 1').get() as { listen_port: number } | undefined;
     const listenPort = hubRow?.listen_port ?? 51820;
+    // The generated compose must reproduce the ACTUAL running config, not assume
+    // 8080. The one thing the container can observe about its host publish is the
+    // port the admin reached it on — the request Host header.
+    const hdr = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? null;
+    const mainHostPort = parseHostPort({
+      host: hdr(req.headers.host),
+      forwardedHost: hdr(req.headers['x-forwarded-host']),
+      forwardedPort: hdr(req.headers['x-forwarded-port']),
+    });
+    const cfg: RunningConfig = { version: APP_VERSION, mainHostPort, offhost: isMounted('/offhost'), listenPort };
     res.json({
       ...cap,
       listenPort,
-      compose: {
-        portainer: generateHubCompose({ version: APP_VERSION, listenPort }),
-        cli: hubComposeCli(),
-      },
+      mainHostPort,
+      compose: { portainer: generateHubCompose(cfg), cli: hubComposeCli() },
     });
   });
 

@@ -407,6 +407,8 @@ export interface HubCapability {
   reason: string;
   checks: { netAdmin: boolean; wgTool: boolean; wgKernel: boolean | null };
   listenPort: number;
+  /** Host port the admin reaches the app on, detected from the request (null = couldn't detect). */
+  mainHostPort: number | null;
   compose: { portainer: string; cli: string };
 }
 

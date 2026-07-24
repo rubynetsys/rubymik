@@ -10,6 +10,23 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.4] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **The generated Remote Access compose now reproduces your actual host port, and adds no ports you
+  aren't already publishing.** It previously hardcoded the `8080` default (so an install on any
+  other port — e.g. `8090` — got a "port already allocated" conflict on apply) and always added an
+  `8081` WebFig published port the base install may not have had (unexpected exposure widening). The
+  capability endpoint now detects the host port the admin actually reaches the app on (from the
+  request, incl. `X-Forwarded-*`) and reproduces it exactly; WebFig is an inert commented hint
+  rather than a published port; and `/offhost` appears only when it's actually mounted. If the host
+  port can't be detected, the file carries a clear "set your host port here" comment instead of a
+  wrong default. The generated "complete" file now equals your running config **plus only** the
+  WireGuard lines (`user`/`cap_add`/`devices`/`sysctls`/the UDP port) — a test pins the diff to
+  exactly those lines, with ports/volumes/env otherwise identical.
+
 ## [1.1.3] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

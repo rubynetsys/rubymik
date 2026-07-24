@@ -82,71 +82,116 @@ export function decideCapability(facts: CapabilityFacts): HubCapability {
 
 const IMAGE_REPO = 'ghcr.io/rubynetsys/rubymik';
 
-export interface HubComposeOptions {
-  /** Running app version → the default image tag (their actual current tag). */
+/** The actual running config, as detected from inside the container. The generated
+ *  compose must reproduce THIS exactly and add ONLY the WireGuard lines — never
+ *  assume 8080, never publish a port the install isn't already publishing. */
+export interface RunningConfig {
+  /** Running app version → the default image tag (RUBYMIK_IMAGE override still wins). */
   version: string;
-  /** The hub's UDP listen port to publish. */
+  /** The host port the admin actually reaches the main service on (container :8080),
+   *  detected from the request Host header. null → we could NOT detect it, and the
+   *  file must say so rather than hardcode a wrong 8080. */
+  mainHostPort: number | null;
+  /** Is /offhost actually mounted in this container? If not, we must not add it. */
+  offhost: boolean;
+  /** The hub's UDP listen port — the ONE new published port the WG additions add. */
   listenPort: number;
-  mainPortDefault?: number;
-  webfigPortDefault?: number;
+}
+
+/** Parse the host publish port from the request headers. Prefers a proxy's
+ *  X-Forwarded-Port / -Host, else the Host header. Returns null when no explicit
+ *  port is present (port 80/443 or unknowable behind a proxy) — the caller then
+ *  emits a "set your host port" comment instead of a wrong default. Pure. */
+export function parseHostPort(h: { host?: string | null; forwardedHost?: string | null; forwardedPort?: string | null }): number | null {
+  const valid = (n: number) => Number.isInteger(n) && n >= 1 && n <= 65535;
+  const first = (v?: string | null) => (v ? v.split(',')[0]!.trim() : '');
+  const fp = first(h.forwardedPort);
+  if (/^\d{1,5}$/.test(fp) && valid(Number(fp))) return Number(fp);
+  const portOf = (v?: string | null): number | null => {
+    const s = first(v);
+    // host:port — the port is the trailing :NNNN (handles IPv6 "[::1]:8090" too).
+    const m = /:(\d{1,5})$/.exec(s);
+    if (!m) return null;
+    const p = Number(m[1]);
+    return valid(p) ? p : null;
+  };
+  return portOf(h.forwardedHost) ?? portOf(h.host);
+}
+
+/** Is `mountPoint` an actual mount in this container? Reads /proc/self/mountinfo
+ *  (field 5 is the mount point). Anything unreadable → false. */
+export function isMounted(mountPoint: string): boolean {
+  try {
+    const mi = fs.readFileSync('/proc/self/mountinfo', 'utf8');
+    return mi.split('\n').some((line) => line.split(' ')[4] === mountPoint);
+  } catch {
+    return false;
+  }
 }
 
 /**
- * A COMPLETE, single-file compose = the base RubyMIK service + the WireGuard
- * additions (NET_ADMIN, root, /dev/net/tun, sysctl, the UDP port). Built to be
- * pasted whole into a Portainer stack editor. Data volumes and env keep the same
- * names/interpolation, so nothing is lost. Image + UDP port reflect the running
- * install. RUBYMIK_IMAGE, if the operator set it, still wins (custom images).
+ * A COMPLETE, single-file compose = the DETECTED running service, reproduced, PLUS
+ * (when includeWireguard) only the WireGuard lines: user/cap_add/devices/sysctls
+ * and the one UDP port. It never assumes 8080 and never publishes a port the
+ * install isn't already publishing — the main port comes from the detected host
+ * port (or a "set this" comment), WebFig is an inert commented hint, and /offhost
+ * appears only if it's actually mounted. `includeWireguard: false` renders the
+ * running config alone (used to prove the diff is exactly the WG lines).
  */
-export function generateHubCompose(opts: HubComposeOptions): string {
-  const main = opts.mainPortDefault ?? 8080;
-  const webfig = opts.webfigPortDefault ?? 8081;
-  const udp = opts.listenPort;
-  const imageDefault = `${IMAGE_REPO}:${opts.version}`;
-  return `# ============================================================================
-# RubyMIK — WireGuard remote-access ENABLED (single file, for Portainer or any
-# stack editor). This is your service PLUS the one server-side step WireGuard
-# needs: NET_ADMIN, root, the UDP port, and /dev/net/tun.
-#
-# HOW TO APPLY (Portainer): Stacks -> your RubyMIK stack -> Editor -> replace the
-# contents with this -> "Update the stack". Your data volumes and environment are
-# preserved (same names). Then reload the Remote Access page: Enable is clickable.
-#
-# Open UDP ${udp} on your host / cloud firewall so remote routers can dial in.
-# ============================================================================
-services:
-  rubymik:
-    image: \${RUBYMIK_IMAGE:-${imageDefault}}
-    container_name: rubymik
-    restart: unless-stopped
-    init: true
-    # --- WireGuard hub additions (only these differ from the LAN-only base) ---
-    user: "0:0"
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    sysctls:
-      - net.ipv4.ip_forward=1
-    ports:
-      - "\${RUBYMIK_PORT:-${main}}:${main}"
-      - "\${RUBYMIK_WEBFIG_PORT:-${webfig}}:${webfig}"
-      - "${udp}:${udp}/udp"
-    environment:
-      RUBYMIK_WEBFIG_PORT: ${webfig}
-      RUBYMIK_LOG_LEVEL: \${RUBYMIK_LOG_LEVEL:-info}
-      RUBYMIK_POLL_INTERVAL: \${RUBYMIK_POLL_INTERVAL:-30}
-      RUBYMIK_ENCRYPTION_KEY: \${RUBYMIK_ENCRYPTION_KEY:-}
-      RUBYMIK_BACKUP_KEY: \${RUBYMIK_BACKUP_KEY:-}
-      RUBYMIK_PUBLIC_URL: \${RUBYMIK_PUBLIC_URL:-}
-    volumes:
-      - rubymik-data:/data
-      - rubymik-offhost:/offhost
-
-volumes:
-  rubymik-data:
-  rubymik-offhost:
-`;
+export function generateHubCompose(cfg: RunningConfig, includeWireguard = true): string {
+  const wg = includeWireguard;
+  const imageDefault = `${IMAGE_REPO}:${cfg.version}`;
+  const L: string[] = [];
+  L.push('# ============================================================================');
+  L.push('# RubyMIK — your CURRENT service, reproduced as detected, plus the WireGuard hub');
+  L.push('# additions (the lines marked "WG:" below). Nothing else is changed: your ports,');
+  L.push('# volumes and environment are reproduced as-is.');
+  L.push('#');
+  L.push('# APPLY (Portainer): Stacks -> your RubyMIK stack -> Editor -> replace the contents');
+  L.push('# with this -> Update the stack. Then reload the Remote Access page: Enable is live.');
+  L.push(`# Open UDP ${cfg.listenPort} on your host / cloud firewall so remote routers can dial in.`);
+  L.push('# ============================================================================');
+  L.push('services:');
+  L.push('  rubymik:');
+  L.push(`    image: \${RUBYMIK_IMAGE:-${imageDefault}}`);
+  L.push('    container_name: rubymik');
+  L.push('    restart: unless-stopped');
+  L.push('    init: true');
+  if (wg) {
+    L.push('    user: "0:0"                     # WG: NET_ADMIN is only effective for root');
+    L.push('    cap_add:');
+    L.push('      - NET_ADMIN                   # WG: create/manage the WireGuard interface');
+    L.push('    devices:');
+    L.push('      - /dev/net/tun:/dev/net/tun   # WG: portability across kernels');
+    L.push('    sysctls:');
+    L.push('      - net.ipv4.ip_forward=1       # WG');
+  }
+  L.push('    ports:');
+  if (cfg.mainHostPort != null) {
+    L.push(`      - "${cfg.mainHostPort}:8080"`);
+  } else {
+    L.push('      # - "<HOST_PORT>:8080"          # set your host port here — could NOT auto-detect the port you reach RubyMIK on');
+  }
+  L.push('      # - "8081:8081"                 # WebFig UI — uncomment + set your host port ONLY if you already publish it');
+  if (wg) {
+    L.push(`      - "${cfg.listenPort}:${cfg.listenPort}/udp"   # WG: routers dial this inbound`);
+  }
+  L.push('    environment:');
+  L.push('      RUBYMIK_WEBFIG_PORT: ${RUBYMIK_WEBFIG_PORT:-8081}');
+  L.push('      RUBYMIK_LOG_LEVEL: ${RUBYMIK_LOG_LEVEL:-info}');
+  L.push('      RUBYMIK_POLL_INTERVAL: ${RUBYMIK_POLL_INTERVAL:-30}');
+  L.push('      RUBYMIK_ENCRYPTION_KEY: ${RUBYMIK_ENCRYPTION_KEY:-}');
+  L.push('      RUBYMIK_BACKUP_KEY: ${RUBYMIK_BACKUP_KEY:-}');
+  L.push('      RUBYMIK_PUBLIC_URL: ${RUBYMIK_PUBLIC_URL:-}');
+  L.push('    volumes:');
+  L.push('      - rubymik-data:/data');
+  if (cfg.offhost) L.push('      - rubymik-offhost:/offhost');
+  L.push('');
+  L.push('volumes:');
+  L.push('  rubymik-data:');
+  if (cfg.offhost) L.push('  rubymik-offhost:');
+  L.push('');
+  return L.join('\n');
 }
 
 /** The docker compose CLI path — the two-file override, unchanged. */
