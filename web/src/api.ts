@@ -6,11 +6,24 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+    });
+  } catch {
+    // Network-level failure: fetch REJECTED with no response at all — the
+    // server restarting/unreachable, a dropped connection, or a stale app
+    // bundle calling a route the new server no longer serves. The error /
+    // errors[] body handling below can't run without a response, so surface
+    // an actionable message rather than a raw "Failed to fetch". (v1.1.6)
+    throw new ApiError(
+      "Couldn't reach the server — it may be restarting, or your browser has an older version of the app loaded. Reload the page.",
+      0,
+    );
+  }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     // Surface a field-level reason from EITHER convention the API uses: a single

@@ -10,6 +10,27 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.6] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Network-level failures now surface an actionable message, never a raw "Failed to fetch".** When
+  `fetch` itself rejects — no HTTP response at all: the server restarting, a dropped connection, or a
+  stale app bundle calling a route the new server no longer serves — the v1.1.1 `errors[]`/`error`
+  body handling could not run (there is no body to read). The API client now catches that case and
+  shows: *"Couldn't reach the server — it may be restarting, or your browser has an older version of
+  the app loaded. Reload the page."*
+
+### Changed
+- **The Provision "Mode A" (generate baseline script) flow now signals completion.** RubyMIK never
+  applies Mode A — the flow correctly ends at script generation — but the screen gave no completion
+  cue. Now the final **Apply** step green-ticks once the script generates, a **Next steps** card under
+  the script walks through download/copy → paste into the router's WinBox terminal or SSH → the
+  router comes up (dials the tunnel-back when remote) → **Adopt it in Onboard** (a button to the
+  Onboard wizard), and a **Done — close wizard** button returns to Devices. Generate/apply
+  behaviour is unchanged.
+
 ## [1.1.5] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).
