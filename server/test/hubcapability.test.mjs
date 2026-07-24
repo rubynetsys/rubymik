@@ -71,7 +71,7 @@ test('generateHubCompose: reproduces the detected host port (8090), never assume
   assert.match(yaml, /# - "8081:8081"/, 'WebFig is an opt-in commented hint, not published');
   // the WG additions + one new UDP port:
   assert.match(yaml, /- NET_ADMIN/); assert.match(yaml, /user: "0:0"/); assert.match(yaml, /\/dev\/net\/tun/);
-  assert.ok(yaml.includes('"51820:51820/udp"'), 'the one new published port is the WG UDP port');
+  assert.ok(yaml.includes('"${RUBYMIK_WG_PORT:-51820}:51820/udp"'), 'the one new published port is the WG UDP port (configured, env-overridable host side)');
   // image tag + override, complete service + volumes:
   assert.ok(yaml.includes('ghcr.io/rubynetsys/rubymik:1.1.4') && yaml.includes('${RUBYMIK_IMAGE:-'));
   assert.match(yaml, /^services:/m); assert.match(yaml, /^  rubymik:/m); assert.match(yaml, /^volumes:/m);
@@ -92,7 +92,7 @@ test('generateHubCompose: diff vs the running config is EXACTLY the WireGuard li
     '      - /dev/net/tun:/dev/net/tun   # WG: portability across kernels',
     '    sysctls:',
     '      - net.ipv4.ip_forward=1       # WG',
-    '      - "51820:51820/udp"   # WG: routers dial this inbound',
+    '      - "${RUBYMIK_WG_PORT:-51820}:51820/udp"   # WG: routers dial this inbound',
   ], 'the ONLY additions are the WG service lines + the UDP port');
   // sanity: the shared (unchanged) lines include the reproduced port, env and volumes.
   assert.ok(running.includes('      - "8090:8080"'));
@@ -106,6 +106,16 @@ test('generateHubCompose: undetectable host port → a "set your host port" comm
   assert.match(yaml, /set your host port here/i, 'tells the user to set it');
   assert.ok(!/^\s+- "\d+:8080"/m.test(yaml), 'NO active main-port line (no wrong default guessed)');
   assert.ok(!/^\s+- "8080:8080"/m.test(yaml), 'specifically no hardcoded 8080');
+});
+
+test('generateHubCompose: a non-default hub port (51821) is reflected in the ports line AND the firewall note', () => {
+  const yaml = generateHubCompose({ ...CFG, listenPort: 51821 });
+  assert.ok(yaml.includes('"${RUBYMIK_WG_PORT:-51821}:51821/udp"'), 'the ports line publishes the configured 51821');
+  assert.match(yaml, /# Open UDP 51821 /, 'the firewall note references the configured 51821');
+  assert.ok(!yaml.includes('51820'), 'no stale 51820 leaks in anywhere');
+  // default case unchanged:
+  const dflt = generateHubCompose({ ...CFG, listenPort: 51820 });
+  assert.ok(dflt.includes('"${RUBYMIK_WG_PORT:-51820}:51820/udp"') && dflt.includes('# Open UDP 51820 '));
 });
 
 test('generateHubCompose: /offhost appears only when it is actually mounted', () => {

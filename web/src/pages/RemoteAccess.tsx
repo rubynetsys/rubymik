@@ -56,7 +56,16 @@ export default function RemoteAccess() {
         {phase !== 'setup' && hub.configured && <EnableToggle enabled={hub.enabled} onChange={load} />}
       </header>
 
-      {phase === 'setup' && <SetupCard cap={cap} hub={hub} checking={checking} onRecheck={checkCapability} capErr={capErr} />}
+      {phase === 'setup' && (
+        <>
+          <SetupCard cap={cap} hub={hub} checking={checking} onRecheck={checkCapability} capErr={capErr} />
+          {/* Hub config is reachable in setup too, so the port can be changed BEFORE
+              applying (e.g. this host already runs WireGuard on 51820). Saving re-checks
+              capability so the generated compose regenerates with the new port. */}
+          <HubConfigCard onSaved={async () => { await load(); await checkCapability(); }} first={!hub.configured}
+            initial={hub.configured ? { endpoint: hub.endpoint ?? '', listenPort: hub.listenPort, overlayCidr: hub.overlayCidr } : undefined} />
+        </>
+      )}
 
       {phase === 'ready' && (
         <>
@@ -152,6 +161,9 @@ function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapabili
             ) : (
               <p className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">Couldn't auto-detect your host port — the file has a <b>“set your host port”</b> comment where it belongs. Set it to the port you open RubyMIK on before applying (don't leave a wrong default).</p>
             )}
+            <p className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">
+              <AlertTriangle className="mr-1 -mt-0.5 inline h-3.5 w-3.5" /> <b>Already running WireGuard on this host?</b> (wg-easy, another hub) The generated file publishes <b>UDP {cap.listenPort}</b> — if that port is taken, the stack update fails with “port is already allocated”. Change the hub port under <b>Edit hub configuration</b> below first, then re-copy this file.
+            </p>
             <CodeBlock code={cap.compose.portainer} label="docker-compose.yml (complete)" filename="docker-compose.yml" />
             <p className="text-xs text-fg-dim">Also open <b>UDP {cap.listenPort}</b> on your host / cloud firewall so remote routers can reach the hub.</p>
           </div>
@@ -160,6 +172,7 @@ function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapabili
           <div className="space-y-3">
             <p className="text-sm text-fg-body">From the directory that holds your <code className="rounded bg-app px-1">docker-compose.yml</code>, run the opt-in override — it adds NET_ADMIN, root, the UDP port and <code className="rounded bg-app px-1">/dev/net/tun</code>:</p>
             <CodeBlock code={cap.compose.cli} label="shell" maxHeightClass="" />
+            <p className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">The override publishes <b>UDP {cap.listenPort}</b>. If this host already runs WireGuard on it, set <code className="rounded bg-warning-bg px-1">RUBYMIK_WG_PORT</code> to a free port (and match it under <b>Edit hub configuration</b>) before running — otherwise the up fails with “port is already allocated”.</p>
             <p className="text-xs text-fg-dim">Then open <b>UDP {cap.listenPort}</b> on your host / cloud firewall, and reload this page.</p>
           </div>
         )}

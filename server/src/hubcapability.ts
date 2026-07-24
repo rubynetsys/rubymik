@@ -174,7 +174,10 @@ export function generateHubCompose(cfg: RunningConfig, includeWireguard = true):
   }
   L.push('      # - "8081:8081"                 # WebFig UI — uncomment + set your host port ONLY if you already publish it');
   if (wg) {
-    L.push(`      - "${cfg.listenPort}:${cfg.listenPort}/udp"   # WG: routers dial this inbound`);
+    // The hub's CONFIGURED listen port (not a hardcoded 51820). Host side is
+    // overridable via RUBYMIK_WG_PORT for hosts that already run WireGuard on the
+    // default; the container/advertised side stays the configured hub port.
+    L.push(`      - "\${RUBYMIK_WG_PORT:-${cfg.listenPort}}:${cfg.listenPort}/udp"   # WG: routers dial this inbound`);
   }
   L.push('    environment:');
   L.push('      RUBYMIK_WEBFIG_PORT: ${RUBYMIK_WEBFIG_PORT:-8081}');

@@ -10,6 +10,22 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.5] — 2026-07-23 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **The generated Remote Access compose now uses the hub's configured UDP port, and warns about
+  collisions.** On a host already running another WireGuard (wg-easy, another hub) on the default
+  `51820`, applying the stack failed with "port is already allocated". Now: the generated file
+  publishes `"${RUBYMIK_WG_PORT:-<configured>}:<configured>/udp"` — the hub's **configured** listen
+  port (env-overridable on the host side), not a hardcoded `51820`; the firewall note references the
+  configured port; and the setup card carries a plain warning above the compose ("If this host
+  already runs WireGuard, change the hub port under Edit hub configuration first — the file uses
+  `<port>`"). The hub configuration (endpoint + port) is now reachable from the **setup** state too,
+  so you can change the port before applying — saving it regenerates the compose with the new port.
+  The `docker-compose.wireguard.yml` CLI override is likewise `RUBYMIK_WG_PORT`-overridable.
+
 ## [1.1.4] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

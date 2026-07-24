@@ -14,9 +14,12 @@
 #   - user: "0:0" (root)   → NET_ADMIN is only effective for root; the default
 #                            image runs as the unprivileged `node` user, which
 #                            cannot manage network interfaces even with the cap.
-#   - ports 51820/udp      → the UDP port remote routers dial INBOUND. Must be
-#                            reachable at the endpoint you configure in the UI
-#                            (open it on your host/cloud firewall).
+#   - the UDP port         → the port remote routers dial INBOUND. Defaults to
+#                            51820; if this host already runs WireGuard on it
+#                            (wg-easy, another hub), set RUBYMIK_WG_PORT to a free
+#                            port AND set the hub's listen port to the SAME value
+#                            in the UI (Remote Access -> Edit hub configuration).
+#                            Open it on your host/cloud firewall.
 #   - /dev/net/tun + sysctl are included for portability across kernels.
 #
 # The WireGuard kernel module must be available on the host (it is on modern
@@ -33,4 +36,6 @@ services:
     sysctls:
       - net.ipv4.ip_forward=1
     ports:
-      - "51820:51820/udp"
+      # Defaults to 51820; override with RUBYMIK_WG_PORT (must equal the hub's
+      # configured listen port). Both sides move together.
+      - "${RUBYMIK_WG_PORT:-51820}:${RUBYMIK_WG_PORT:-51820}/udp"
