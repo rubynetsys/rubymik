@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   HardDriveDownload, Loader2, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft,
-  ShieldCheck, Network, RadioTower, Server, Cpu, X,
+  ShieldCheck, Network, RadioTower, Server, Cpu, X, Link2,
 } from 'lucide-react';
 import { api } from '../api';
 import Select from '../components/Select';
@@ -66,6 +66,7 @@ export default function Provision() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [genScript, setGenScript] = useState<string | null>(null);
+  const [genPeer, setGenPeer] = useState<{ id: number; tunnelIp: string } | null>(null);
   const [applyOut, setApplyOut] = useState<any>(null);
   const set = (patch: Partial<Spec>) => setSpec((s) => ({ ...s, ...patch }));
   const navigate = useNavigate();
@@ -117,7 +118,7 @@ export default function Provision() {
         {step === 1 && <InterfacesWan spec={spec} set={set} setSpec={setSpec} />}
         {step === 2 && <LanFirewall spec={spec} set={set} />}
         {step === 3 && <Review spec={spec} validation={validation} busy={busy} revalidate={validate} mode={mode} setMode={setMode} />}
-        {step === 4 && <Apply spec={spec} mode={mode} busy={busy} setBusy={setBusy} setErr={setErr} genScript={genScript} setGenScript={setGenScript} applyOut={applyOut} setApplyOut={setApplyOut} />}
+        {step === 4 && <Apply spec={spec} mode={mode} busy={busy} setBusy={setBusy} setErr={setErr} genScript={genScript} setGenScript={setGenScript} genPeer={genPeer} setGenPeer={setGenPeer} applyOut={applyOut} setApplyOut={setApplyOut} />}
 
         <div className="mt-6 flex items-center justify-between">
           <button onClick={() => go(-1)} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-fg-muted hover:bg-app disabled:opacity-40"><ArrowLeft className="h-4 w-4" /> Back</button>
@@ -295,12 +296,15 @@ function Review({ spec, validation, busy, revalidate, mode, setMode }: any) {
   );
 }
 
-function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, applyOut, setApplyOut }: any) {
+function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, genPeer, setGenPeer, applyOut, setApplyOut }: any) {
   const [host, setHost] = useState(''); const [user, setUser] = useState(''); const [pass, setPass] = useState('');
 
   async function generate() {
     setBusy(true); setErr(null);
-    try { const r = await api.post<{ script: string }>('/api/provision/generate', { spec }); setGenScript(r.script); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try {
+      const r = await api.post<{ script: string; peer?: { id: number; tunnelIp: string } }>('/api/provision/generate', { spec });
+      setGenScript(r.script); setGenPeer(r.peer ?? null);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   async function liveApply() {
     setBusy(true); setErr(null);
@@ -322,8 +326,8 @@ function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, app
                 {[
                   'Download or copy the script above.',
                   "Paste it into the router's WinBox terminal (New Terminal) or over SSH.",
-                  spec.remote ? 'The router dials the WireGuard tunnel-back to RubyMIK.' : 'The router comes up on your LAN, fully configured.',
-                  'Adopt it into RubyMIK from the Onboard wizard.',
+                  spec.remote ? 'The router dials the WireGuard tunnel-back and prints its public key (RUBYMIK_PUBKEY=…).' : 'The router comes up on your LAN, fully configured.',
+                  spec.remote ? 'Paste that key into "Finish adoption" below to complete the tunnel, then adopt it in Remote Access.' : 'Adopt it into RubyMIK from the Onboard wizard.',
                 ].map((t: string, i: number) => (
                   <li key={i} className="flex gap-2.5">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-[11px] font-bold text-accent">{i + 1}</span>
@@ -331,8 +335,12 @@ function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, app
                   </li>
                 ))}
               </ol>
-              <Link to="/onboard" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Adopt it in Onboard <ArrowRight className="h-4 w-4" /></Link>
+              {!spec.remote && <Link to="/onboard" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Adopt it in Onboard <ArrowRight className="h-4 w-4" /></Link>}
             </div>
+            {spec.remote && genPeer && <FinishAdoption spec={spec} peer={genPeer} />}
+            {spec.remote && !genPeer && (
+              <div className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">This remote baseline reserved a hub peer, but its details didn't come back — complete it from <Link to="/remote-access" className="font-semibold underline">Remote Access</Link> (it's listed as "awaiting key").</div>
+            )}
           </>
         )}
       </div>
@@ -362,4 +370,47 @@ function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, app
 
 function Meta({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><dt className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">{label}</dt><dd className="mt-0.5 truncate font-medium text-fg" title={value}>{value}</dd></div>;
+}
+
+// P11 remote key handoff (v1.1.7): the remote baseline already reserved a hub peer
+// (peer id + overlay IP). This panel registers the router's public key onto it, so
+// the tunnel actually handshakes — no hunting for where to paste RUBYMIK_PUBKEY.
+function FinishAdoption({ spec, peer }: { spec: Spec; peer: { id: number; tunnelIp: string } }) {
+  const [name, setName] = useState(spec.identity || 'Provisioned router');
+  const [pubkey, setPubkey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function register() {
+    setBusy(true); setErr(null);
+    try {
+      await api.post(`/api/remote-access/sites/${peer.id}/register`, { publicKey: pubkey.trim(), label: name.trim() });
+      setDone(true);
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="rounded-xl border border-accent-border bg-accent-subtle/30 p-4">
+      <div className="mb-1 flex items-center gap-2 font-semibold text-fg-strong"><RadioTower className="h-4 w-4 text-accent" /> Finish adoption — register the router's key</div>
+      <p className="text-sm text-fg-dim">The hub reserved overlay IP <b className="font-mono text-fg-body">{peer.tunnelIp}</b> for this site. After you apply the script, the router prints <code className="rounded bg-app px-1 text-xs">RUBYMIK_PUBKEY=…</code> — paste it here to complete the tunnel. Without it the router dials but the hub drops it as an unknown peer (Tx climbs, Rx stays 0 — no handshake).</p>
+      {done ? (
+        <div className="mt-3 rounded-lg bg-success-bg px-3 py-2 text-sm text-success-fg">
+          <CheckCircle2 className="mr-1 inline h-4 w-4" /> Key registered — the router should handshake within ~30s. Watch its status and adopt it as a managed device in <Link to="/remote-access" className="font-semibold underline">Remote Access</Link>.
+        </div>
+      ) : (
+        <>
+          {err && <div className="mt-3 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <Field label="Site name"><input className={input} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+            <Field label="Router public key (RUBYMIK_PUBKEY)"><input className={input} value={pubkey} onChange={(e) => setPubkey(e.target.value)} placeholder="paste the printed key" /></Field>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button onClick={() => void register()} disabled={busy || !pubkey.trim()} className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />} Register key &amp; finish</button>
+            <Link to="/remote-access" className="text-sm font-semibold text-accent-text hover:underline">or manage in Remote Access →</Link>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

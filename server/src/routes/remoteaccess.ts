@@ -146,11 +146,14 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
     if (!peer) { res.status(404).json({ error: 'Site not found.' }); return; }
     const publicKey = typeof (req.body ?? {}).publicKey === 'string' ? (req.body.publicKey as string).trim() : '';
     if (!isValidWgKey(publicKey)) { res.status(400).json({ error: 'That does not look like a WireGuard public key (44-char base64).' }); return; }
+    // Optional rename (the provision "Finish adoption" panel carries a Name field).
+    const rawLabel = typeof (req.body ?? {}).label === 'string' ? (req.body.label as string).trim() : '';
+    const label = rawLabel || peer.label;
     try {
-      db.prepare('UPDATE wg_peers SET public_key = ?, status = ?, updated_at = ? WHERE id = ?')
-        .run(publicKey, 'registered', new Date().toISOString(), peer.id);
+      db.prepare('UPDATE wg_peers SET public_key = ?, label = ?, status = ?, updated_at = ? WHERE id = ?')
+        .run(publicKey, label, 'registered', new Date().toISOString(), peer.id);
       await hub.syncPeers();
-      audit(actorOf(req), 'wg.peer.register', `${peer.label} (${peer.tunnel_ip})`, `Registered router public key for "${peer.label}"`, 'Peer key registered; hub reconciled.');
+      audit(actorOf(req), 'wg.peer.register', `${label} (${peer.tunnel_ip})`, `Registered router public key for "${label}"`, 'Peer key registered; hub reconciled.');
       res.json({ ok: true, peer: peersView().find((p) => p.id === peer.id) });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });

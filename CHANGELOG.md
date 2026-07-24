@@ -10,6 +10,26 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.7] — 2026-07-24 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Remote provisioning no longer dead-ends at the key handoff.** A remote baseline reserves a
+  hub-side peer (overlay IP) and the router prints `RUBYMIK_PUBKEY=…` when applied — but nothing told
+  you *where* to paste it, so the tunnel silently never handshook (the hub drops an unregistered peer
+  as unknown: Tx climbs, Rx stays 0). Now:
+  - **Provision → Mode A (remote) ends with a "Finish adoption" panel** — a Name field and a paste
+    field for the router's public key that registers it directly onto the reserved peer, plus a
+    link straight to **Remote Access**. No hunting.
+  - **A provisioned-but-not-adopted router is visible** in Remote Access → Remote sites as
+    **"awaiting key"** (it never vanishes), and each peer shows its **hub-side handshake state**
+    (connected / stale / awaiting-key / no-handshake).
+  - **"No handshake yet" now explains the two real causes** inline: the key isn't registered, or the
+    host firewall / published UDP port doesn't match the hub port.
+  The remote "next steps" now point to Finish adoption rather than the (not-yet-reachable) Onboard
+  wizard; local provisioning still links to Onboard.
+
 ## [1.1.6] — 2026-07-23 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

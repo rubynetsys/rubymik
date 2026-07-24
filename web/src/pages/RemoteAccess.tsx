@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Globe, Loader2, Plus, RadioTower, ShieldCheck, X, CheckCircle2,
-  AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw,
+  AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw, KeyRound, Info,
 } from 'lucide-react';
 import { api } from '../api';
 import type { RemoteAccessView, PeerView, HubCapability, HubStatus } from '../types';
 import { phaseFor } from '../lib/hubphase';
+import { peerState, peerHint, PEER_STATE_LABEL, type PeerState } from '../lib/peerstate';
 import CodeBlock from '../components/CodeBlock';
 
 const inputCls = 'w-full rounded-lg border border-border-strong px-3 py-2 text-sm outline-none transition focus:border-accent-border-strong focus:ring-2 focus:ring-accent-border-strong/20';
@@ -294,11 +295,20 @@ function HubConfigCard({ onSaved, initial, first }: { onSaved: () => Promise<voi
   );
 }
 
-const STATE_META: Record<string, { label: string; cls: string }> = {
-  recent: { label: 'connected', cls: 'bg-success-bg text-success-fg' },
-  stale: { label: 'stale', cls: 'bg-warning-bg text-warning-fg' },
-  never: { label: 'never connected', cls: 'bg-app text-fg-dim' },
+const PEER_STATE_CLS: Record<PeerState, string> = {
+  connected: 'bg-success-bg text-success-fg',
+  stale: 'bg-warning-bg text-warning-fg',
+  'awaiting-key': 'bg-info-bg text-info-fg',
+  'no-handshake': 'bg-warning-bg text-warning-fg',
 };
+function PeerStatePill({ state }: { state: PeerState }) {
+  const Icon = state === 'connected' ? CheckCircle2 : state === 'awaiting-key' ? KeyRound : state === 'stale' ? Clock : AlertTriangle;
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${PEER_STATE_CLS[state]}`}>
+      <Icon className="h-3.5 w-3.5" />{PEER_STATE_LABEL[state]}
+    </span>
+  );
+}
 
 function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; onShowBootstrap: (v: { peer: PeerView; bootstrap: string }) => void; reload: () => Promise<void> }) {
   const [adding, setAdding] = useState(false);
@@ -344,20 +354,21 @@ function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; 
         <div className="overflow-hidden rounded-xl border border-border-subtle">
           {view.peers.map((p) => {
             const live = view.live[p.id];
-            const state = !p.hasKey ? 'pending-key' : live?.state ?? 'never';
-            const meta = STATE_META[state] ?? { label: 'pending key', cls: 'bg-info-bg text-info-fg' };
+            const st = peerState(p.hasKey, live?.state);
+            const hint = peerHint(st, view.hub.listenPort);
             return (
-              <div key={p.id} className="flex items-center gap-3 border-b border-border-subtle px-4 py-3 text-sm last:border-0">
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-fg">{p.label}</div>
-                  <div className="font-mono text-xs text-fg-dim">{p.tunnelIp}
-                    {p.deviceId && <> · <a href={`/devices/${p.deviceId}`} className="text-accent-text hover:underline">{p.deviceName ?? `device #${p.deviceId}`}</a></>}
+              <div key={p.id} className="border-b border-border-subtle px-4 py-3 text-sm last:border-0">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-fg">{p.label}</div>
+                    <div className="font-mono text-xs text-fg-dim">{p.tunnelIp}
+                      {p.deviceId && <> · <a href={`/devices/${p.deviceId}`} className="text-accent-text hover:underline">{p.deviceName ?? `device #${p.deviceId}`}</a></>}
+                    </div>
                   </div>
+                  <PeerStatePill state={st} />
+                  <button onClick={() => void showBootstrap(p)} className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-fg-muted hover:bg-app">{p.hasKey ? 'Bootstrap' : 'Finish setup'}</button>
                 </div>
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${meta.cls}`}>
-                  {state === 'recent' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}{meta.label}
-                </span>
-                <button onClick={() => void showBootstrap(p)} className="rounded-md px-2.5 py-1 text-xs font-semibold text-fg-muted hover:bg-app">Bootstrap</button>
+                {hint && <div className="mt-1.5 flex items-start gap-1.5 text-xs text-fg-dim"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{hint}</span></div>}
               </div>
             );
           })}
