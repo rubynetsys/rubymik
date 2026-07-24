@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Globe, Loader2, Plus, RadioTower, ShieldCheck, X, CheckCircle2,
-  AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw, KeyRound, Info,
+  AlertTriangle, Link2, Clock, Boxes, Terminal, HelpCircle, RefreshCw, KeyRound, Info, Trash2,
 } from 'lucide-react';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import type { RemoteAccessView, PeerView, HubCapability, HubStatus } from '../types';
 import { phaseFor } from '../lib/hubphase';
 import { peerState, peerHint, PEER_STATE_LABEL, type PeerState } from '../lib/peerstate';
@@ -328,6 +328,23 @@ function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; 
     const r = await api.get<{ bootstrap: string }>(`/api/remote-access/sites/${peer.id}/bootstrap`);
     onShowBootstrap({ peer, bootstrap: r.bootstrap });
   }
+  const [confirmDel, setConfirmDel] = useState<PeerView | null>(null);
+  async function del(p: PeerView, confirmName?: string) {
+    setErr(null);
+    try {
+      await api.del(`/api/remote-access/sites/${p.id}`, confirmName ? { confirmName } : undefined);
+      setConfirmDel(null); await reload();
+    } catch (e) {
+      // The server is authoritative: if it wants a typed confirm, open the modal.
+      if (e instanceof ApiError && e.status === 409) setConfirmDel(p);
+      else setErr((e as Error).message);
+    }
+  }
+  function onDelete(p: PeerView, st: PeerState) {
+    const dangerous = p.hasKey && (st === 'connected' || !!p.deviceId);
+    if (dangerous) setConfirmDel(p);
+    else if (confirm(`Delete remote site "${p.label}"? This frees its overlay IP ${p.tunnelIp}.`)) void del(p);
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-5">
@@ -367,6 +384,7 @@ function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; 
                   </div>
                   <PeerStatePill state={st} />
                   <button onClick={() => void showBootstrap(p)} className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-fg-muted hover:bg-app">{p.hasKey ? 'Bootstrap' : 'Finish setup'}</button>
+                  <button onClick={() => onDelete(p, st)} title="Delete site" className="shrink-0 rounded-md p-1.5 text-fg-faint hover:bg-danger-bg hover:text-danger-fg-strong"><Trash2 className="h-4 w-4" /></button>
                 </div>
                 {hint && <div className="mt-1.5 flex items-start gap-1.5 text-xs text-fg-dim"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>{hint}</span></div>}
               </div>
@@ -374,6 +392,31 @@ function SitesCard({ view, onShowBootstrap, reload }: { view: RemoteAccessView; 
           })}
         </div>
       )}
+      {confirmDel && <DeletePeerModal peer={confirmDel} onCancel={() => setConfirmDel(null)} onConfirm={(name) => del(confirmDel, name)} />}
+    </div>
+  );
+}
+
+function DeletePeerModal({ peer, onCancel, onConfirm }: { peer: PeerView; onCancel: () => void; onConfirm: (name: string) => Promise<void> }) {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4" onMouseDown={onCancel}>
+      <div className="w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 text-lg font-bold text-danger-fg-strong"><AlertTriangle className="h-5 w-5" /> Delete a live remote site</div>
+        <p className="mt-2 text-sm text-fg-dim">
+          <b className="text-fg-body">{peer.label}</b> <span className="font-mono text-xs">({peer.tunnelIp})</span> has a live tunnel{peer.deviceId ? <> and is the management path for <b className="text-fg-body">{peer.deviceName ?? `device #${peer.deviceId}`}</b></> : ''}. Deleting it <b className="text-fg-body">cuts the router's remote management access</b> — it can't be reached over the tunnel until re-provisioned. The overlay IP is freed for reuse. Type the site name to confirm.
+        </p>
+        <input className={`${inputCls} mt-3`} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={peer.label} autoFocus />
+        <div className="mt-4 flex justify-end gap-3">
+          <button onClick={onCancel} className="rounded-lg border border-border-strong px-4 py-2 text-sm font-semibold text-fg-body hover:bg-sunken">Cancel</button>
+          <button onClick={async () => { setBusy(true); try { await onConfirm(typed.trim()); } finally { setBusy(false); } }}
+            disabled={busy || typed.trim() !== peer.label}
+            className="inline-flex items-center gap-2 rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-inverse hover:opacity-90 disabled:opacity-50">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Delete site
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

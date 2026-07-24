@@ -7,6 +7,7 @@ import {
 import { api } from '../api';
 import type { Alert, AuditEntry, FleetPayload, FleetSite, HealthStatus } from '../types';
 import Sparkline from '../components/Sparkline';
+import PendingSetup from '../components/PendingSetup';
 
 const REFRESH_MS = 10_000;
 const RANK: Record<HealthStatus, number> = { down: 3, warning: 2, rebooting: 2, pending: 1, up: 0 };
@@ -56,6 +57,9 @@ export default function Dashboard() {
         <Kpi label="Pending" value={s.pending} Icon={Clock} tone="neutral" />
         <Kpi label="Open alerts" value={alerts.length} Icon={Bell} tone={alerts.length ? 'warn' : 'neutral'} />
       </div>
+
+      {/* remote sites awaiting key / adoption — hidden when none (P11 v1.1.8) */}
+      <PendingSetup variant="card" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* sites, worst-first */}

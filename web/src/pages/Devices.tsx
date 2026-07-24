@@ -7,6 +7,7 @@ import {
 import { api } from '../api';
 import { fmtBytes, type Device, type RouterSystemInfo, type Site, type TestResult } from '../types';
 import Select from '../components/Select';
+import PendingSetup from '../components/PendingSetup';
 import { CATEGORY_META, type DeviceCategory, effectiveCategory } from '../catalog';
 import { useMe } from '../me';
 
@@ -69,6 +70,9 @@ export default function Devices() {
           </Link>
         )}
       </div>
+
+      {/* provisioned-not-yet-adopted routers — distinct, not counted in the tiles (v1.1.8) */}
+      <div className="mt-5"><PendingSetup variant="section" /></div>
 
       {devices.length > 0 && (
         <div className="mt-5 flex flex-wrap gap-1.5">

@@ -10,6 +10,29 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.8] — 2026-07-24 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Re-running the remote provision wizard no longer orphans peer reservations.** Each remote
+  *Generate* used to reserve a **new** hub peer (and overlay IP), so generating twice for the same
+  site left duplicate "awaiting key" reservations. It now **reuses the existing awaiting-key
+  reservation for the same site name** — two generates make one peer. (A genuinely different site
+  name still gets its own; a site that's already registered isn't reused.)
+
+### Added
+- **Delete a remote site.** Each Remote Access site row has a delete action. Awaiting-key /
+  unregistered reservations delete with a simple confirm (nothing is live) and **free their overlay
+  IP for reuse**; a registered site that's a **live management path** (recent handshake or an adopted
+  device) requires a **typed-name confirm** and warns the router will lose management access. Both
+  cases are audit-logged.
+- **"Pending setup" visibility.** Provisioned-but-not-yet-adopted routers are now surfaced from one
+  shared source (`GET /api/remote-access/pending`): a **Dashboard card** (hidden when empty) and a
+  distinct **section on the Devices page** — each row dimmed with a "pending" chip, non-clickable
+  into device detail, and a **Finish setup →** link. Pending items are **not** fleet devices, so they
+  are never counted in the up / down / warning tiles.
+
 ## [1.1.7] — 2026-07-24 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

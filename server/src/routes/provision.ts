@@ -9,7 +9,7 @@ import {
   type BaselineSpec,
 } from '../provision.js';
 import { liveApplyBaseline, type ProvCtx } from '../provisionapply.js';
-import { allocateTunnelIp, createPeer, type HubConfig, type PeerRow } from '../remoteaccess.js';
+import { reservePeer, type HubConfig, type PeerRow } from '../remoteaccess.js';
 import { log } from '../log.js';
 import { writeErr } from '../snapshothook.js';
 
@@ -68,11 +68,12 @@ export function provisionRoutes(db: DatabaseSync): Router {
     if (spec.remote) {
       const hub = hubConfig();
       if (!hub) { res.status(400).json({ ok: false, errors: ['Remote provisioning needs the WireGuard hub enabled. Turn on Remote Access first (or provision this router as local).'] }); return; }
-      const tunnelIp = allocateTunnelIp(db, hub.overlayCidr, hub.hubAddress);
-      const p: PeerRow = createPeer(db, spec.identity || 'Provisioned router', tunnelIp);
+      // Reuse an existing awaiting-key reservation for this site name instead of
+      // orphaning a new overlay IP each time the wizard is re-run (v1.1.8).
+      const p: PeerRow = reservePeer(db, hub, spec.identity || 'Provisioned router');
       peer = { id: p.id, tunnelIp: p.tunnel_ip };
       tunnelBootstrap = baselineTunnelBootstrap(hub, p);
-      audit(actorOf(req), 'provision.generate.remote', `${spec.identity} (${tunnelIp})`, `Generated remote baseline for "${spec.identity}" incl. tunnel-back at ${tunnelIp}`);
+      audit(actorOf(req), 'provision.generate.remote', `${spec.identity} (${p.tunnel_ip})`, `Generated remote baseline for "${spec.identity}" incl. tunnel-back at ${p.tunnel_ip}`);
     } else {
       audit(actorOf(req), 'provision.generate.local', spec.identity, `Generated local baseline for "${spec.identity}"`);
     }

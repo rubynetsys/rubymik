@@ -54,6 +54,59 @@ export function createPeer(db: DatabaseSync, label: string, tunnelIp: string): P
   return db.prepare('SELECT * FROM wg_peers WHERE id = ?').get(id) as unknown as PeerRow;
 }
 
+/**
+ * Reserve a hub peer for a site (v1.1.8 root-cause fix). Re-running the provision
+ * wizard for the SAME site name must NOT orphan a second overlay IP — so reuse an
+ * existing unregistered, unadopted reservation with that label; only allocate a
+ * fresh IP + create a peer when there isn't one. Two generates → one peer.
+ */
+export function reservePeer(db: DatabaseSync, hub: HubConfig, label: string): PeerRow {
+  const existing = db.prepare(
+    'SELECT * FROM wg_peers WHERE label = ? AND public_key IS NULL AND device_id IS NULL ORDER BY id LIMIT 1',
+  ).get(label) as unknown as PeerRow | undefined;
+  if (existing) return existing;
+  const tunnelIp = allocateTunnelIp(db, hub.overlayCidr, hub.hubAddress);
+  return createPeer(db, label, tunnelIp);
+}
+
+// ---- pending-setup selector + delete-guard (shared source for both feeds) ----
+
+export interface PendingItem {
+  id: number;
+  label: string;
+  tunnelIp: string;
+  hasKey: boolean;
+  /** awaiting-key = no router key yet; awaiting-adoption = key registered, not yet a device. */
+  kind: 'awaiting-key' | 'awaiting-adoption';
+}
+
+/** Pure: the ONE source both the Dashboard and Devices pending feeds read. A
+ *  pending item is a provisioned peer that is not yet a managed device
+ *  (device_id null) — so it is NEVER a fleet device and never counted up/down. */
+export function selectPending(
+  peers: Array<{ id: number; label: string; tunnel_ip: string; public_key: string | null; device_id: number | null }>,
+): PendingItem[] {
+  return peers
+    .filter((p) => p.device_id == null)
+    .map((p) => ({
+      id: p.id,
+      label: p.label,
+      tunnelIp: p.tunnel_ip,
+      hasKey: !!p.public_key,
+      kind: p.public_key ? 'awaiting-adoption' as const : 'awaiting-key' as const,
+    }));
+}
+
+/** Pure: deleting a site is "dangerous" (needs a typed-name confirm) when it's a
+ *  registered peer that is actually a live management path — a recent handshake OR
+ *  an adopted device. An unregistered/awaiting-key reservation deletes freely. */
+export function isDeleteDangerous(
+  peer: { public_key: string | null; device_id: number | null },
+  liveHandshake: boolean,
+): boolean {
+  return !!peer.public_key && (liveHandshake || peer.device_id != null);
+}
+
 /** A basic sanity check on a router-supplied WireGuard public key (base64, 44 chars). */
 export function isValidWgKey(key: string): boolean {
   return /^[A-Za-z0-9+/]{43}=$/.test(key.trim());

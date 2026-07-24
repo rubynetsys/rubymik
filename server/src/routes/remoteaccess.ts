@@ -6,6 +6,7 @@ import type { WireguardHub } from '../wireguard.js';
 import { writeAudit } from '../safeapply.js';
 import {
   allocateTunnelIp, createPeer, generateBootstrap, isValidWgKey,
+  selectPending, isDeleteDangerous,
   type HubConfig, type PeerRow,
 } from '../remoteaccess.js';
 import { generateHubCompose, hubComposeCli, parseHostPort, isMounted, type RunningConfig } from '../hubcapability.js';
@@ -191,6 +192,48 @@ export function remoteAccessRoutes(db: DatabaseSync, box: SecretBox, hub: Wiregu
       log.info(`Adopted remote device #${id} "${name}" over tunnel ${peer.tunnel_ip}`);
       res.status(201).json({ deviceId: id, tunnelIp: peer.tunnel_ip });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // Delete a remote site (frees its overlay IP for reuse). Awaiting-key/unregistered
+  // reservations delete freely; a registered peer that is a LIVE management path (recent
+  // handshake or an adopted device) requires a typed-name confirm — never silently
+  // strand a box. Audited either way.
+  router.delete('/sites/:id', async (req, res) => {
+    const peer = db.prepare('SELECT * FROM wg_peers WHERE id = ?').get(Number(req.params.id)) as unknown as PeerRow | undefined;
+    if (!peer) { res.status(404).json({ error: 'Site not found.' }); return; }
+    let liveHandshake = false;
+    if (peer.public_key) {
+      try { liveHandshake = (await hub.status()).peers.some((sp) => sp.publicKey === peer.public_key && sp.state === 'recent'); }
+      catch { liveHandshake = false; }
+    }
+    const dangerous = isDeleteDangerous(peer, liveHandshake);
+    if (dangerous) {
+      const confirmName = typeof (req.body ?? {}).confirmName === 'string' ? (req.body.confirmName as string).trim() : '';
+      if (confirmName !== peer.label) {
+        res.status(409).json({
+          error: `"${peer.label}" is a live management path${peer.device_id ? ` for device #${peer.device_id}` : ''} — deleting it cuts the router's tunnel access. Type the site name to confirm.`,
+          requiresConfirm: true, label: peer.label,
+        });
+        return;
+      }
+    }
+    try {
+      db.prepare('DELETE FROM wg_peers WHERE id = ?').run(peer.id);
+      try { await hub.syncPeers(); } catch { /* interface may be down; DB row is gone either way */ }
+      audit(actorOf(req), 'wg.peer.delete', `${peer.label} (${peer.tunnel_ip})`,
+        `Deleted remote site "${peer.label}" — freed ${peer.tunnel_ip}${dangerous ? ' (was a LIVE mgmt path)' : ''}`,
+        'Peer removed; overlay IP freed.');
+      res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // Pending-setup feed (the ONE source both the Dashboard card and the Devices page
+  // read): provisioned peers that aren't yet managed devices. Never fleet devices,
+  // so never in up/down counts.
+  router.get('/pending', (_req, res) => {
+    const peers = db.prepare('SELECT id, label, tunnel_ip, public_key, device_id FROM wg_peers')
+      .all() as Array<{ id: number; label: string; tunnel_ip: string; public_key: string | null; device_id: number | null }>;
+    res.json({ items: selectPending(peers) });
   });
 
   return router;
