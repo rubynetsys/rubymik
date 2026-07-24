@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.6",
+  "latest": "1.1.7",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.6 — patch: network-level failures (a dropped connection, the server restarting, or a stale browser bundle) now show an actionable \"Couldn't reach the server — reload the page\" message instead of a raw \"Failed to fetch\"; and the Provision \"Mode A\" (generate script) flow now signals completion — the Apply step green-ticks, a Next steps card guides download → paste → adopt in Onboard, and a Done button returns to Devices. No migration (schema unchanged). See the changelog."
+  "notes": "1.1.7 — patch: remote provisioning no longer dead-ends at the key handoff. Provision → Mode A (remote) now ends with a \"Finish adoption\" panel that registers the router's printed RUBYMIK_PUBKEY directly onto the reserved hub peer; a provisioned-but-not-adopted router shows in Remote Access as \"awaiting key\" (never vanishes); and each peer shows its hub-side handshake state with a \"no handshake yet\" hint naming the two real causes (key not registered, or host firewall/port mismatch). No migration (schema unchanged). See the changelog."
 }
