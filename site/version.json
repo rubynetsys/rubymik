@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.4",
+  "latest": "1.1.5",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.4 — patch: the generated Remote Access compose now reproduces your actual host port (no assumed 8080 → no 'port already allocated' on non-8080 installs) and adds no ports you aren't already publishing (WebFig 8081 is a commented hint, not a published port). The file equals your running config plus only the WireGuard lines. No migration (schema unchanged). See the changelog."
+  "notes": "1.1.5 — patch: the generated Remote Access compose now uses the hub's CONFIGURED WireGuard UDP port (env-overridable via RUBYMIK_WG_PORT), not a hardcoded 51820 — so hosts already running WireGuard (wg-easy, another hub) no longer hit 'port is already allocated'. The setup card warns about the clash and the hub port is now changeable before enabling. No migration (schema unchanged). See the changelog."
 }
