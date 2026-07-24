@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.7",
+  "latest": "1.1.8",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.7 — patch: remote provisioning no longer dead-ends at the key handoff. Provision → Mode A (remote) now ends with a \"Finish adoption\" panel that registers the router's printed RUBYMIK_PUBKEY directly onto the reserved hub peer; a provisioned-but-not-adopted router shows in Remote Access as \"awaiting key\" (never vanishes); and each peer shows its hub-side handshake state with a \"no handshake yet\" hint naming the two real causes (key not registered, or host firewall/port mismatch). No migration (schema unchanged). See the changelog."
+  "notes": "1.1.8 — patch: re-running the remote provision wizard no longer orphans peer reservations (the same site name reuses its awaiting-key reservation — one peer, not duplicates). Remote sites can now be deleted (awaiting-key deletes freely and frees the overlay IP; a live/adopted site needs a typed-name confirm). And provisioned-but-not-adopted routers appear in a \"Pending setup\" card on the Dashboard and a section on the Devices page — never counted in the fleet up/down tiles. No migration (schema unchanged). See the changelog."
 }
