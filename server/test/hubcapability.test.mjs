@@ -60,15 +60,15 @@ function assertYamlWellFormed(text) {
 // port. It must instead reproduce the DETECTED host port and publish nothing extra.
 const CFG = { version: '1.1.4', mainHostPort: 8090, offhost: true, listenPort: 51820 };
 
-test('generateHubCompose: reproduces the detected host port (8090), never assumes 8080, never adds 8081', () => {
+test('generateHubCompose: reproduces the detected host port (8090), never assumes 8080; publishes the Router Admin port', () => {
   const yaml = generateHubCompose(CFG);
   assertYamlWellFormed(yaml);
   // Ray's bug: he runs on 8090 — reproduce it exactly, never a wrong 8080.
   assert.ok(yaml.includes('"8090:8080"'), 'the detected host port is reproduced');
   assert.ok(!/^\s+- "8080:8080"/m.test(yaml), 'NO hardcoded 8080 published port');
-  // the 8081 webfig port must NOT be an ACTIVE published port (only an inert comment).
-  assert.ok(!/^\s+- "8081:8081"/m.test(yaml), 'NO silently-added 8081 published port');
-  assert.match(yaml, /# - "8081:8081"/, 'WebFig is an opt-in commented hint, not published');
+  // v1.1.9: the WebFig/Router Admin port IS published (or Router Admin can't reach
+  // the proxy on a public install), clearly labelled — not commented out.
+  assert.ok(/^\s+- "8081:8081"\s+# Router Admin/m.test(yaml), 'the Router Admin (WebFig) port is published + labelled');
   // the WG additions + one new UDP port:
   assert.match(yaml, /- NET_ADMIN/); assert.match(yaml, /user: "0:0"/); assert.match(yaml, /\/dev\/net\/tun/);
   assert.ok(yaml.includes('"${RUBYMIK_WG_PORT:-51820}:51820/udp"'), 'the one new published port is the WG UDP port (configured, env-overridable host side)');

@@ -120,6 +120,28 @@ test('DELETE: a live registered site needs the typed-name confirm (409 without, 
   } finally { f.cleanup(); }
 });
 
+test('DELETE: removing a pending peer that SHARES a key with an adopted device does not orphan the live key', async () => {
+  // Ray adopted the .2 orphan; the .3/.4 reservations are stale. If a stale one was
+  // (mis)registered with the same router key, deleting it must not cut the live device:
+  // syncPeers keys off the DB "want" set, and the surviving adopted peer keeps the key.
+  const f = routeFixture();
+  try {
+    const live = reservePeer(f.db, HUB, 'live');   // will be adopted, key K
+    const stale = reservePeer(f.db, HUB, 'stale');  // pending, same key K
+    // register + adopt `live` (device); register `stale` with the SAME key
+    await call(f.port, 'POST', `/api/remote-access/sites/${live.id}/register`, { publicKey: VALID_KEY });
+    await call(f.port, 'POST', `/api/remote-access/sites/${live.id}/device`, { name: 'live-dev', username: 'm', password: 'x' });
+    f.db.prepare('UPDATE wg_peers SET public_key = ? WHERE id = ?').run(VALID_KEY, stale.id);
+    // delete the stale pending peer — it's registered but has no device + no live handshake → free delete
+    const res = await call(f.port, 'DELETE', `/api/remote-access/sites/${stale.id}`);
+    assert.equal(res.status, 200, 'the stale reservation deletes freely (no device, no handshake)');
+    // the live device + its key survive; the key is still "wanted", so syncPeers keeps it live
+    assert.ok(f.db.prepare('SELECT 1 FROM wg_peers WHERE id = ?').get(live.id), 'the adopted peer survives');
+    assert.ok(f.db.prepare('SELECT COUNT(*) n FROM wg_peers WHERE public_key = ?').get(VALID_KEY).n >= 1, 'the router key is NOT orphaned');
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM devices').get().n, 1, 'the live device is untouched');
+  } finally { f.cleanup(); }
+});
+
 test('GET /pending: returns provisioned-not-adopted peers; an adopted peer (a fleet device) is excluded', async () => {
   const f = routeFixture();
   try {

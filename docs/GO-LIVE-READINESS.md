@@ -103,6 +103,18 @@ Execute top to bottom. Each step gates the next.
 
 ## 6. Known gaps (backlog — not go-live blockers)
 
+- **Router Admin (WebFig proxy, P15) — proven against a real router; needs its port reachable.**
+  The proxy correctly renders a real router's WebFig end-to-end (verified v1.1.9 against a live
+  RB-class router — the proxy streams `<title>RouterOS` + the router's `/assets/*`, direct and, by
+  the same `resolveEndpoint` path, over the tunnel). WebFig owns web-root `/` **and** `/assets/*`,
+  which collide with RubyMIK's own SPA/`/assets` — so it *must* live on a dedicated origin (the
+  WebFig proxy port, default 8081), not a same-origin sub-path. Consequence: that port must be
+  **browser-reachable**. The generated WireGuard-hub compose now publishes it (v1.1.9 — it stopped
+  after v1.1.4, which is why "Router Admin" showed *connection refused* on Ray's public box). Still
+  unaddressed for **TLS-terminating reverse-proxy installs**: the app on 443/HTTPS with the WebFig
+  port on plain HTTP is a mixed-content/second-origin problem — such installs must also expose (or
+  proxy) the WebFig port on a compatible scheme. Verify Router-Admin-over-tunnel on the first real
+  tunnel deployment.
 - **PRINCIPLE (established P45, enforced going forward): any feature that needs a
   host-level privilege must PRE-CHECK the capability and INSTRUCT the operator BEFORE
   offering the action — never fail raw.** A clickable control that produces a kernel

@@ -172,7 +172,12 @@ export function generateHubCompose(cfg: RunningConfig, includeWireguard = true):
   } else {
     L.push('      # - "<HOST_PORT>:8080"          # set your host port here — could NOT auto-detect the port you reach RubyMIK on');
   }
-  L.push('      # - "8081:8081"                 # WebFig UI — uncomment + set your host port ONLY if you already publish it');
+  // Router Admin (WebFig) proxy port — must be browser-reachable, or "Router Admin"
+  // shows "connection refused" (it did on public installs after v1.1.4 stopped
+  // publishing it). Managing behind-NAT routers over the tunnel needs it, so a
+  // WireGuard-hub stack publishes it; keep it on the container port so the app's
+  // frame URL (host:8081) resolves. Remove ONLY if you never open Router Admin.
+  L.push('      - "8081:8081"                 # Router Admin (WebFig) — needed to open a router\'s admin UI, incl. over the tunnel');
   if (wg) {
     // The hub's CONFIGURED listen port (not a hardcoded 51820). Host side is
     // overridable via RUBYMIK_WG_PORT for hosts that already run WireGuard on the

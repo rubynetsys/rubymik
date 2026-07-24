@@ -1,6 +1,6 @@
 {
   "name": "rubymik",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "private": true,
   "description": "Modern, self-hosted monitoring dashboard for MikroTik RouterOS devices",
   "license": "MIT",

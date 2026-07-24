@@ -10,6 +10,26 @@ pre-migration backup on first boot (see `README-DEPLOY.md`).
 
 ## [Unreleased]
 
+## [1.1.9] — 2026-07-24 (schema 24)
+
+A patch release — no migration (schema unchanged at 24).
+
+### Fixed
+- **Router Admin (WebFig) works again over the tunnel / on public installs.** After v1.1.4 the
+  generated WireGuard-hub compose stopped publishing the WebFig proxy port, so opening "Router
+  Admin" showed *"…refused to connect"* — the browser couldn't reach the proxy port (the proxy
+  itself was fine and targets the device correctly over its transport). WebFig owns web-root `/`
+  **and** `/assets/*`, which collide with RubyMIK's own UI, so it must live on its own port — which
+  therefore has to be reachable. The generated compose now **publishes the Router Admin port**,
+  clearly labelled, since managing routers (including behind-NAT ones over the tunnel) needs it. The
+  WebFig proxy is now proven end-to-end against a real router (it streams the router's own WebFig
+  and assets, not the RubyMIK host).
+
+### Verified
+- Deleting a stale/pending remote site that happens to share a router key with a live adopted device
+  does **not** cut the live device — peer reconciliation keys off the surviving records, so the
+  live key is never orphaned (test added).
+
 ## [1.1.8] — 2026-07-24 (schema 24)
 
 A patch release — no migration (schema unchanged at 24).

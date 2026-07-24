@@ -158,7 +158,7 @@ function SetupCard({ cap, hub, checking, onRecheck, capErr }: { cap: HubCapabili
               <li>Click <b>Update the stack</b>, then reload this page.</li>
             </ol>
             {cap.mainHostPort != null ? (
-              <p className="text-xs text-fg-dim">Detected your host port as <b className="text-fg-body">{cap.mainHostPort}</b> and reproduced it exactly (no assumed 8080, no extra published ports).</p>
+              <p className="text-xs text-fg-dim">Detected your host port as <b className="text-fg-body">{cap.mainHostPort}</b> and reproduced it (no assumed 8080). The file also publishes the <b className="text-fg-body">Router Admin</b> port (8081) — needed to open a router's WebFig over the tunnel.</p>
             ) : (
               <p className="rounded-lg bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg">Couldn't auto-detect your host port — the file has a <b>“set your host port”</b> comment where it belongs. Set it to the port you open RubyMIK on before applying (don't leave a wrong default).</p>
             )}
