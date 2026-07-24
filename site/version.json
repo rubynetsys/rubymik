@@ -1,8 +1,8 @@
 {
   "$comment": "RubyMIK update manifest served at https://rubymik.com/version.json. Updated by scripts/release.sh on each release. P38 contract.",
-  "latest": "1.1.3",
+  "latest": "1.1.4",
   "minimum_supported": "0.9.0",
   "changelog_url": "https://github.com/rubynetsys/rubymik/blob/main/CHANGELOG.md",
   "breaking": [],
-  "notes": "1.1.3 — patch: Copy buttons now work over plain HTTP (most self-hosted LAN installs), not just HTTPS/localhost — fixed at one shared utility with a hidden-textarea fallback and always-on feedback (Copied / Press Ctrl+C). Large blocks (compose file, .rsc scripts, 2FA codes) also gained a Download button. No migration (schema unchanged). See the changelog."
+  "notes": "1.1.4 — patch: the generated Remote Access compose now reproduces your actual host port (no assumed 8080 → no 'port already allocated' on non-8080 installs) and adds no ports you aren't already publishing (WebFig 8081 is a commented hint, not a published port). The file equals your running config plus only the WireGuard lines. No migration (schema unchanged). See the changelog."
 }
