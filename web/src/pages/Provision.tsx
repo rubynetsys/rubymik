@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   HardDriveDownload, Loader2, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft,
   ShieldCheck, Network, RadioTower, Server, Cpu, X,
@@ -68,6 +68,12 @@ export default function Provision() {
   const [genScript, setGenScript] = useState<string | null>(null);
   const [applyOut, setApplyOut] = useState<any>(null);
   const set = (patch: Partial<Spec>) => setSpec((s) => ({ ...s, ...patch }));
+  const navigate = useNavigate();
+  // Completion signalling (P11 UX): the final Apply step is done when Mode A
+  // has generated a script or Mode B has applied. applyRan also covers a
+  // Mode B failure so the wizard always offers an exit.
+  const applySucceeded = mode === 'A' ? !!genScript : applyOut?.result === 'applied';
+  const applyRan = mode === 'A' ? !!genScript : !!applyOut;
 
   function pickModel(mName: string, count?: number) {
     setModel(mName);
@@ -95,12 +101,15 @@ export default function Provision() {
 
       <div className="rounded-2xl border border-border bg-surface p-6">
         <ol className="mb-6 flex flex-wrap gap-x-2 gap-y-1 text-xs font-semibold">
-          {STEPS.map((s, i) => (
+          {STEPS.map((s, i) => {
+            const done = i < step || (i === step && applySucceeded);
+            return (
             <li key={s} className="flex items-center gap-2">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${i < step ? 'bg-success-strong text-inverse' : i === step ? 'bg-accent text-inverse' : 'bg-border text-fg-dim'}`}>{i < step ? <CheckCircle2 className="h-4 w-4" /> : i + 1}</span>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${done ? 'bg-success-strong text-inverse' : i === step ? 'bg-accent text-inverse' : 'bg-border text-fg-dim'}`}>{done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}</span>
               <span className={i === step ? 'text-fg-strong' : 'text-fg-faint'}>{s}</span>{i < STEPS.length - 1 && <span className="mx-1 text-fg-faint">›</span>}
             </li>
-          ))}
+            );
+          })}
         </ol>
         {err && <div className="mb-4 rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-fg-strong">{err}</div>}
 
@@ -115,6 +124,11 @@ export default function Provision() {
           {step < 4 && (
             <button onClick={() => void go(1)} disabled={busy || (step === 3 && (!validation || !validation.ok))} className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover disabled:opacity-40">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : step === 3 ? 'Apply' : 'Next'} <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
+          {step === 4 && applyRan && (
+            <button onClick={() => navigate('/devices')} className="inline-flex items-center gap-1.5 rounded-lg bg-success-strong px-5 py-2 text-sm font-semibold text-inverse hover:opacity-90">
+              <CheckCircle2 className="h-4 w-4" /> Done — close wizard
             </button>
           )}
         </div>
@@ -302,7 +316,23 @@ function Apply({ spec, mode, busy, setBusy, setErr, genScript, setGenScript, app
         ) : (
           <>
             <CodeBlock code={genScript} label="baseline.rsc" filename="rubymik-baseline.rsc" maxHeightClass="max-h-96" />
-            <div className="rounded-lg bg-success-bg px-3 py-2 text-sm text-success-fg">After it's applied and the router is reachable{spec.remote ? ' over the tunnel' : ''}, adopt it from the Onboard wizard.</div>
+            <div className="rounded-xl border border-border bg-app/50 p-4">
+              <div className="mb-3 flex items-center gap-2 font-semibold text-fg-strong"><CheckCircle2 className="h-4 w-4 text-success" /> Baseline script ready — next steps</div>
+              <ol className="space-y-2.5 text-sm text-fg-body">
+                {[
+                  'Download or copy the script above.',
+                  "Paste it into the router's WinBox terminal (New Terminal) or over SSH.",
+                  spec.remote ? 'The router dials the WireGuard tunnel-back to RubyMIK.' : 'The router comes up on your LAN, fully configured.',
+                  'Adopt it into RubyMIK from the Onboard wizard.',
+                ].map((t: string, i: number) => (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-[11px] font-bold text-accent">{i + 1}</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ol>
+              <Link to="/onboard" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-inverse hover:bg-accent-hover">Adopt it in Onboard <ArrowRight className="h-4 w-4" /></Link>
+            </div>
           </>
         )}
       </div>
